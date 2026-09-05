@@ -1435,14 +1435,14 @@ export function AppShell() {
         role="tablist"
         aria-label={translate("topbar.sessions")}
         style={{
-          display: "flex", alignItems: "center", flex: "0 1 auto", minWidth: 0,
+          display: "flex", alignItems: "center", flex: "1 1 auto", minWidth: 0,
           height: "100%", overflow: "hidden", borderRight: "1px solid var(--border)",
         }}
       >
         <div
           style={{
-            display: "flex", alignItems: "center", height: "100%",
-            overflowX: "auto", overflowY: "hidden", scrollbarWidth: "thin", minWidth: 0,
+            display: "flex", alignItems: "center", height: "100%", flex: "1 1 auto", minWidth: 0,
+            overflowX: "auto", overflowY: "hidden", scrollbarWidth: "thin",
           }}
         >
           {topOpenSessions.map(({ session, snapshot }) => {
@@ -2388,14 +2388,24 @@ export function AppShell() {
           )}
           {!isMobile && (
             <>
-              {renderThemeButton(false)}
-              {renderSessionStrip()}
-              {renderProjectTrustWarning(false)}
-              {renderMoreMenuButton()}
-              {renderSessionStatsButton(false)}
+              {/* Left fixed segment: chrome actions never resize. */}
+              <div style={{ display: "flex", alignItems: "center", height: "100%", flexShrink: 0 }}>
+                {renderThemeButton(false)}
+                {renderProjectTrustWarning(false)}
+                {renderMoreMenuButton()}
+              </div>
+              {/* Middle flexible segment: session tabs only — overflow scrolls
+                  here instead of squeezing the fixed left/right segments. */}
+              <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "center", height: "100%", overflow: "hidden" }}>
+                {renderSessionStrip()}
+              </div>
+              {/* Right fixed segment: token/session stats. */}
+              <div style={{ display: "flex", alignItems: "center", height: "100%", flexShrink: 0 }}>
+                {renderSessionStatsButton(false)}
+                {renderMainFileToggle(false)}
+              </div>
             </>
           )}
-          {!isMobile && renderMainFileToggle(false)}
           {isMobile && sessionHasBranches && (
             <BranchNavigator
               tree={branchTree}
