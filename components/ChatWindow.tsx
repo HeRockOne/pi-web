@@ -16,6 +16,7 @@ import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAg
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import { getContextUsageSnapshot, setContextUsageSnapshot } from "@/lib/context-usage-store";
 import type { AppUpdateResponse } from "@/lib/api-types";
 import type { ToolEntry } from "@/lib/tool-presets";
 import {
@@ -406,7 +407,25 @@ export function ChatWindow({ session, sessionRunning, newSessionCwd, newSessionD
   contextUsageRef.current = contextUsage;
   useEffect(() => {
     onContextUsageChange?.(contextUsageRef.current);
+    // Persist the last known value per session so the top-bar gauge survives
+    // page refreshes and wrapper recycling (live state only exists while the
+    // wrapper is alive).
+    const sessionId = contextUsageSessionIdRef.current;
+    if (sessionId && contextUsageRef.current) {
+      setContextUsageSnapshot(sessionId, contextUsageRef.current);
+    }
   }, [ctxKey, onContextUsageChange]);
+  // Keep a ref of the session id without re-subscribing the push effect above.
+  const contextUsageSessionIdRef = useRef(session?.id ?? null);
+  contextUsageSessionIdRef.current = session?.id ?? null;
+  // Seed the gauge from the persisted snapshot on session switch/refresh.
+  useEffect(() => {
+    const sessionId = session?.id;
+    if (!sessionId) return;
+    if (contextUsageRef.current) return;
+    const snapshot = getContextUsageSnapshot(sessionId);
+    if (snapshot) onContextUsageChange?.(snapshot);
+  }, [session?.id, onContextUsageChange]);
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
   const onDrop = useCallback((files: File[]) => {
