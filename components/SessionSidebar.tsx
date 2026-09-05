@@ -88,6 +88,10 @@ interface Props {
   skipInitialProjectSelection?: boolean;
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
+  // Browser-style tab strip: the sidebar reports every session row click so the
+  // top bar can pin a tab with a fresh title/project snapshot.
+  getSnapshotsForSessions?: (sessionIds: string[]) => { id: string; title: string; project: string }[];
+  openSessionTabs?: (snapshots: { id: string; title: string; project: string }[]) => void;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (
@@ -351,7 +355,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, getSnapshotsForSessions, openSessionTabs }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -878,8 +882,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
     if (s.cwd) setSelectedCwd(s.cwd);
+    // Browser-style tab strip: report the click so the top bar can pin a tab
+    // with a fresh title/project snapshot (new sessions get titles later).
+    if (openSessionTabs) {
+      const [snap] = getSnapshotsForSessions
+        ? getSnapshotsForSessions([s.id])
+        : [{ id: s.id, title: s.name || s.firstMessage || s.id, project: "" }];
+      if (snap) openSessionTabs([snap]);
+    }
     onSelectSession(s);
-  }, [onSelectSession]);
+  }, [onSelectSession, openSessionTabs, getSnapshotsForSessions]);
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
