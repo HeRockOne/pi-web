@@ -352,8 +352,6 @@ export const zhCNLocale: LocalePlugin = {
     "chat.steerHint": "打断当前运行，立即插入这条消息",
     "chat.followUpHint": "排队这条消息，等当前运行结束后发送",
     "chat.followUp": "后续消息",
-    "chat.steerHint": "中断当前运行并立即注入此消息",
-    "chat.followUpHint": "在 Agent 完成后排队此消息",
     "chat.inputHistory": "输入历史",
     "chat.modelError": "模型错误",
     "chat.modelScopeWarning": "模型范围警告",

@@ -352,8 +352,6 @@ export const zhTWLocale: LocalePlugin = {
     "chat.steerHint": "打斷當前執行，立即插入這條訊息",
     "chat.followUpHint": "排隊這條訊息，等當前執行結束後傳送",
     "chat.followUp": "後續訊息",
-    "chat.steerHint": "中斷目前的執行並立即注入此訊息",
-    "chat.followUpHint": "在 Agent 完成後排入此訊息",
     "chat.inputHistory": "輸入紀錄",
     "chat.modelError": "模型錯誤",
     "chat.modelScopeWarning": "模型範圍警告",

@@ -85,7 +85,7 @@ test("shows the follow-up shortcut in the button tooltip", () => {
     })),
   );
 
-  assert.match(html, /title="Queue this message after the agent finishes \(Alt\/Option\+Enter\)"/);
+  assert.match(html, /title="Queue this message to send after the current run finishes \(Alt\/Option\+Enter\)"/);
   assert.match(html, /aria-keyshortcuts="Alt\+Enter"/);
 });
 
@@ -209,7 +209,7 @@ test("renders the compact composer with the standard Send button and no session 
   );
 
   assert.match(html, /<textarea/);
-  assert.match(html, />Send<\/button>/);
+  assert.match(html, /aria-label="Send" title="Send"/);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1);
   assert.doesNotMatch(html, /type="file"|Attach image|Change tool preset/);
 });

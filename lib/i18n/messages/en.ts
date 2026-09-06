@@ -352,8 +352,6 @@ export const enLocale: LocalePlugin = {
     "chat.steerHint": "Interrupt the current run and inject this message now",
     "chat.followUpHint": "Queue this message to send after the current run finishes",
     "chat.followUp": "Follow-up",
-    "chat.steerHint": "Interrupt the current run and inject this message now",
-    "chat.followUpHint": "Queue this message after the agent finishes",
     "chat.inputHistory": "Input history",
     "chat.modelError": "Model error",
     "chat.modelScopeWarning": "Model scope warning",

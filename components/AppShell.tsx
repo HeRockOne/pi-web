@@ -937,6 +937,31 @@ export function AppShell() {
     router.replace(typeof window !== "undefined" ? window.location.pathname : "/", { scroll: false });
   }, [invalidateWorkspaceRestore, router, isMobile]);
 
+
+  // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
+  useGlobalKeyboardShortcuts({
+    onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
+    activeCwd,
+  });
+
+  // Client-built transient SessionInfo (new session / fork) lacks the
+  // server-computed projectKey, which the same-project check in
+  // handleCwdChange relies on. Hydrate it from the session list so switching
+  // worktrees right after creating a session doesn't close the chat.
+  const hydrateSelectedSession = useCallback((sessionId: string) => {
+    void fetch("/api/sessions", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
+      .then((d) => {
+        const full = d?.sessions.find((s) => s.id === sessionId);
+        if (!full) return;
+        setSelectedSession((prev) => (
+          prev?.id === sessionId
+            ? { ...prev, ...full, transient: full.transient ?? false }
+            : prev
+        ));
+      })
+      .catch(() => {});
+  }, []);
   // Close a tab with browser semantics: closing the active tab activates its
   // nearest remaining neighbor; closing the last tab opens a fresh composer.
   // Tabs whose session vanished elsewhere are verified and cleaned on demand.
@@ -979,30 +1004,6 @@ export function AppShell() {
     })();
   }, [sessionsById, handleSelectSession, closeSessionTab]);
 
-  // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
-  useGlobalKeyboardShortcuts({
-    onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
-    activeCwd,
-  });
-
-  // Client-built transient SessionInfo (new session / fork) lacks the
-  // server-computed projectKey, which the same-project check in
-  // handleCwdChange relies on. Hydrate it from the session list so switching
-  // worktrees right after creating a session doesn't close the chat.
-  const hydrateSelectedSession = useCallback((sessionId: string) => {
-    void fetch("/api/sessions", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
-      .then((d) => {
-        const full = d?.sessions.find((s) => s.id === sessionId);
-        if (!full) return;
-        setSelectedSession((prev) => (
-          prev?.id === sessionId
-            ? { ...prev, ...full, transient: full.transient ?? false }
-            : prev
-        ));
-      })
-      .catch(() => {});
-  }, []);
 
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
