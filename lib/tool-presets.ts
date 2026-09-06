@@ -4,6 +4,13 @@ export interface ToolEntry {
   active: boolean;
   parameters?: Record<string, unknown>;
   promptGuidelines?: string[];
+  sourceInfo?: {
+    path: string;
+    source: string;
+    scope?: string;
+    origin?: string;
+    baseDir?: string;
+  };
 }
 
 export const TOOL_PRESET_VALUES = ["none", "read-only", "default", "full"] as const;

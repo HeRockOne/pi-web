@@ -1,22 +1,122 @@
+"use client";
+
+import { useState } from "react";
+
 import { colorForProvider } from "../lib/usage-stats-format";
-import { analyzeSystemPrompt } from "../lib/system-prompt-analysis";
+import { analyzeSystemPrompt, type PromptSection, type ToolHint } from "../lib/system-prompt-analysis";
+import type { ToolEntry } from "../lib/tool-presets";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+const SYNTHETIC_SOURCE_LABELS = new Set(["inline", "builtin"]);
 
 interface Props {
   loading: boolean;
   prompt: string | null;
+  tools: ToolEntry[] | null;
   translate: Translate;
 }
 
-function PromptComposition({ prompt, translate }: { prompt: string; translate: Translate }) {
-  const analysis = analyzeSystemPrompt(prompt);
+function toToolHints(tools: ToolEntry[] | null): ToolHint[] {
+  return (tools ?? []).map((tool) => ({
+    name: tool.name,
+    promptGuidelines: tool.promptGuidelines,
+    source: tool.sourceInfo?.source?.replace(/^npm:/, ""),
+  }));
+}
+
+function SectionRow({
+  section,
+  depth,
+  totalTokens,
+  expanded,
+  onToggle,
+  translate,
+}: {
+  section: PromptSection;
+  depth: number;
+  totalTokens: number;
+  expanded: boolean;
+  onToggle: () => void;
+  translate: Translate;
+}) {
+  const label = section.labelKey
+    ? translate(section.labelKey)
+    : section.label && SYNTHETIC_SOURCE_LABELS.has(section.label)
+      ? translate("system.section.builtin")
+      : section.label ?? section.key;
+  const percent = totalTokens > 0 ? Math.round((section.tokens / totalTokens) * 100) : 0;
+  const color = colorForProvider(section.key);
+  const hasChildren = Boolean(section.children && section.children.length > 0);
+  const isChild = depth > 0;
+  const row = (
+    <>
+      <span
+        className="system-prompt-composition-dot"
+        style={{ background: color, opacity: isChild ? 0.65 : 1 }}
+      />
+      {hasChildren ? (
+        <span className={`system-prompt-composition-chevron${expanded ? " open" : ""}`} aria-hidden="true">▶</span>
+      ) : null}
+      <span className="system-prompt-composition-label">
+        {label}
+        {section.detail ? <span className="system-prompt-composition-path">{section.detail}</span> : null}
+      </span>
+      <span className="system-prompt-composition-numbers">
+        ≈{section.tokens.toLocaleString("en-US")} · {percent}%
+      </span>
+    </>
+  );
+  if (!hasChildren) {
+    return <li className={isChild ? "is-child" : undefined}>{row}</li>;
+  }
+  return (
+    <li className={isChild ? "is-child has-children" : "has-children"}>
+      <button
+        type="button"
+        className="system-prompt-composition-row"
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        {row}
+      </button>
+      {expanded ? (
+        <ul className="system-prompt-composition-list is-nested">
+          {section.children!.map((child) => (
+            <SectionRow
+              key={child.key}
+              section={child}
+              depth={depth + 1}
+              totalTokens={totalTokens}
+              expanded={false}
+              onToggle={() => {}}
+              translate={translate}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function PromptComposition({ prompt, tools, translate }: { prompt: string; tools: ToolEntry[] | null; translate: Translate }) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const analysis = analyzeSystemPrompt(prompt, toToolHints(tools));
   if (analysis.sections.length === 0) return null;
 
+  const toggle = (key: string) => {
+    setExpandedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const rows = analysis.sections.map((section) => ({
-    ...section,
+    section,
+    color: colorForProvider(section.key),
     percent: analysis.totalTokens > 0 ? Math.round((section.tokens / analysis.totalTokens) * 100) : 0,
-    color: colorForProvider(section.detail ?? section.key),
   }));
 
   return (
@@ -35,44 +135,43 @@ function PromptComposition({ prompt, translate }: { prompt: string; translate: T
         role="img"
         aria-label={translate("system.composition")}
       >
-        {rows.map((row) => (
+        {rows.map(({ section, color }) => (
           <span
-            key={row.key}
+            key={section.key}
             style={{
-              flexGrow: Math.max(row.tokens, 1),
+              flexGrow: Math.max(section.tokens, 1),
               flexBasis: 0,
               minWidth: 3,
-              background: row.color,
+              background: color,
             }}
-            title={`${translate(row.labelKey)}${row.detail ? ` · ${row.detail}` : ""} ≈${row.tokens.toLocaleString("en-US")} (${row.percent}%)`}
+            title={`${section.labelKey ? translate(section.labelKey) : section.label} ≈${section.tokens.toLocaleString("en-US")}`}
           />
         ))}
       </div>
       <ul className="system-prompt-composition-list">
-        {rows.map((row) => (
-          <li key={row.key} title={row.detail ?? undefined}>
-            <span className="system-prompt-composition-dot" style={{ background: row.color }} />
-            <span className="system-prompt-composition-label">
-              {translate(row.labelKey)}
-              {row.detail ? <span className="system-prompt-composition-path">{row.detail}</span> : null}
-            </span>
-            <span className="system-prompt-composition-numbers">
-              ≈{row.tokens.toLocaleString("en-US")} · {row.percent}%
-            </span>
-          </li>
+        {rows.map(({ section }) => (
+          <SectionRow
+            key={section.key}
+            section={section}
+            depth={0}
+            totalTokens={analysis.totalTokens}
+            expanded={expandedKeys.has(section.key)}
+            onToggle={() => toggle(section.key)}
+            translate={translate}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-export function SystemPromptPanel({ loading, prompt, translate }: Props) {
+export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) {
   return (
     <section className="system-prompt-panel" aria-label={translate("system.prompt")}>
       <div className="system-prompt-scroll">
         {prompt ? (
           <>
-            <PromptComposition prompt={prompt} translate={translate} />
+            <PromptComposition prompt={prompt} tools={tools} translate={translate} />
             <div className="system-prompt-text">{prompt}</div>
           </>
         ) : (
@@ -121,6 +220,7 @@ export function SystemPromptPanel({ loading, prompt, translate }: Props) {
           border: 1px solid var(--border);
           border-radius: 8px;
           background: color-mix(in srgb, var(--bg) 55%, var(--bg-panel));
+          overflow: hidden;
         }
         .system-prompt-composition-head {
           display: flex;
@@ -155,15 +255,53 @@ export function SystemPromptPanel({ loading, prompt, translate }: Props) {
           padding: 0;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 2px;
         }
-        .system-prompt-composition-list li {
+        .system-prompt-composition-list > li {
+          min-width: 0;
+        }
+        .system-prompt-composition-list > li:not(.has-children) {
           display: flex;
           align-items: center;
           gap: 6px;
-          min-width: 0;
-          font-size: 11px;
+          padding: 2px 0 2px 4px;
+        }
+        .system-prompt-composition-list .is-child {
+          padding-left: 22px;
+        }
+        .system-prompt-composition-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
+          padding: 2px 0 2px 4px;
+          background: none;
+          border: none;
+          border-radius: 4px;
+          color: inherit;
+          font-size: inherit;
+          cursor: pointer;
+          text-align: left;
+          transition: background 0.1s;
+        }
+        .system-prompt-composition-row:hover {
+          background: var(--bg-hover);
+        }
+        .system-prompt-composition-list .is-child .system-prompt-composition-label,
+        .system-prompt-composition-list .is-child .system-prompt-composition-numbers {
+          font-size: 10.5px;
           color: var(--text-muted);
+        }
+        .system-prompt-composition-chevron {
+          flex-shrink: 0;
+          display: inline-block;
+          width: 8px;
+          font-size: 8px;
+          color: var(--text-dim);
+          transition: transform 0.12s;
+        }
+        .system-prompt-composition-chevron.open {
+          transform: rotate(90deg);
         }
         .system-prompt-composition-dot {
           flex-shrink: 0;
@@ -187,9 +325,15 @@ export function SystemPromptPanel({ loading, prompt, translate }: Props) {
         }
         .system-prompt-composition-numbers {
           flex-shrink: 0;
+          min-width: 96px;
+          text-align: right;
+          white-space: nowrap;
           font-family: var(--font-mono);
           font-size: 11px;
           font-variant-numeric: tabular-nums;
+        }
+        .system-prompt-composition-list.is-nested {
+          margin: 2px 0 4px;
         }
       `}</style>
     </section>

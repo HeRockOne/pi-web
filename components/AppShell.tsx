@@ -2982,6 +2982,7 @@ export function AppShell() {
                 <SystemPromptPanel
                   loading={systemInfoLoading}
                   prompt={systemPrompt}
+                  tools={systemTools}
                   translate={translate}
                 />
               )}
