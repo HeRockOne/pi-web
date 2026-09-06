@@ -66,6 +66,8 @@ type AutoNameStatus =
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
 const LANGUAGE_MENU_WIDTH = 176;
 const AGENT_PANEL_WIDTH = 420;
+const MORE_MENU_WIDTH = 224;
+const SESSIONS_PANEL_WIDTH = 460;
 
 export function AppShell() {
   const router = useRouter();
@@ -119,6 +121,30 @@ export function AppShell() {
       return ids;
     });
   }, []);
+  // Browser-style session tabs in the top bar: current session first, then every
+  // running session across all projects so a click switches instantly.
+  const [sessionTabs, setSessionTabs] = useState<{ selectedId: string | null; items: string[] }>({ selectedId: null, items: [] });
+  const topOpenSessions = useMemo(() => {
+    const tabs: SessionInfo[] = [];
+    const seen = new Set<string>();
+    const push = (session: SessionInfo) => {
+      if (seen.has(session.id) || session.relation?.kind === "subagent") return;
+      seen.add(session.id);
+      tabs.push(session);
+    };
+    if (selectedSession) push(selectedSession);
+    const byId = new Map(sessionsWithSelection.map((session) => [session.id, session] as const));
+    for (const id of sessionTabs.items) {
+      const session = byId.get(id);
+      if (session) push(session);
+    }
+    // Running sessions from any project join the strip automatically, newest first.
+    const running = sessionsWithSelection
+      .filter((session) => runningSessionIds.has(session.id) && !seen.has(session.id))
+      .sort((a, b) => b.modified.localeCompare(a.modified));
+    for (const session of running) push(session);
+    return tabs;
+  }, [selectedSession, sessionsWithSelection, sessionTabs, runningSessionIds]);
   // The temporary id distinguishes consecutive fresh composers in one cwd.
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
   const [newSessionDraftId, setNewSessionDraftId] = useState("initial");
@@ -210,6 +236,7 @@ export function AppShell() {
   const topBarRef = useRef<HTMLDivElement>(null);
   const mobileToolbarRef = useRef<HTMLDivElement>(null);
   const languageBtnRef = useRef<HTMLButtonElement>(null);
+  const moreMenuBtnRef = useRef<HTMLButtonElement>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -282,7 +309,7 @@ export function AppShell() {
   }, []);
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"agents" | "branches" | "system" | "tools" | "session" | "language" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"agents" | "branches" | "sessions" | "more" | "system" | "tools" | "session" | "language" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
@@ -298,7 +325,7 @@ export function AppShell() {
   }, [hasSubagentSessions]);
 
   const toggleTopPanel = useCallback((
-    panel: "agents" | "branches" | "system" | "tools" | "session" | "language",
+    panel: "agents" | "branches" | "sessions" | "more" | "system" | "tools" | "session" | "language",
     keepMobileToolbarOpen = false,
   ) => {
     if (isMobile) setSidebarOpen(false);
@@ -379,6 +406,32 @@ export function AppShell() {
     };
   }, [mobileToolbarMoreOpen]);
 
+  // The desktop ⋯ overflow menu closes on outside pointerdown / Escape.
+  useEffect(() => {
+    if (activeTopPanel !== "more") return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const path = event.composedPath();
+      if (moreMenuBtnRef.current && path.includes(moreMenuBtnRef.current)) return;
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-more-menu-panel]")) return;
+      setActiveTopPanel(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveTopPanel(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [activeTopPanel]);
+
   useEffect(() => {
     setMobileToolbarMoreOpen(false);
   }, [isMobile, isNarrowMobile, selectedSession?.id, newSessionDraftId]);
@@ -387,15 +440,22 @@ export function AppShell() {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
       const topBarRect = topBarRef.current!.getBoundingClientRect();
-      if (activeTopPanel === "language" && !isMobile && languageBtnRef.current) {
-        const buttonRect = languageBtnRef.current.getBoundingClientRect();
-        const width = Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
-        const left = Math.min(
-          buttonRect.left - 1,
-          Math.max(topBarRect.left, topBarRect.right - width),
-        );
-        setTopPanelPos({ top: topBarRect.bottom, left, width });
-        return;
+      if ((activeTopPanel === "language" || activeTopPanel === "more") && !isMobile) {
+        // On desktop the language menu opens from inside the ⋯ menu, so anchor
+        // it (and the menu itself) to the ⋯ button; fall back to the standalone
+        // language button on layouts where it still exists.
+        const anchor = (activeTopPanel === "language" && languageBtnRef.current) || moreMenuBtnRef.current;
+        if (anchor) {
+          const buttonRect = anchor.getBoundingClientRect();
+          const width = activeTopPanel === "more"
+            ? Math.min(MORE_MENU_WIDTH, topBarRect.width)
+            : Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
+          const left = activeTopPanel === "more"
+            ? Math.min(Math.max(buttonRect.right - width, topBarRect.left), Math.max(topBarRect.left, topBarRect.right - width))
+            : Math.min(buttonRect.left - 1, Math.max(topBarRect.left, topBarRect.right - width));
+          setTopPanelPos({ top: topBarRect.bottom, left, width });
+          return;
+        }
       }
       if (activeTopPanel === "agents") {
         setTopPanelPos({
@@ -405,12 +465,22 @@ export function AppShell() {
         });
         return;
       }
+      if (activeTopPanel === "sessions") {
+        // Browser-tab-like list: wide enough for long titles, still a dropdown.
+        setTopPanelPos({
+          top: topBarRect.bottom,
+          left: topBarRect.left,
+          width: Math.min(SESSIONS_PANEL_WIDTH, topBarRect.width),
+        });
+        return;
+      }
       setTopPanelPos({ top: topBarRect.bottom, left: topBarRect.left, width: topBarRect.width });
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(topBarRef.current);
     if (languageBtnRef.current) ro.observe(languageBtnRef.current);
+    if (moreMenuBtnRef.current) ro.observe(moreMenuBtnRef.current);
     return () => ro.disconnect();
   }, [activeTopPanel, isMobile]);
 
@@ -616,6 +686,12 @@ export function AppShell() {
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     invalidateWorkspaceRestore();
     activeNewSessionDraftKeyRef.current = null;
+    // Every opened session joins the top-bar tab strip (current session always stays first).
+    setSessionTabs((prev) => {
+      const items = [session.id, ...prev.items.filter((id) => id !== session.id)];
+      if (prev.selectedId === session.id && prev.items[0] === session.id) return prev;
+      return { selectedId: session.id, items: items.slice(0, 12) };
+    });
     // Re-clicking the already-open session must not remount the chat and
     // re-run the full load/positioning cycle. Only skip when the effective
     // cwd context already matches — otherwise a pending cwd move still needs
@@ -1150,6 +1226,81 @@ export function AppShell() {
     </button>
   );
 
+  // Browser-style open-session tabs (top bar). Click = switch instantly;
+  // running sessions show an accent dot.
+  const renderSessionTabsButton = (mobile: boolean) => {
+    const count = topOpenSessions.length;
+    return (
+      <button
+        type="button"
+        onClick={() => toggleTopPanel("sessions", mobile)}
+        title={translate("topbar.sessions")}
+        aria-label={translate("topbar.sessions")}
+        aria-pressed={activeTopPanel === "sessions"}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
+          height: "100%", padding: mobile ? 0 : "0 12px",
+          background: "none", border: "none", borderRight: "1px solid var(--border)",
+          borderTop: activeTopPanel === "sessions" ? "2px solid var(--accent)" : "2px solid transparent",
+          color: activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)",
+          cursor: "pointer", flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
+          transition: "color 0.1s, background 0.1s",
+        }}
+        onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
+        onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)"; }}
+        data-mobile-toolbar-action={mobile ? "sessions" : undefined}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+          <rect x="3" y="7" width="18" height="13" rx="2" />
+          <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
+        </svg>
+        {!mobile && <span>{translate("topbar.sessions")}</span>}
+        {count > 1 && (
+          <span
+            aria-hidden="true"
+            style={{
+              minWidth: 15, height: 15, padding: "0 4px", display: "grid", placeItems: "center",
+              borderRadius: 7, background: "var(--bg-selected)", color: "var(--accent)",
+              fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums",
+              ...(mobile ? { position: "absolute", top: 2, right: 2, minWidth: 13, height: 13, padding: "0 3px", fontSize: 9 } as React.CSSProperties : {}),
+            }}
+          >
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  // Desktop ⋯ overflow menu: collects the low-frequency top-bar actions so
+  // the bar itself stays short. Theme stays outside on purpose.
+  const renderMoreMenuButton = () => (
+    <button
+      ref={moreMenuBtnRef}
+      type="button"
+      onClick={() => toggleTopPanel("more")}
+      title={translate("chat.moreControls")}
+      aria-label={translate("chat.moreControls")}
+      aria-haspopup="menu"
+      aria-expanded={activeTopPanel === "more"}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+        background: activeTopPanel === "more" ? "var(--bg-selected)" : "none",
+        border: "none", borderRight: "1px solid var(--border)",
+        color: activeTopPanel === "more" ? "var(--text)" : "var(--text-muted)",
+        cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
+      }}
+      onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "more" ? "var(--text)" : "var(--text-muted)"; }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+      </svg>
+    </button>
+  );
+
   const renderProjectTrustWarning = (mobileBanner: boolean) => {
     if (!showChat || !projectTrust?.requiresTrust || projectTrust.trusted) return null;
     return (
@@ -1513,6 +1664,11 @@ export function AppShell() {
         ? `${(value / 1000).toFixed(0)}k`
         : String(value);
     const costText = cost > 0 ? (cost >= 0.01 ? `$${cost.toFixed(2)}` : `<$0.01`) : null;
+    // Avg cache hit rate = cache reads / all input-class tokens (same formula as the stats panel).
+    const hitDenominator = tokens ? tokens.cacheRead + tokens.cacheWrite + tokens.input : 0;
+    const cacheHitRateText = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
+      ? `${(tokens.cacheRead / hitDenominator * 100).toFixed(1)}%`
+      : null;
 
     let contextColor = "var(--text-muted)";
     let desktopContextText: string | null = null;
@@ -1533,6 +1689,7 @@ export function AppShell() {
       tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
       tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
       tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
+      if (cacheHitRateText) tooltipParts.push(`${translate("session.cacheHitRate")}: ${cacheHitRateText}`);
       if (cost > 0) tooltipParts.push(`cost: $${cost.toFixed(4)}`);
     }
     if (contextUsage?.contextWindow) {
@@ -1657,6 +1814,14 @@ export function AppShell() {
                   <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
                 </svg>
                 {desktopContextText}
+              </span>
+            )}
+            {cacheHitRateText && (
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }} title={translate("session.cacheHitRate")}>
+                <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
+                </svg>
+                {cacheHitRateText}
               </span>
             )}
           </>
@@ -1911,6 +2076,7 @@ export function AppShell() {
                   )}
                 </button>
               )}
+              {!isNarrowMobile && renderSessionTabsButton(true)}
               {!isNarrowMobile && renderChatToolbarActions(true)}
               {renderSessionStatsButton(true)}
               {renderMainFileToggle(true)}
@@ -1934,6 +2100,7 @@ export function AppShell() {
                     backdropFilter: "blur(10px)",
                   }}
                 >
+                  {renderSessionTabsButton(true)}
                   {renderChatToolbarActions(true)}
                 </div>
               )}
@@ -1942,9 +2109,9 @@ export function AppShell() {
           {!isMobile && (
             <>
               {renderThemeButton(false)}
-              {renderLanguageButton(false)}
+              {renderSessionTabsButton(false)}
               {renderProjectTrustWarning(false)}
-              {renderChatToolbarActions(false)}
+              {renderMoreMenuButton()}
               {renderSessionStatsButton(false)}
             </>
           )}
@@ -2015,6 +2182,165 @@ export function AppShell() {
                       <span>{plugin.label}</span>
                     </button>
                   ))}
+                </div>
+              )}
+              {activeTopPanel === "more" && (() => {
+    const item = (
+      key: string,
+      label: string,
+      icon: React.ReactNode,
+      opts: { onClick: () => void; disabled?: boolean; active?: boolean; trailing?: React.ReactNode },
+    ) => (
+      <button
+        key={key}
+        type="button"
+        role="menuitem"
+        aria-disabled={opts.disabled || undefined}
+        onClick={() => { if (!opts.disabled) opts.onClick(); }}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", height: 34, padding: "0 10px",
+          border: "none", borderRadius: 4,
+          background: opts.active ? "var(--bg-selected)" : "transparent",
+          color: opts.disabled ? "var(--text-dim)" : opts.active ? "var(--accent)" : "var(--text)",
+          cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
+          transition: "background 0.1s",
+        }}
+        onMouseEnter={(e) => { if (!opts.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = opts.active ? "var(--bg-selected)" : "transparent"; }}
+      >
+        <span style={{ display: "flex", color: opts.disabled ? "var(--text-dim)" : "var(--text-muted)", flexShrink: 0 }}>{icon}</span>
+        <span style={{ flex: 1 }}>{label}</span>
+        {opts.trailing}
+      </button>
+    );
+    const icon = (children: React.ReactNode) => (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+    );
+    const chevron = icon(<polyline points="9 6 15 12 9 18" />);
+    // Widen the type so item() can compare the active panel without TS
+    // narrowing activeTopPanel to "more" inside this branch.
+    const currentPanel = activeTopPanel as "agents" | "branches" | "sessions" | "more" | "system" | "tools" | "session" | "language" | null;
+    const titleDisabled = !selectedSession || selectedSession.transient
+      || !(((sessionStats?.userMessages ?? 0) > 0) || selectedSession.messageCount > 0)
+      || autoNameStatus.kind === "naming";
+    return (
+      <div
+        data-more-menu-panel="true"
+        role="menu"
+        aria-label={translate("chat.moreControls")}
+        style={{
+          background: "var(--bg-panel)",
+          borderLeft: "1px solid var(--border)",
+          borderRight: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+          overflow: "hidden", padding: 4,
+        }}
+      >
+        {item("language", translate("common.language"), icon(
+          <>
+            <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" />
+            <path d="m22 22-5-10-5 10" /><path d="M14 18h6" />
+          </>
+        ), { onClick: () => toggleTopPanel("language"), trailing: chevron })}
+        {item("history", translate("history.label"), icon(
+          <>
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
+          </>
+        ), { onClick: () => { setActiveTopPanel(null); handleViewFullHistory(); }, disabled: !selectedSession })}
+        {item("title", translate("title.generate"), icon(
+          <>
+            <path d="m15 4 5 5L7 22l-5-5Z" /><path d="m14 5 5 5" />
+          </>
+        ), { onClick: () => { setActiveTopPanel(null); void handleAutoName(); }, disabled: titleDisabled })}
+        {sessionHasBranches && item("branches", translate("i18n.branches"), icon(
+          <>
+            <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+            <path d="M18 9a9 9 0 0 1-9 9" />
+          </>
+        ), { onClick: () => toggleTopPanel("branches"), active: currentPanel === "branches" })}
+        {hasSubagentSessions && item("agents", translate("agentSwitcher.title"), icon(
+          <>
+            <rect x="5" y="7" width="14" height="11" rx="2" />
+            <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
+          </>
+        ), { onClick: () => toggleTopPanel("agents"), active: currentPanel === "agents" })}
+        {item("system", translate("system.label"), icon(
+          <>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </>
+        ), { onClick: () => handleSystemInfoToggle("system"), active: currentPanel === "system" })}
+        {item("tools", translate("tools.label"), icon(
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z" />
+        ), { onClick: () => handleSystemInfoToggle("tools"), active: currentPanel === "tools" })}
+      </div>
+    );
+  })()}
+              {activeTopPanel === "sessions" && (
+                <div
+                  role="menu"
+                  aria-label={translate("topbar.sessions")}
+                  style={{
+                    background: "var(--bg-panel)",
+                    borderLeft: "1px solid var(--border)",
+                    borderRight: "1px solid var(--border)",
+                    borderBottom: "1px solid var(--border)",
+                    overflow: "hidden", padding: 4,
+                  }}
+                >
+                  {topOpenSessions.length === 0 ? (
+                    <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-dim)" }}>
+                      {translate("topbar.noSessions")}
+                    </div>
+                  ) : topOpenSessions.map((session) => {
+                    const active = session.id === selectedSession?.id;
+                    const running = runningSessionIds.has(session.id);
+                    const root = session.projectRoot || session.cwd;
+                    const project = root.split(/[\\\\/]+/).filter(Boolean).pop() ?? root;
+                    return (
+                      <button
+                        key={session.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={active}
+                        title={`${project}\n${session.cwd}`}
+                        onClick={() => { handleSelectSession(session); setActiveTopPanel(null); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          width: "100%", height: 34, padding: "0 10px",
+                          border: "none", borderRadius: 4,
+                          background: active ? "var(--bg-selected)" : "transparent",
+                          color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                            background: running ? "var(--accent)" : "var(--text-dim)",
+                            opacity: running ? 1 : 0.4,
+                            boxShadow: running ? "0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)" : "none",
+                          }}
+                        />
+                        <span
+                          style={{
+                            flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            fontWeight: active ? 600 : 400,
+                            color: active ? "var(--text)" : "var(--text-muted)",
+                          }}
+                        >
+                          {session.name || session.firstMessage || session.id}
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
+                          {project}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {activeTopPanel === "agents" && activeSessionFamily && selectedSession && (

@@ -917,6 +917,31 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     [projectActivity, selectedProject],
   );
 
+
+  // Cross-project live sessions: any running (or unread) session whose project
+  // is not the currently selected one. Shown as a pinned section at the top of
+  // the session list so concurrent projects stay visible without switching.
+  const crossProjectActiveSessions = useMemo(() => {
+    const selectedKey = selectedProject?.key ?? null;
+    const seen = new Set<string>();
+    const result: { session: SessionInfo; projectRoot: string; running: boolean; unread: boolean }[] = [];
+    for (const session of allSessions) {
+      if (seen.has(session.id)) continue;
+      const key = workspaceKeyOf(session);
+      if (!key || key === selectedKey) continue;
+      const running = runningSessionIds.has(session.id);
+      const unread = unreadSessionIds.has(session.id);
+      if (!running && !unread) continue;
+      seen.add(session.id);
+      result.push({
+        session,
+        projectRoot: session.projectRoot ?? session.cwd ?? "",
+        running,
+        unread,
+      });
+    }
+    return result.sort((a, b) => b.session.modified.localeCompare(a.session.modified));
+  }, [allSessions, runningSessionIds, unreadSessionIds, selectedProject]);
   const filteredSessions = selectedProject
     ? sessionsForProject(allSessions, selectedProject.key)
     : allSessions;
@@ -1613,6 +1638,49 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </button>
         )}
       </div>
+
+      {crossProjectActiveSessions.length > 0 && (
+        <div style={{ flexShrink: 0, borderBottom: "1px solid var(--border)", padding: "4px 0 2px" }}>
+          <div style={{ padding: "2px 12px 3px", fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-dim)" }}>
+            {t("sidebar.activeElsewhere")}
+          </div>
+          {crossProjectActiveSessions.map(({ session, projectRoot, running, unread }) => {
+            const projectName = projectRoot.split(/[\\\\/]+/).filter(Boolean).pop() ?? projectRoot;
+            const itemTitle = session.name
+              || skillExpansionToCommand(session.firstMessage)?.slice(0, 50)
+              || session.firstMessage.slice(0, 50)
+              || session.id.slice(0, 12);
+            return (
+              <button
+                key={session.id}
+                onClick={() => handleSelectSessionFromList(session)}
+                title={`${projectRoot}\n${itemTitle}`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  width: "100%", padding: "5px 12px",
+                  background: "none", border: "none",
+                  cursor: "pointer", textAlign: "left",
+                  fontSize: 11,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "var(--text-dim)" }} aria-hidden="true">
+                  <line x1="6" y1="3" x2="6" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+                <span style={{ flexShrink: 0, maxWidth: "45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>
+                  {projectName}
+                </span>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
+                  {itemTitle}
+                </span>
+                {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Session list */}
       <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>

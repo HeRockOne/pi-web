@@ -287,6 +287,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [streamState, dispatch] = useReducer(streamReducer, INITIAL_STREAMING_STATE);
   const [agentRunning, setAgentRunning] = useState(false);
   const [bashRunning, setBashRunning] = useState(false);
+  // Actual wall-clock start of each tool execution, from tool_execution_start SSE
+  // events. The assistant message timestamp is when generation started, not when
+  // the tool began running — durations anchored to it overstate the tool time.
+  const [toolStartTimes, setToolStartTimes] = useState<Map<string, number>>(new Map());
   const [pendingBash, setPendingBash] = useState<{ command: string; excludeFromContext: boolean } | null>(null);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<ModelEntry[]>([]);
@@ -830,6 +834,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentPhase(null);
     setRetryInfo(null);
     dispatch({ type: "end" });
+    setToolStartTimes((prev) => prev.size > 0 ? new Map<string, number>() : prev);
     return wasRunning;
   }, []);
 
@@ -1201,6 +1206,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_start": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
+        if (id) setToolStartTimes((prev) => prev.has(id) ? prev : new Map(prev).set(id, Date.now()));
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           if (!tools.some((t) => t.id === id)) tools.push({ id, name });
@@ -1389,6 +1395,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentRunning(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
+      setToolStartTimes((prev) => prev.size > 0 ? new Map<string, number>() : prev);
     }
   }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, composerDraftKey, reconcileAgentState, restoreSubmission]);
 
@@ -2027,6 +2034,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     scrollToBottom, scrollUserMsgToTop,
     dispatch, setAgentRunning, setForkingEntryId,
     bashRunning, pendingBash,
+    toolStartTimes,
     // Subscriptions
     handleAgentEventRef,
   };

@@ -13,6 +13,7 @@ import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { ConfigSwitch } from "./SettingsUi";
+import { WebThemePicker } from "./WebThemePicker";
 
 interface Props {
   cwd: string | null;
@@ -127,8 +128,8 @@ function GeneralSettings({ sessionId, onSessionReloaded }: Pick<Props, "sessionI
             );
           })}
         </div>
+        <WebThemePicker />
       </section>
-
       {shellSettings?.isWindows && (
         <section className="settings-general-section">
           <h3 className="settings-general-heading">{t("settings.shellTool")}</h3>

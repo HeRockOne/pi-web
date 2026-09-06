@@ -200,7 +200,18 @@ interface Props {
    * final answer text-only.
    */
   writtenFiles?: WrittenFile[];
+  /** An agent run is active in this session — enables live tool timing after message end. */
+  runActive?: boolean;
+  /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
+  toolStartTimes?: Map<string, number>;
 }
+
+
+/** Duration display: integers as-is ("8s"), live fractional values with one decimal ("3.4s"). */
+function formatSeconds(seconds: number): string {
+  return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+}
+
 
 function formatTime(ts?: number): string | null {
   if (!ts) return null;
@@ -248,12 +259,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -582,10 +593,17 @@ function AssistantMessageView({
   sessionId,
   entryId,
   writtenFiles,
+  runActive,
+  toolStartTimes,
 }: {
   message: AssistantMessage;
+  /** Streamed model output still growing — the streaming-phase live tick. */
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
+  /** An agent run is active in this session — enables live tool timing. */
+  runActive?: boolean;
+  /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
+  toolStartTimes?: Map<string, number>;
   modelNames?: Record<string, string>;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
@@ -633,6 +651,8 @@ function AssistantMessageView({
   // Streaming-based timing for thinking blocks
   const blockStartTimesRef = useRef<Map<number, number>>(new Map());
   const [streamingDurations, setStreamingDurations] = useState<Map<number, number>>(new Map());
+  // Live elapsed seconds for the still-running (last) block while streaming.
+  const [liveDurations, setLiveDurations] = useState<Map<number, number>>(new Map());
 
   // Thinking duration derived from file timestamps: time from prev message end to this message end
   // This is the total generation time (thinking + any text before first tool call)
@@ -643,19 +663,22 @@ function AssistantMessageView({
   }, [message.timestamp, prevTimestamp]);
 
   // Tool call durations derived from session file timestamps (accurate for completed messages)
-  // assistant message timestamp = when generation ended = when tools started running
-  // toolResult timestamp = when tool execution finished
+  // Tool call durations derived from session file timestamps (accurate for completed messages).
+  // Prefer the exact SSE execution start; fall back to the assistant message
+  // timestamp, which is when generation started — a later overstatement that
+  // only applies to historical entries loaded from file.
   const toolCallDurations = useMemo<Map<string, number>>(() => {
     const map = new Map<string, number>();
     if (!toolResults || !message.timestamp) return map;
     for (const [callId, result] of toolResults) {
-      if (result.timestamp && message.timestamp) {
-        const secs = Math.round((result.timestamp - message.timestamp) / 1000);
+      const start = toolStartTimes?.get(callId) ?? message.timestamp;
+      if (result.timestamp && start) {
+        const secs = Math.round((result.timestamp - start) / 1000);
         if (secs > 0) map.set(callId, secs);
       }
     }
     return map;
-  }, [toolResults, message.timestamp]);
+  }, [toolResults, message.timestamp, toolStartTimes]);
 
   const textContent = blocks
     .filter((b): b is TextContent => b.type === "text")
@@ -670,7 +693,11 @@ function AssistantMessageView({
   };
 
   useEffect(() => {
-    if (!isStreaming) {
+    // Live timing follows the whole agent run (not just the model stream):
+    // tools keep running after message_end / stream end, and their elapsed
+    // time must keep ticking until the run settles.
+    const active = isStreaming || runActive;
+    if (!active) {
       // Finalise any un-finished thinking block durations on stream end
       const now = new Date().getTime();
       setStreamingDurations((prev: Map<number, number>) => {
@@ -680,6 +707,7 @@ function AssistantMessageView({
         }
         return next;
       });
+      setLiveDurations(new Map());
       streamStartRef.current = null;
       setTps(null);
       return;
@@ -710,6 +738,13 @@ function AssistantMessageView({
         return changed ? next : prev;
       });
 
+      // The last block is still running — expose its live elapsed seconds.
+      const lastIdx = items.length > 0 ? items[items.length - 1].originalIndex : undefined;
+      const lastStart = lastIdx !== undefined ? blockStartTimesRef.current.get(lastIdx) : undefined;
+      if (lastIdx !== undefined && lastStart !== undefined) {
+        setLiveDurations(new Map([[lastIdx, (now - lastStart) / 1000]]));
+      }
+
       const tokens = estimatedTokensRef.current;
       if (tokens === 0) return;
       if (streamStartRef.current === null) streamStartRef.current = now;
@@ -718,8 +753,46 @@ function AssistantMessageView({
     };
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
-  }, [isStreaming]);
+  }, [isStreaming, runActive]);
 
+  // Live tool-execution timing: between assistant message end (generation done,
+  // tools start) and each tool result, tick elapsed seconds per still-running
+  // tool call. This is the phase where the model stream is already over but the
+  // bash/tool card would otherwise show no timer until its result landed.
+  const [liveToolDurations, setLiveToolDurations] = useState<Map<string, number>>(new Map());
+  const toolResultsRef = useRef(toolResults);
+  toolResultsRef.current = toolResults;
+  const messageTimestampRef = useRef(message.timestamp);
+  messageTimestampRef.current = message.timestamp;
+  const toolStartTimesRef = useRef(toolStartTimes);
+  toolStartTimesRef.current = toolStartTimes;
+  useEffect(() => {
+    if (!runActive || isStreaming) {
+      setLiveToolDurations((prev) => prev.size > 0 ? new Map<string, number>() : prev);
+      return;
+    }
+    const tick = () => {
+      const results = toolResultsRef.current;
+      const now = Date.now();
+      const next = new Map<string, number>();
+      for (const { block } of blockItemsRef.current) {
+        if (block.type !== "toolCall") continue;
+        const id = (block as ToolCallContent).toolCallId;
+        if (!id || (results && results.has(id))) continue;
+        const start = toolStartTimesRef.current?.get(id) ?? messageTimestampRef.current;
+        if (!start) continue;
+        const secs = (now - start) / 1000;
+        if (secs > 0) next.set(id, secs);
+      }
+      setLiveToolDurations((prev) => {
+        if (prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) return prev;
+        return next;
+      });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [runActive, isStreaming]);
   if (blocks.length === 0 && !isStreaming && !providerError) return null;
 
   return (
@@ -772,7 +845,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} liveDuration={liveDurations.get(originalIndex)} liveToolDuration={liveToolDurations.get((block as ToolCallContent).toolCallId ?? "")} blockStart={blockStartTimesRef.current.get(originalIndex)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -850,17 +923,24 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, onOpenSession, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenSession?: (sessionId: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, liveDuration, liveToolDuration, blockStart, toolCallDurations, cwd, onOpenFile, onOpenSession, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; liveDuration?: number; liveToolDuration?: number; blockStart?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenSession?: (sessionId: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
   if (block.type === "thinking") {
-    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
+    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration ?? liveDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
   }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
-    const duration = toolCallDurations?.get(tc.toolCallId);
+    // Prefer the file-based duration; else freeze at result arrival (result ts − block start);
+    // else live-tick while the tool is still running.
+    const streamedSecs = result?.timestamp !== undefined && blockStart !== undefined
+      ? (result.timestamp - blockStart) / 1000
+      : undefined;
+    const duration = toolCallDurations?.get(tc.toolCallId)
+      ?? (streamedSecs !== undefined && streamedSecs > 0.05 ? Math.round(streamedSecs) : undefined)
+      ?? (result ? undefined : (liveToolDuration ?? liveDuration));
     return <ToolCallBlock block={tc} result={result} duration={duration} onOpenSession={onOpenSession} />;
   }
   return null;
@@ -908,7 +988,6 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
       style={{
         border: "1px solid var(--border)",
         borderRadius: 6,
-        overflow: "hidden",
         fontSize: 13,
       }}
     >
@@ -930,7 +1009,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
       >
          <span>{t("i18n.thinking")}</span>
         {duration !== undefined && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration !== undefined ? formatSeconds(duration) : ""}</span>
         )}
       </button>
       {expanded && (
@@ -946,6 +1025,40 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
           }}
         >
            {loading ? t("i18n.loadingThinking") : error ?? (block.deferred ? content : block.thinking)}
+        </div>
+      )}
+      {expanded && !loading && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 0,
+            zIndex: 1,
+            display: "flex",
+            justifyContent: "flex-end",
+            padding: "4px 10px 6px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => void toggle()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "3px 12px",
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              background: "var(--bg)",
+              color: "var(--text-muted)",
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m18 15-6-6-6 6" />
+            </svg>
+            {t("i18n.collapse")}
+          </button>
         </div>
       )}
     </div>
@@ -1011,7 +1124,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             {isStreamingInput ? t("chat.generatingToolInput") : getToolPreview(block)}
           </span>
           {duration !== undefined && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration !== undefined ? formatSeconds(duration) : ""}</span>
           )}
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
             <polyline points="2 3.5 5 6.5 8 3.5" />

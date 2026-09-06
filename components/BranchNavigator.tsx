@@ -240,7 +240,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
       {/* Children */}
       {rep.children.map((child, idx) => (
         <TreeNodeView
-          key={child.entry.id}
+          key={child.entry.id ?? `node-${idx}`}
           node={child}
           activePathIds={activePathIds}
           depth={depth + 1}
@@ -353,7 +353,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
               <div style={{ padding: "4px 12px 8px 12px", maxHeight: 260, overflowY: "auto" }}>
                 {topLevel.map((child, idx) => (
                   <TreeNodeView
-                    key={child.entry.id}
+                    key={child.entry.id ?? `node-${idx}`}
                     node={child}
                     activePathIds={activePathIds}
                     depth={0}
@@ -414,7 +414,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             <div style={{ padding: "4px 12px 8px 12px", maxHeight: 260, overflowY: "auto" }}>
               {topLevel.map((child, idx) => (
                 <TreeNodeView
-                  key={child.entry.id}
+                  key={child.entry.id ?? `node-${idx}`}
                   node={child}
                   activePathIds={activePathIds}
                   depth={0}
