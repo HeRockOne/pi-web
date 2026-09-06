@@ -1588,3 +1588,267 @@
   background: var(--bg-hover);
   color: var(--text);
 }
+
+/* ── 用量统计（Usage Stats）─────────────────────────────────────────
+ * 移植自 PiDeck usageStats 模块，语义 token 换成 pi-web 的 CSS 变量，
+ * 暗色模式由变量自然适配。 */
+.usage-stats-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+}
+.usage-stats-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.usage-stats-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.usage-stats-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+.usage-stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.usage-stats-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.usage-stats-card-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.usage-stats-card-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+.usage-stats-card-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.usage-stats-unknown {
+  color: #d97706;
+}
+.usage-stats-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 6px 0;
+}
+.usage-stats-code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: 4px 0;
+}
+.usage-stats-not-installed p {
+  margin: 6px 0;
+}
+.usage-stats-install-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.usage-stats-day-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.usage-stats-date-input {
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.usage-stats-date-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.usage-stats-provider-bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  margin-top: 4px;
+}
+.usage-stats-provider-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 20px;
+  row-gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.usage-stats-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.usage-stats-legend-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 6px;
+  color: var(--text);
+}
+.usage-stats-provider-legend span:last-child {
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+.usage-stats-day-tables {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  padding: 10px 12px;
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 1100px) {
+  .usage-stats-day-tables {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.usage-stats-day-tables h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.usage-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.usage-stats-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.usage-stats-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-soft, var(--border));
+  font-variant-numeric: tabular-nums;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.usage-stats-table td:first-child {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.usage-stats-heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.usage-heatmap-l0 { fill: var(--bg-subtle); }
+.usage-heatmap-l1 { fill: color-mix(in srgb, var(--accent) 25%, transparent); }
+.usage-heatmap-l2 { fill: color-mix(in srgb, var(--accent) 50%, transparent); }
+.usage-heatmap-l3 { fill: color-mix(in srgb, var(--accent) 72%, transparent); }
+.usage-heatmap-l4 { fill: color-mix(in srgb, var(--accent) 95%, transparent); }
+.usage-stats-chart {
+  margin-top: 4px;
+}
+.usage-stats-chart-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.usage-stats-range-button {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.usage-stats-range-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.usage-stats-range-button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.usage-stats-range-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.usage-stats-chart-tooltip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.usage-stats-chart-tooltip-label {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.usage-stats-chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+.usage-stats-chart-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.usage-stats-chart-tooltip-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-stats-chart-tooltip-value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}

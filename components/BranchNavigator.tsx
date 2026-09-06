@@ -332,7 +332,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}
-           title={t("i18n.branches")}
+           title={t("i18n.branchesTooltip")}
            aria-label={t("i18n.branches")}
           aria-pressed={open}
         >
@@ -340,7 +340,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
            {!compact && <span>{t("i18n.branches")}</span>}
         </button>
         {open && dropdownPos && (
-          <div style={{
+          <div
+            data-branch-panel="true"
+            style={{
             position: "fixed",
             top: dropdownPos.top,
             left: dropdownPos.left,

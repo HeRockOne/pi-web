@@ -12,12 +12,15 @@ test("keeps action icons inline in medium mobile sidebars", () => {
   assert.match(source, /\{isNarrowMobile && \([\s\S]*?data-mobile-toolbar-more="true"/);
 });
 
-test("uses a compact narrow-mobile toolbar with a floating action layer", () => {
+test("uses a compact narrow-mobile toolbar with a labeled action menu", () => {
   assert.match(source, /data-mobile-toolbar="true"[\s\S]*?flex: 1,[\s\S]*?minWidth: 0/);
   assert.match(
     source,
-    /data-mobile-toolbar-actions="true"[\s\S]*?position: "absolute"[\s\S]*?right: 0,[\s\S]*?left: TOP_BAR_ICON_BUTTON_SIZE/,
+    /data-mobile-toolbar-actions="true"[\s\S]*?position: "absolute"[\s\S]*?top: "100%",[\s\S]*?right: 0,[\s\S]*?width: `min\(\$\{MORE_MENU_WIDTH\}px, 100%\)`/,
   );
+  assert.match(source, /id="mobile-toolbar-actions"[\s\S]*?role="menu"/);
+  assert.match(source, /row\("sessions", translate\("menu\.sessions"\)/);
+  assert.match(source, /row\("theme", translate\("menu\.theme"\)/);
 
   for (const action of ["history", "name", "agents", "branches", "system", "tools", "theme", "language"]) {
     assert.match(source, new RegExp(`data-mobile-toolbar-action=(?:\\{mobile \\? )?"${action}"`));

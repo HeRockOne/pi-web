@@ -558,6 +558,31 @@ export function AppShell() {
     };
   }, [activeTopPanel]);
 
+  // The desktop branch panel (opened from the ⋯ menu) closes on outside
+  // pointerdown / Escape. Clicks inside its own popup keep it open.
+  useEffect(() => {
+    if (activeTopPanel !== "branches") return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-branch-panel]")) return;
+      setActiveTopPanel(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveTopPanel(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [activeTopPanel]);
+
   useEffect(() => {
     setMobileToolbarMoreOpen(false);
   }, [isMobile, isNarrowMobile, selectedSession?.id, newSessionDraftId]);
@@ -2499,25 +2524,121 @@ export function AppShell() {
               {isNarrowMobile && mobileToolbarMoreOpen && (
                 <div
                   id="mobile-toolbar-actions"
-                  role="toolbar"
+                  role="menu"
                   aria-label={translate("chat.moreControls")}
                   data-mobile-toolbar-actions="true"
                   style={{
                     position: "absolute",
-                    top: 0,
+                    top: "100%",
                     right: 0,
-                    bottom: 0,
-                    left: TOP_BAR_ICON_BUTTON_SIZE,
+                    width: `min(${MORE_MENU_WIDTH}px, 100%)`,
+                    maxHeight: "calc(100dvh - 64px)",
+                    overflowY: "auto",
                     zIndex: 20,
                     display: "flex",
-                    alignItems: "stretch",
-                    background: "color-mix(in srgb, var(--bg-panel) 94%, var(--bg))",
-                    boxShadow: "4px 0 18px rgba(0,0,0,0.12)",
-                    backdropFilter: "blur(10px)",
+                    flexDirection: "column",
+                    padding: 4,
+                    background: "var(--bg-panel)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
                   }}
                 >
-                  {renderSessionTabsButton(true)}
-                  {renderChatToolbarActions(true)}
+                  {(() => {
+                    const row = (
+                      key: string,
+                      label: string,
+                      icon: React.ReactNode,
+                      opts: { onClick: () => void; disabled?: boolean; trailing?: React.ReactNode },
+                    ) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="menuitem"
+                        aria-disabled={opts.disabled || undefined}
+                        onClick={() => { if (!opts.disabled) opts.onClick(); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          width: "100%", height: 34, padding: "0 10px",
+                          border: "none", borderRadius: 4, background: "transparent",
+                          color: opts.disabled ? "var(--text-dim)" : "var(--text)",
+                          cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) => { if (!opts.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span style={{ display: "flex", color: opts.disabled ? "var(--text-dim)" : "var(--text-muted)", flexShrink: 0 }}>{icon}</span>
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                        {opts.trailing}
+                      </button>
+                    );
+                    const rowIcon = (children: React.ReactNode) => (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+                    );
+                    const rowBadge = (value: number) => (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          minWidth: 15, height: 15, padding: "0 4px", display: "grid", placeItems: "center",
+                          borderRadius: 7, background: "var(--accent)", color: "var(--bg-panel)",
+                          fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums", flexShrink: 0,
+                        }}
+                      >
+                        {value}
+                      </span>
+                    );
+                    const closeMenu = () => setMobileToolbarMoreOpen(false);
+                    const hasMessages = Boolean(
+                      selectedSession
+                      && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
+                    );
+                    const titleDisabled = !selectedSession || selectedSession.transient || !hasMessages
+                      || autoNameStatus.kind === "naming";
+                    return (
+                      <>
+                        {row("sessions", translate("menu.sessions"), rowIcon(
+                          <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" /></>
+                        ), {
+                          onClick: () => { closeMenu(); toggleTopPanel("sessions"); },
+                          trailing: topOpenSessions.length > 1 ? rowBadge(topOpenSessions.length) : null,
+                        })}
+                        {row("history", translate("history.label"), rowIcon(
+                          <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></>
+                        ), { onClick: () => { closeMenu(); handleViewFullHistory(); }, disabled: !selectedSession })}
+                        {row("title", translate("title.generate"), rowIcon(
+                          <><path d="m15 4 5 5L7 22l-5-5Z" /><path d="m14 5 5 5" /></>
+                        ), { onClick: () => { closeMenu(); void handleAutoName(); }, disabled: titleDisabled })}
+                        {hasSubagentSessions && row("agents", translate("menu.agents"), rowIcon(
+                          <><rect x="5" y="7" width="14" height="11" rx="2" /><path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" /></>
+                        ), {
+                          onClick: () => { closeMenu(); toggleTopPanel("agents"); },
+                          trailing: activeSessionFamily && activeSessionFamily.subagents.length > 0
+                            ? rowBadge(activeSessionFamily.subagents.length)
+                            : null,
+                        })}
+                        {sessionHasBranches && row("branches", translate("i18n.branches"), rowIcon(
+                          <><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></>
+                        ), { onClick: () => { closeMenu(); toggleTopPanel("branches"); } })}
+                        {row("system", translate("system.label"), rowIcon(
+                          <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>
+                        ), { onClick: () => { closeMenu(); handleSystemInfoToggle("system"); }, disabled: !showChat })}
+                        {row("tools", translate("tools.label"), rowIcon(
+                          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z" />
+                        ), { onClick: () => { closeMenu(); handleSystemInfoToggle("tools"); }, disabled: !showChat })}
+                        {row("theme", translate("menu.theme"), rowIcon(
+                          <><rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></>
+                        ), {
+                          onClick: () => toggleTheme(),
+                          trailing: (
+                            <span style={{ color: "var(--text-muted)", fontSize: 11, flexShrink: 0 }}>
+                              {translate(preference === "light" ? "theme.mode.light" : preference === "dark" ? "theme.mode.dark" : "theme.mode.auto")}
+                            </span>
+                          ),
+                        })}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -2643,7 +2764,6 @@ export function AppShell() {
     const icon = (children: React.ReactNode) => (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
     );
-    const chevron = icon(<polyline points="9 6 15 12 9 18" />);
     // Widen the type so item() can compare the active panel without TS
     // narrowing activeTopPanel to "more" inside this branch.
     const currentPanel = activeTopPanel as "agents" | "branches" | "sessions" | "more" | "system" | "tools" | "session" | "language" | null;
@@ -2663,12 +2783,6 @@ export function AppShell() {
           overflow: "hidden", padding: 4,
         }}
       >
-        {item("language", translate("common.language"), icon(
-          <>
-            <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" />
-            <path d="m22 22-5-10-5 10" /><path d="M14 18h6" />
-          </>
-        ), { onClick: () => toggleTopPanel("language"), trailing: chevron })}
         {item("history", translate("history.label"), icon(
           <>
             <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
@@ -2685,7 +2799,7 @@ export function AppShell() {
             <path d="M18 9a9 9 0 0 1-9 9" />
           </>
         ), { onClick: () => toggleTopPanel("branches"), active: currentPanel === "branches" })}
-        {hasSubagentSessions && item("agents", translate("agentSwitcher.title"), icon(
+        {hasSubagentSessions && item("agents", translate("menu.agents"), icon(
           <>
             <rect x="5" y="7" width="14" height="11" rx="2" />
             <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
@@ -2849,6 +2963,19 @@ export function AppShell() {
                   selectedSessionId={selectedSession.id}
                   runningSessionIds={runningSessionIds}
                   onSelectSession={handleSelectSession}
+                />
+              )}
+              {activeTopPanel === "branches" && (
+                <BranchNavigator
+                  tree={branchTree}
+                  activeLeafId={branchActiveLeafId}
+                  onLeafChange={handleBranchLeafChange}
+                  inline
+                  hideInlineButton
+                  containerRef={topBarRef}
+                  open
+                  onToggle={() => toggleTopPanel("branches")}
+                  hasSession={Boolean(selectedSession)}
                 />
               )}
               {activeTopPanel === "system" && (
