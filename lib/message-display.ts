@@ -1,4 +1,5 @@
 import type { AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
+import { splitThinkTextBlock } from "./think-tag";
 
 interface DisplayOptions {
   isStreaming?: boolean;
@@ -12,7 +13,21 @@ export function getDisplayableAssistantBlocks(
   message: AssistantMessage,
   options: DisplayOptions = {},
 ): AssistantContentBlock[] {
-  return (message.content ?? []).filter((block) => !isEmptyThinkingBlock(block, options));
+  // Recover reasoning that a provider returned inline inside the assistant text
+  // (think-tagged) instead of a separate reasoning field: split it back out so
+  // the UI can render thinking vs. answer properly. See lib/think-tag.ts.
+  const expanded: AssistantContentBlock[] = [];
+  for (const block of message.content ?? []) {
+    if (block.type === "text") {
+      const split = splitThinkTextBlock(block);
+      if (split) {
+        expanded.push(...split);
+        continue;
+      }
+    }
+    expanded.push(block);
+  }
+  return expanded.filter((block) => !isEmptyThinkingBlock(block, options));
 }
 
 export function getAssistantErrorMessage(
