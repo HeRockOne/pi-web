@@ -273,7 +273,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   const [restoreAnchorReady, setRestoreAnchorReady] = useState(false);
 
   const {
-    loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
+    loading, error, messages, entryIds, thinkingLevels, historyCursor, hasEarlierMessages, streamState,
     agentRunning, bashRunning, pendingBash, toolStartTimes, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
@@ -1085,6 +1085,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                     onOpenFile={onOpenFile}
                     onOpenSession={onOpenSession}
                     entryId={entryIds[idx]}
+                    thinkingLevel={thinkingLevels[idx] ?? undefined}
                     searchBlock={entryIds[idx] === pendingSearchScroll?.entryId ? searchBlock : undefined}
                     onFork={sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
                     forking={forkingEntryId === entryIds[idx]}
@@ -1228,7 +1229,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
               );
             })()}
             {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} thinkingLevel={thinkingLevel === "auto" ? undefined : thinkingLevel} cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
             )}
 
             {agentRunning && !hasStreamingContent && agentPhase && (

@@ -349,6 +349,7 @@ export interface SessionInfo {
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
+  thinkingLevels: (string | null)[]; // parallel to messages — thinking level in effect when the message was generated (assistant only)
   oldestEntryId: string | null;
   hasMore: boolean;
   thinkingLevel: string;

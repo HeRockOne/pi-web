@@ -43,6 +43,7 @@ export interface SessionData {
   context: {
     messages: AgentMessage[];
     entryIds: string[];
+    thinkingLevels: (string | null)[];
     oldestEntryId: string | null;
     hasMore: boolean;
     thinkingLevel: string;
@@ -285,6 +286,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
+  const [thinkingLevels, setThinkingLevels] = useState<(string | null)[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasEarlierMessages, setHasEarlierMessages] = useState(false);
   const [streamState, dispatch] = useReducer(streamReducer, INITIAL_STREAMING_STATE);
@@ -472,6 +474,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           setActiveLeafId(null);
           setMessages([]);
           setEntryIds([]);
+          setThinkingLevels([]);
           setHistoryCursor(null);
           setHasEarlierMessages(false);
           setError(null);
@@ -486,6 +489,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveLeafId(d.leafId);
       setMessages(persistedMessages);
       setEntryIds(d.context.entryIds ?? []);
+      setThinkingLevels(d.context.thinkingLevels ?? []);
       setHistoryCursor(d.context.oldestEntryId);
       setHasEarlierMessages(d.context.hasMore);
       setToolPresetState(d.toolNames !== undefined ? getPresetFromToolNames(d.toolNames) : "default");
@@ -550,6 +554,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           ...prev.context,
           messages: [...d.context.messages, ...prev.context.messages],
           entryIds: [...d.context.entryIds, ...prev.context.entryIds],
+          thinkingLevels: [...d.context.thinkingLevels, ...prev.context.thinkingLevels],
           oldestEntryId: d.context.oldestEntryId,
           hasMore: d.context.hasMore,
         } : d.context;
@@ -2076,7 +2081,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
+    data, loading, error, activeLeafId, messages, entryIds, thinkingLevels, historyCursor, hasEarlierMessages, streamState,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,

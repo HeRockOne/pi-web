@@ -184,6 +184,8 @@ interface Props {
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
+  /** Thinking level in effect when this assistant message was generated (rendered in the header). */
+  thinkingLevel?: string;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenSession?: (sessionId: string) => void;
@@ -263,12 +265,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, thinkingLevel, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} modelNames={modelNames} thinkingLevel={thinkingLevel} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -289,6 +291,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.isStreaming === next.isStreaming
     && haveSameRelevantToolResults(prev.message, prev.toolResults, next.toolResults)
     && prev.modelNames === next.modelNames
+    && prev.thinkingLevel === next.thinkingLevel
     && prev.cwd === next.cwd
     && prev.onOpenFile === next.onOpenFile
     && prev.onOpenSession === next.onOpenSession
@@ -591,6 +594,7 @@ function AssistantMessageView({
   isStreaming,
   toolResults,
   modelNames,
+  thinkingLevel,
   cwd,
   onOpenFile,
   onOpenSession,
@@ -612,6 +616,7 @@ function AssistantMessageView({
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
   modelNames?: Record<string, string>;
+  thinkingLevel?: string;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenSession?: (sessionId: string) => void;
@@ -822,7 +827,20 @@ function AssistantMessageView({
         }}
       >
         {message.provider && (
-          <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+          <>
+            <span aria-hidden>🤖</span>
+            <span>{message.provider}</span>
+            <span aria-hidden>·</span>
+            <span aria-hidden>🪪</span>
+            <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+            {thinkingLevel && (
+              <>
+                <span aria-hidden>·</span>
+                <span aria-hidden>🧠</span>
+                <span>{thinkingLevel}</span>
+              </>
+            )}
+          </>
         )}
         {isStreaming && (() => {
           const est = Math.round(estimatedTokens);

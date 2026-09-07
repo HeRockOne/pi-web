@@ -436,6 +436,22 @@ function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pi
   return { thinkingLevel: thinkingLevel ?? "off", model: model ?? null };
 }
 
+/**
+ * Thinking level in effect at each entry of the active branch. Walks the FULL
+ * branch root→leaf (not just the sliced page) so a page that starts after the
+ * last thinking_level_change still resolves the level that was active then.
+ */
+function getThinkingLevelByEntry(entries: SessionEntry[], leafId?: string | null): Map<string, string> {
+  const chain = sliceActiveBranch(entries, leafId ?? null, entries.length);
+  const levels = new Map<string, string>();
+  let level = "off";
+  for (const entry of chain) {
+    if (entry.type === "thinking_level_change") level = entry.thinkingLevel;
+    levels.set(entry.id, level);
+  }
+  return levels;
+}
+
 export interface BuildSessionContextOptions {
   deferThinking?: boolean;
   deferToolResultImages?: boolean;
@@ -459,19 +475,23 @@ export function buildSessionContext(
   const hasMore = Boolean(tail && tail > 0 && sliced[0]?.parentId);
 
   // Convert messages and their IDs together to keep fork/navigation targets aligned.
+  const levelsAtEntry = getThinkingLevelByEntry(entries, leafId);
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
+  const thinkingLevels: (string | null)[] = [];
   for (const entry of sliced) {
     const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
       entryIds.push(entry.id);
+      thinkingLevels.push(m.role === "assistant" ? (levelsAtEntry.get(entry.id) ?? "off") : null);
     }
   }
 
   return {
     messages,
     entryIds,
+    thinkingLevels,
     oldestEntryId: sliced[0]?.id ?? null,
     hasMore,
     ...getSessionSettings(entries, leafId),
