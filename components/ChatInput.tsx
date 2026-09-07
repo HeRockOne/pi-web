@@ -88,6 +88,7 @@ export interface ChatInputHandle {
   replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  addFileReferences: (files: File[]) => void;
   rekeyDraft: (previousKey: string, nextKey: string) => void;
   restoreSubmission: (text: string, images?: ChatDraftImage[], targetDraftKey?: string) => void;
 }
@@ -506,6 +507,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [historyActiveIndex, setHistoryActiveIndex] = useState(0);
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
+  // Dropped file whose name matched multiple index entries — pick which one.
+  const [dropPicker, setDropPicker] = useState<{ name: string; matches: FileIndexEntry[] } | null>(null);
+  const [dropActiveIndex, setDropActiveIndex] = useState(0);
+  const dropPickerQueueRef = useRef<Array<{ name: string; matches: FileIndexEntry[] }>>([]);
+  const dropPickerRef = useRef<HTMLDivElement | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
   const [skillDormancyState, setSkillDormancyState] = useState<{
@@ -691,33 +697,103 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       });
     },
     insertText(text: string) {
-      const ta = textareaRef.current;
-      if (!ta) {
-        setValue((v) => v + (v ? " " : "") + text);
-        return;
-      }
-      const start = ta.selectionStart ?? ta.value.length;
-      const end = ta.selectionEnd ?? ta.value.length;
-      const before = ta.value.slice(0, start);
-      const after = ta.value.slice(end);
-      const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
-      const newVal = before + sep + text + after;
-      valueRef.current = newVal;
-      setValue(newVal);
-      setAtQuery(null);
-      requestAnimationFrame(() => {
-        if (!ta) return;
-        const pos = start + sep.length + text.length;
-        ta.setSelectionRange(pos, pos);
-        ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-      });
+      insertTextAtCursor(text);
     },
     addImages(files: File[]) {
       processImageFiles(files);
     },
+    addFileReferences(files: File[]) {
+      void processFileReferences(files);
+    },
   }));
+
+  const insertTextAtCursor = useCallback((text: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setValue((v) => v + (v ? " " : "") + text);
+      return;
+    }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
+    const newVal = before + sep + text + after;
+    valueRef.current = newVal;
+    setValue(newVal);
+    setAtQuery(null);
+    requestAnimationFrame(() => {
+      if (!ta) return;
+      const pos = start + sep.length + text.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    });
+  }, []);
+
+  const advanceDropPicker = useCallback(() => {
+    const next = dropPickerQueueRef.current.shift() ?? null;
+    if (next) {
+      setDropPicker(next);
+      setDropActiveIndex(0);
+    } else {
+      setDropPicker(null);
+    }
+  }, []);
+
+  const applyDropCandidate = useCallback((entry: FileIndexEntry) => {
+    insertTextAtCursor(entry.path);
+    advanceDropPicker();
+  }, [insertTextAtCursor, advanceDropPicker]);
+
+  const dismissDropPicker = useCallback((insertName: boolean) => {
+    const current = dropPicker;
+    if (insertName && current) insertTextAtCursor(current.name);
+    advanceDropPicker();
+  }, [dropPicker, insertTextAtCursor, advanceDropPicker]);
+
+  const dismissDropPickerRef = useRef(dismissDropPicker);
+  dismissDropPickerRef.current = dismissDropPicker;
+
+  const processFileReferences = useCallback(async (files: File[]) => {
+    if (compact || files.length === 0) return;
+    const resolved: string[] = [];
+    const queue: Array<{ name: string; matches: FileIndexEntry[] }> = [];
+    for (const file of files) {
+      // The browser never exposes a dropped file's absolute path — the server
+      // locates it by name/size/mtime (allowed roots first, then home dir).
+      let data: { path?: string | null; candidates?: string[] } | null = null;
+      try {
+        const res = await fetch("/api/resolve-file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: file.name,
+            size: file.size,
+            lastModified: file.lastModified,
+            cwd: cwd ?? undefined,
+          }),
+        });
+        if (res.ok) data = await res.json();
+      } catch {
+        // Network error — fall back to the plain name.
+      }
+      if (data?.path) {
+        resolved.push(data.path);
+      } else if (data?.candidates && data.candidates.length > 0) {
+        queue.push({ name: file.name, matches: data.candidates.map((p) => ({ path: p, isDir: false })) });
+      } else {
+        resolved.push(file.name);
+      }
+    }
+    if (resolved.length > 0) insertTextAtCursor(resolved.join(" "));
+    if (queue.length > 0) {
+      dropPickerQueueRef.current = queue.slice(1);
+      setDropPicker(queue[0]);
+      setDropActiveIndex(0);
+    }
+  }, [compact, cwd, insertTextAtCursor]);
 
   const processImageFiles = useCallback(async (files: File[]) => {
     if (compact) return;
@@ -1238,6 +1314,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
 
+      // Dropped-file candidate picker — same keys as the @ menu.
+      if (dropPicker && !isComposing) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setDropActiveIndex((i) => Math.min(dropPicker.matches.length - 1, i + 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setDropActiveIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          dismissDropPicker(true);
+          return;
+        }
+        if ((e.key === "Tab" || sendShortcut) && dropPicker.matches[dropActiveIndex]) {
+          e.preventDefault();
+          applyDropCandidate(dropPicker.matches[dropActiveIndex]);
+          return;
+        }
+      }
+
       // @ file menu — skip while composing so IME candidate navigation
       // (arrows/Enter/Tab) is never intercepted.
       if (atMenuOpen && atQuery !== null && !isComposing) {
@@ -1288,7 +1388,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isMobile, isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value]
+    [isMobile, isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, dropPicker, dropActiveIndex, applyDropCandidate, dismissDropPicker]
   );
 
   const handleInput = useCallback(() => {
@@ -1452,6 +1552,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node) && !textareaRef.current?.contains(e.target as Node)) {
         setHistoryMenuOpen(false);
       }
+      if (dropPickerRef.current && !dropPickerRef.current.contains(e.target as Node) && !textareaRef.current?.contains(e.target as Node)) {
+        dismissDropPickerRef.current(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -1476,12 +1579,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       {!compact && <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
         multiple
         style={{ display: "none" }}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          processImageFiles(files);
+          const images = files.filter((f) => f.type.startsWith("image/"));
+          const others = files.filter((f) => !f.type.startsWith("image/"));
+          if (images.length > 0) processImageFiles(images);
+          if (others.length > 0) void processFileReferences(others);
           e.target.value = "";
         }}
       />}
@@ -1978,6 +2083,86 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       );
                     })
                   )}
+                </div>
+              </div>
+            );
+          })()}
+          {dropPicker && (() => {
+            return (
+              <div
+                ref={dropPickerRef}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: "calc(100% + 8px)",
+                  zIndex: 120,
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                  overflow: "hidden",
+                  maxHeight: "min(48vh, 400px)",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "8px 10px",
+                    borderBottom: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    fontSize: 11,
+                    color: "var(--text-dim)",
+                  }}
+                >
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t("chat.dropCandidates", { name: dropPicker.name })}
+                  </span>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("chat.tabEnter")}</span>
+                </div>
+                <div style={{ maxHeight: "calc(min(48vh, 400px) - 34px)", overflowY: "auto", padding: 4 }}>
+                  {dropPicker.matches.map((entry, index) => {
+                    const active = index === dropActiveIndex;
+                    const displayPath = cwd && entry.path.startsWith(`${cwd}/`) ? entry.path.slice(cwd.length + 1) : entry.path;
+                    const name = displayPath.split("/").pop() ?? displayPath;
+                    const dirPrefix = displayPath.slice(0, displayPath.length - name.length);
+                    return (
+                      <button
+                        key={`drop:${entry.path}`}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          applyDropCandidate(entry);
+                        }}
+                        onMouseEnter={() => setDropActiveIndex(index)}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 8px",
+                          border: "none",
+                          borderRadius: 6,
+                          background: active ? "var(--bg-selected)" : "none",
+                          color: "var(--text)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 12.5,
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+                          {getFileIcon(name, 14)}
+                        </span>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {dirPrefix && <span style={{ color: "var(--text-dim)" }}>{dirPrefix}</span>}
+                          {name}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -362,6 +362,7 @@ export const enLocale: LocalePlugin = {
     "chat.files": "Files · {label}{hint}",
     "chat.searching": "Searching…",
     "chat.noMatchingFiles": "No matching files",
+    "chat.dropCandidates": "Multiple files named \"{name}\" — pick one",
     "chat.searchingAll": " · searching all files…",
     "chat.indexTruncated": " · index truncated",
     "chat.steerPlaceholder": "Steer now / queue follow-up...",

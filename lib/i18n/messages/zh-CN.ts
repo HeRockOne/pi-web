@@ -362,6 +362,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.files": "文件 · {label}{hint}",
     "chat.searching": "搜索中…",
     "chat.noMatchingFiles": "未找到匹配的文件",
+    "chat.dropCandidates": "有多个文件叫 \"{name}\"，请选择",
     "chat.searchingAll": " · 正在搜索所有文件…",
     "chat.indexTruncated": " · 索引不完整",
     "chat.steerPlaceholder": "立即引导 / 排队后续消息...",

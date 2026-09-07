@@ -362,6 +362,7 @@ export const zhTWLocale: LocalePlugin = {
     "chat.files": "檔案 · {label}{hint}",
     "chat.searching": "搜尋中…",
     "chat.noMatchingFiles": "找不到相符的檔案",
+    "chat.dropCandidates": "有多個檔案叫 \"{name}\"，請選擇",
     "chat.searchingAll": " · 正在搜尋所有檔案…",
     "chat.indexTruncated": " · 索引已截斷",
     "chat.steerPlaceholder": "立即引導 / 將後續訊息排入佇列...",
