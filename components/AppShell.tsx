@@ -583,6 +583,32 @@ export function AppShell() {
     };
   }, [activeTopPanel]);
 
+  // Panels opened from the ⋯ menus (system prompt, tools, agents, sessions,
+  // session stats, language) collapse on any pointerdown outside the top bar,
+  // so clicking the chat area dismisses them in one step. Pointerdowns inside
+  // the top bar are left alone — the toggle buttons own their open/close.
+  useEffect(() => {
+    if (!activeTopPanel || activeTopPanel === "more" || activeTopPanel === "branches") return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (topBarRef.current && event.composedPath().includes(topBarRef.current)) return;
+      setActiveTopPanel(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setActiveTopPanel(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [activeTopPanel]);
+
   useEffect(() => {
     setMobileToolbarMoreOpen(false);
   }, [isMobile, isNarrowMobile, selectedSession?.id, newSessionDraftId]);
