@@ -168,12 +168,12 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
 export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) {
   return (
     <section className="system-prompt-panel" aria-label={translate("system.prompt")}>
+      {prompt ? (
+        <PromptComposition prompt={prompt} tools={tools} translate={translate} />
+      ) : null}
       <div className="system-prompt-scroll">
         {prompt ? (
-          <>
-            <PromptComposition prompt={prompt} tools={tools} translate={translate} />
-            <div className="system-prompt-text">{prompt}</div>
-          </>
+          <div className="system-prompt-text">{prompt}</div>
         ) : (
           <div className="system-prompt-empty">
             {prompt === ""
@@ -215,12 +215,13 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           font-style: italic;
         }
         .system-prompt-composition {
-          margin: 0 0 12px;
+          margin: 12px 16px 0;
           padding: 10px 12px;
           border: 1px solid var(--border);
           border-radius: 8px;
           background: color-mix(in srgb, var(--bg) 55%, var(--bg-panel));
-          overflow: hidden;
+          min-height: 0;
+          overflow-y: auto;
         }
         .system-prompt-composition-head {
           display: flex;
