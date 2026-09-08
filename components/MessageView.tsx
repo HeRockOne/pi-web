@@ -831,7 +831,7 @@ function AssistantMessageView({
             <span aria-hidden>🤖</span>
             <span>{message.provider}</span>
             <span aria-hidden>·</span>
-            <span aria-hidden>🪪</span>
+            <span aria-hidden>⚙️</span>
             <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
             {thinkingLevel && (
               <>
