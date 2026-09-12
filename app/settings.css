@@ -1750,8 +1750,19 @@
   font-weight: 600;
   color: var(--text-muted);
 }
+.usage-stats-day-tables > div {
+  min-width: 0;
+}
+/* 窄屏（移动端）下 nowrap 表格的最小内容宽度会超出面板，交给容器横向滚动，
+ * 避免把面板撑破；min-width 保证列宽不因压缩而不可读。 */
+.usage-stats-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
 .usage-stats-table {
   width: 100%;
+  min-width: 400px;
   border-collapse: collapse;
   font-size: 12px;
 }

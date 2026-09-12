@@ -78,26 +78,28 @@ function UsageTable({ headers, rows }: { headers: string[]; rows: string[][] }) 
     return <div className="usage-stats-hint">{t("usageStats.table.empty")}</div>;
   }
   return (
-    <table className="usage-stats-table">
-      <thead>
-        <tr>
-          {headers.map((h, i) => (
-            <th key={i}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, 12).map((row, ri) => (
-          <tr key={ri}>
-            {row.map((cell, ci) => (
-              <td key={ci} title={ci === 0 ? cell : undefined}>
-                {cell}
-              </td>
+    <div className="usage-stats-table-wrap">
+      <table className="usage-stats-table">
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i}>{h}</th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.slice(0, 12).map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} title={ci === 0 ? cell : undefined}>
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
