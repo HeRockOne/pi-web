@@ -25,10 +25,12 @@ import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
 import type { UsageAggregated, UsageDayRow } from "@/lib/usage-stats";
 import {
   buildBuckets,
+  cacheHitRateOf,
   colorForProvider,
   dayKeyOf,
   formatCost,
   formatDayKeyPlusOffset,
+  formatPercent,
   formatTokens,
   type RangeMode,
 } from "@/lib/usage-stats-format";
@@ -54,7 +56,7 @@ function CostValue({ cost, costKnown }: { cost: number; costKnown: boolean }) {
   );
 }
 
-function SummaryCard({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
+function SummaryCard({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
     <div className="usage-stats-card">
       <div className="usage-stats-card-label">{label}</div>
@@ -62,6 +64,12 @@ function SummaryCard({ label, value, sub }: { label: string; value: ReactNode; s
       {sub && <div className="usage-stats-card-sub">{sub}</div>}
     </div>
   );
+}
+
+/** 缓存命中率展示：无 prompt token 时显示占位符。 */
+function CacheRateValue({ totals }: { totals: { input: number; cacheRead: number; cacheWrite: number } }) {
+  const rate = cacheHitRateOf(totals);
+  return <>{rate === null ? "—" : formatPercent(rate)}</>;
 }
 
 function UsageTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
@@ -297,6 +305,14 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
             />
             <SummaryCard label={t("usageStats.dayDetail.cards.turns")} value={String(row.totals.turns)} />
             <SummaryCard label={t("usageStats.dayDetail.cards.sessions")} value={String(row.totals.sessions.length)} />
+            <SummaryCard
+              label={t("usageStats.dayDetail.cards.cacheHit")}
+              value={<CacheRateValue totals={row.totals} />}
+              sub={t("usageStats.dayDetail.cards.cacheSub", {
+                read: formatTokens(row.totals.cacheRead),
+                write: formatTokens(row.totals.cacheWrite),
+              })}
+            />
           </div>
 
           {visibleProviders.length > 1 && total > 0 && (
@@ -451,6 +467,15 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                   since: dayKeyOf(new Date(data.window.since)),
                   days: String(Math.max(1, Math.round((data.window.to - data.window.since) / 86400000) + 1)),
                 })}
+              />
+              <SummaryCard
+                label={t("usageStats.cards.cacheHit")}
+                value={<CacheRateValue totals={data.totals} />}
+                sub={
+                  <>
+                    {t("usageStats.cards.today")} <CacheRateValue totals={data.today} />
+                  </>
+                }
               />
             </div>
 

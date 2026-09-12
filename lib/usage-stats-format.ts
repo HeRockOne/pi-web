@@ -20,6 +20,21 @@ export function formatCost(n: number): string {
   return `$${n.toFixed(4)}`;
 }
 
+/** 百分比格式化：一位小数。 */
+export function formatPercent(rate: number): string {
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
+/**
+ * 缓存命中率：cacheRead 占全部 prompt token（input + cacheRead + cacheWrite）
+ * 的比例；没有任何 prompt token 时返回 null（显示为占位符而非 0%）。
+ */
+export function cacheHitRateOf(totals: { input: number; cacheRead: number; cacheWrite: number }): number | null {
+  const prompt = totals.input + totals.cacheRead + totals.cacheWrite;
+  if (prompt <= 0) return null;
+  return totals.cacheRead / prompt;
+}
+
 /** 本地时区日键 "YYYY-MM-DD"。 */
 export function dayKeyOf(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
