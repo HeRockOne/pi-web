@@ -1686,6 +1686,72 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+/* 供应商余额（balance） */
+.usage-stats-balance-input {
+  width: 110px;
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.usage-stats-balance-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.usage-stats-balance-negative {
+  color: #e5484d;
+  font-weight: 600;
+}
+.usage-stats-balance-bar {
+  margin-top: 6px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+  max-width: 140px;
+}
+.usage-stats-balance-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+.usage-stats-balance-bar-fill.is-ok { background: #30a46c; }
+.usage-stats-balance-bar-fill.is-warn { background: #f5a524; }
+.usage-stats-balance-bar-fill.is-low { background: #e5484d; }
+.usage-stats-balance-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+/* 固定列宽：保存后出现“重置已扣”按钮 / 进度条时不引起表格弹跳 */
+.usage-stats-balance-table {
+  table-layout: fixed;
+}
+.usage-stats-balance-table th:nth-child(1) { width: auto; }
+.usage-stats-balance-table th:nth-child(2) { width: 130px; }
+.usage-stats-balance-table th:nth-child(3) { width: 90px; }
+.usage-stats-balance-table th:nth-child(4) { width: 150px; }
+.usage-stats-balance-table th:nth-child(5) { width: 180px; }
+.usage-stats-balance-table td {
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
+.usage-stats-balance-table td:nth-child(4) {
+  position: relative;
+  padding-bottom: 16px;
+}
+.usage-stats-balance-table .usage-stats-balance-bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 4px;
+  margin-top: 0;
+  max-width: none;
+}
 .usage-stats-date-input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

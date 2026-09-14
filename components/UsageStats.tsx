@@ -23,6 +23,7 @@ import {
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
 import type { UsageAggregated, UsageDayRow } from "@/lib/usage-stats";
+import type { BalanceSnapshotRow } from "@/lib/usage-balances";
 import {
   buildBuckets,
   cacheHitRateOf,
@@ -41,6 +42,7 @@ type UsageStatsResponse = {
   installed?: boolean;
   logPath?: string;
   aggregated?: UsageAggregated | null;
+  balances?: BalanceSnapshotRow[];
   error?: string;
 };
 
@@ -376,7 +378,129 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
   );
 }
 
-// ── 主组件 ────────────────────────────────────────────────────────────────
+// ── 供应商余额（Balance）──────────────────────────────────────────────────────
+
+/** 剩余比例进度条：绿色→黄→红随剩余占比下降。 */
+function BalanceBar({ balance, remaining }: { balance: number; remaining: number }) {
+  if (balance <= 0) return null;
+  const pct = Math.max(0, Math.min(100, (remaining / balance) * 100));
+  const tone = pct > 50 ? "ok" : pct > 25 ? "warn" : "low";
+  return (
+    <div className="usage-stats-balance-bar" role="img" aria-label={`${pct.toFixed(0)}%`}>
+      <div className={`usage-stats-balance-bar-fill is-${tone}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/** 余额编辑区：每供应商一行（余额输入 / 已扣 / 剩余 / 保存+重置），保存走 POST /api/usage-stats。 */
+function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onChanged: () => void }) {
+  const { t } = useI18n();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const save = async (row: BalanceSnapshotRow, resetSpent: boolean) => {
+    const raw = drafts[row.provider] ?? (row.balance !== null ? String(row.balance) : "");
+    const value = raw.trim() === "" ? null : Number(raw);
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      setError(t("usageStats.balance.invalid"));
+      return;
+    }
+    setBusy(row.provider);
+    setError("");
+    try {
+      const response = await fetch("/api/usage-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: row.provider, balance: value, resetSpent }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
+      setSaved(row.provider);
+      window.setTimeout(() => setSaved(null), 1600);
+      setDrafts((prev) => ({ ...prev, [row.provider]: value === null ? "" : String(value) }));
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="usage-stats-table-wrap">
+        <table className="usage-stats-table usage-stats-balance-table">
+          <thead>
+            <tr>
+              <th>{t("usageStats.balance.col.provider")}</th>
+              <th>{t("usageStats.balance.col.balance")}</th>
+              <th>{t("usageStats.balance.col.spent")}</th>
+              <th>{t("usageStats.balance.col.remaining")}</th>
+              <th>{t("usageStats.balance.col.actions")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const remaining = row.remaining;
+              const negative = remaining !== null && remaining < 0;
+              return (
+                <tr key={row.provider}>
+                  <td>
+                    <span className="usage-stats-legend-dot" style={{ background: colorForProvider(row.provider) }} />
+                    <span className="usage-stats-legend-name">{row.provider}</span>
+                    {!row.costKnown && <span className="usage-stats-unknown"> *</span>}
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="usage-stats-balance-input"
+                      value={drafts[row.provider] ?? (row.balance !== null ? String(row.balance) : "")}
+                      placeholder={t("usageStats.balance.placeholder")}
+                      aria-label={`${row.provider} ${t("usageStats.balance.col.balance")}`}
+                      onChange={(event) => setDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
+                    />
+                  </td>
+                  <td>{formatCost(row.spent)}</td>
+                  <td>
+                    {remaining === null ? (
+                      "—"
+                    ) : (
+                      <>
+                        <span className={negative ? "usage-stats-balance-negative" : undefined}>
+                          {formatCost(remaining)}
+                        </span>
+                        <BalanceBar balance={row.balance ?? 0} remaining={remaining} />
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    <div className="usage-stats-balance-actions">
+                      <ConfigButton onClick={() => void save(row, false)} disabled={busy === row.provider}>
+                        {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.save")}
+                      </ConfigButton>
+                      {row.balance !== null && (
+                        <ConfigButton onClick={() => void save(row, true)} disabled={busy === row.provider}>
+                          {t("usageStats.balance.reset")}
+                        </ConfigButton>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.length === 0 && <div className="usage-stats-hint">{t("usageStats.balance.empty")}</div>}
+      {error && <div className="usage-stats-hint">{t("usageStats.errorHint", { message: error })}</div>}
+    </div>
+  );
+}
+
 
 export function UsageStats({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const { t } = useI18n();
@@ -385,6 +509,7 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
   const [logPath, setLogPath] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [balances, setBalances] = useState<BalanceSnapshotRow[]>([]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -394,6 +519,7 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
       if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
       setLogPath(result.logPath ?? null);
       setData(result.aggregated ?? null);
+      setBalances(result.balances ?? []);
       setPhase(result.installed ? "ready" : "missing");
       setError("");
     } catch (err) {
@@ -442,6 +568,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
 
         {phase === "ready" && data && data.recordCount > 0 && (
           <>
+            <SectionTitle>{t("usageStats.balance.title")}</SectionTitle>
+            <BalanceSection rows={balances} onChanged={load} />
+
+            <div className="usage-stats-divider" />
             <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
 
             <div className="usage-stats-divider" />
@@ -524,6 +654,13 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                 String(p.turns),
               ])}
             />
+          </>
+        )}
+
+        {phase === "ready" && (!data || data.recordCount === 0) && balances.length > 0 && (
+          <>
+            <SectionTitle>{t("usageStats.balance.title")}</SectionTitle>
+            <BalanceSection rows={balances} onChanged={load} />
           </>
         )}
 

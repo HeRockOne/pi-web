@@ -722,8 +722,8 @@ export type UsageStatsSnapshot = {
 };
 
 /** 查询聚合视图；文件不存在 = 未安装（installed=false）。 */
-export async function getUsageStatsSnapshot(): Promise<UsageStatsSnapshot> {
-  const logPath = usageLogPath();
+/** 触发一次增量刷新并返回当前中间态；日志未安装时返回 null。单飞，并发共享。 */
+export async function getUsageStatsIntermediate(): Promise<UsageStatsIntermediate | null> {
   const state = (globalThis.__piUsageStats ??= { cached: null, refreshPromise: null });
   if (!state.refreshPromise) {
     state.refreshPromise = refreshUsageStats().finally(() => {
@@ -731,11 +731,15 @@ export async function getUsageStatsSnapshot(): Promise<UsageStatsSnapshot> {
     });
   }
   await state.refreshPromise;
+  return globalThis.__piUsageStats?.cached?.intermediate ?? null;
+}
 
-  const intermediate = globalThis.__piUsageStats?.cached?.intermediate ?? null;
+/** 查询聚合视图；文件不存在 = 未安装（installed=false）。 */
+export async function getUsageStatsSnapshot(): Promise<UsageStatsSnapshot> {
+  const intermediate = await getUsageStatsIntermediate();
   return {
     installed: intermediate !== null,
-    logPath,
+    logPath: usageLogPath(),
     aggregated: intermediate ? buildAggregatedView(intermediate) : null,
   };
 }
