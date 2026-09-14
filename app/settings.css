@@ -1728,9 +1728,10 @@
   align-items: center;
 }
 /* 固定列宽：保存后出现“重置已扣”按钮 / 进度条时不引起表格弹跳 */
-.usage-stats-balance-table {
+.usage-stats-table.usage-stats-balance-table {
   table-layout: fixed;
-  /* 列宽合计约 700px：窄容器（含移动端）交给 wrap 横向滚动，避免压缩供应商列 */
+  /* 列宽合计约 700px：窄容器（含移动端）交给 wrap 横向滚动，避免压缩供应商列。
+     双类选择器保证特异性高于 .usage-stats-table 的 min-width:400px。 */
   min-width: 700px;
 }
 .usage-stats-balance-table th:nth-child(1) { width: auto; min-width: 150px; }
