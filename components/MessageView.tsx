@@ -6,6 +6,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
+import { formatCost } from "@/lib/usage-stats-format";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -210,6 +211,8 @@ interface Props {
   runActive?: boolean;
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
+  /** provider → 剩余余额（仅已配置余额的供应商），来自 /api/usage-balances。 */
+  balances?: Record<string, number> | null;
 }
 
 
@@ -265,12 +268,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, thinkingLevel, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, balances, modelNames, thinkingLevel, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} modelNames={modelNames} thinkingLevel={thinkingLevel} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} balances={balances} modelNames={modelNames} thinkingLevel={thinkingLevel} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -606,6 +609,7 @@ function AssistantMessageView({
   writtenFiles,
   runActive,
   toolStartTimes,
+  balances,
 }: {
   message: AssistantMessage;
   /** Streamed model output still growing — the streaming-phase live tick. */
@@ -615,6 +619,7 @@ function AssistantMessageView({
   runActive?: boolean;
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
+  balances?: Record<string, number> | null;
   modelNames?: Record<string, string>;
   thinkingLevel?: string;
   cwd?: string;
@@ -906,7 +911,12 @@ function AssistantMessageView({
       }}>
         {message.usage && !isStreaming && (
           <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage)}
+            {formatUsage(message.usage, t)}
+            {balances && message.provider && balances[message.provider] !== undefined && (
+              <span style={{ marginLeft: 8 }}>
+                <span aria-hidden>💰</span> {t("i18n.balance")} {formatCost(balances[message.provider])}
+              </span>
+            )}
           </div>
         )}
         {textContent && !isStreaming && (
@@ -1865,13 +1875,13 @@ function formatUsage(usage: {
   cacheRead: number;
   cacheWrite: number;
   cost: { total: number };
-}): string {
+}, t: (key: string) => string): string {
   const parts = [];
   if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
   if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
   if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
   if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
-  if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
+  if (usage.cost?.total) parts.push(`🔥 ${t("i18n.cost")} ${formatCost(usage.cost.total)}`);
   return parts.join(" · ");
 }
 

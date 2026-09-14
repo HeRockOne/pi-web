@@ -241,6 +241,22 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
 
 export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, quoteSelectionEnabled = false, initialPrompt, onInitialPromptConsumed, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
+  const [providerBalances, setProviderBalances] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/usage-balances")
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((data: { providers?: Record<string, { balance: number; spent: number; remaining: number }> } | null) => {
+        if (cancelled || !data?.providers) return;
+        const map: Record<string, number> = {};
+        for (const [provider, info] of Object.entries(data.providers)) map[provider] = info.remaining;
+        setProviderBalances(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const isMobile = useIsMobile();
   const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
 
@@ -1075,6 +1091,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
                 const view = (
                   <MessageView
+                    balances={providerBalances}
                     key={`${keyPrefix}-view-${messageKey}`}
                     message={msg}
                     toolResults={toolResultsMap}
@@ -1229,7 +1246,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
               );
             })()}
             {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} thinkingLevel={thinkingLevel === "auto" ? undefined : thinkingLevel} cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming balances={providerBalances} modelNames={modelNames} thinkingLevel={thinkingLevel === "auto" ? undefined : thinkingLevel} cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
             )}
 
             {agentRunning && !hasStreamingContent && agentPhase && (
