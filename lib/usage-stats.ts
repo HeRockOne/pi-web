@@ -54,8 +54,28 @@ export type DayTotals = {
   sessions: string[];
 };
 
-export type ProviderSlice = { provider: string; tokens: number; cost: number; turns: number };
-export type UsageDayModelSlice = { model: string; provider: string; tokens: number; cost: number; turns: number };
+export type ProviderSlice = {
+  provider: string;
+  tokens: number;
+  cost: number;
+  turns: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+
+export type UsageDayModelSlice = {
+  model: string;
+  provider: string;
+  tokens: number;
+  cost: number;
+  turns: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
 export type UsageDayProjectSlice = { project: string; tokens: number; cost: number; turns: number };
 
 /** 某天用量行（含 provider 分解与模型/项目明细）。 */
@@ -82,6 +102,10 @@ export type UsageModelRow = {
   tokens: number;
   cost: number;
   turns: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
   sessions: number;
 };
 
@@ -190,7 +214,7 @@ export type UsageStatsIntermediate = {
     byModel: UsageDayModelSlice[];
     byProject: UsageDayProjectSlice[];
   }>;
-  modelBuckets: Array<{ model: string; provider: string; tokens: number; cost: number; turns: number; sessions: string[] }>;
+  modelBuckets: Array<{ model: string; provider: string; tokens: number; cost: number; turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; sessions: string[] }>;
   projectBuckets: Array<{ project: string; tokens: number; cost: number; turns: number; sessions: string[] }>;
   totals: DayTotals;
   window: { since: number; to: number };
@@ -241,12 +265,16 @@ type DayBucket = {
 function addToProvider(map: Map<string, ProviderSlice>, provider: string, r: UsageRecord): void {
   let slice = map.get(provider);
   if (!slice) {
-    slice = { provider, tokens: 0, cost: 0, turns: 0 };
+    slice = { provider, tokens: 0, cost: 0, turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     map.set(provider, slice);
   }
   slice.tokens += r.totalTokens;
   slice.cost += r.cost;
   slice.turns += 1;
+  slice.input += r.input;
+  slice.output += r.output;
+  slice.cacheRead += r.cacheRead;
+  slice.cacheWrite += r.cacheWrite;
 }
 
 /** 扫描记录 → 中间态。 */
@@ -254,7 +282,7 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
   const dayBuckets = new Map<string, DayBucket>();
   const totals = emptyTotals();
   const totalSessions = new Set<string>();
-  const byModel = new Map<string, { provider: string; tokens: number; cost: number; turns: number; sessions: Set<string> }>();
+  const byModel = new Map<string, { provider: string; tokens: number; cost: number; turns: number; sessions: Set<string>; input: number; output: number; cacheRead: number; cacheWrite: number }>();
   const byProject = new Map<string, { tokens: number; cost: number; turns: number; sessions: Set<string> }>();
   let firstTs = Number.POSITIVE_INFINITY;
   let lastTs = Number.NEGATIVE_INFINITY;
@@ -285,12 +313,16 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
 
     let dayModel = bucket.byModel.get(r.model);
     if (!dayModel) {
-      dayModel = { model: r.model, provider: providerOf(r.model), tokens: 0, cost: 0, turns: 0 };
+      dayModel = { model: r.model, provider: providerOf(r.model), tokens: 0, cost: 0, turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
       bucket.byModel.set(r.model, dayModel);
     }
     dayModel.tokens += r.totalTokens;
     dayModel.cost += r.cost;
     dayModel.turns += 1;
+    dayModel.input += r.input;
+    dayModel.output += r.output;
+    dayModel.cacheRead += r.cacheRead;
+    dayModel.cacheWrite += r.cacheWrite;
 
     let dayProject = bucket.byProject.get(r.cwd);
     if (!dayProject) {
@@ -312,12 +344,16 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
 
     let modelRow = byModel.get(r.model);
     if (!modelRow) {
-      modelRow = { provider: providerOf(r.model), tokens: 0, cost: 0, turns: 0, sessions: new Set() };
+      modelRow = { provider: providerOf(r.model), tokens: 0, cost: 0, turns: 0, sessions: new Set(), input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
       byModel.set(r.model, modelRow);
     }
     modelRow.tokens += r.totalTokens;
     modelRow.cost += r.cost;
     modelRow.turns += 1;
+    modelRow.input += r.input;
+    modelRow.output += r.output;
+    modelRow.cacheRead += r.cacheRead;
+    modelRow.cacheWrite += r.cacheWrite;
     modelRow.sessions.add(r.sid);
 
     let projectRow = byProject.get(r.cwd);
@@ -354,6 +390,10 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
         tokens: row.tokens,
         cost: row.cost,
         turns: row.turns,
+        input: row.input,
+        output: row.output,
+        cacheRead: row.cacheRead,
+        cacheWrite: row.cacheWrite,
         sessions: [...row.sessions],
       })),
     projectBuckets: [...byProject.entries()]
@@ -539,6 +579,10 @@ export function buildAggregatedView(
       tokens: row.tokens,
       cost: row.cost,
       turns: row.turns,
+      input: row.input,
+      output: row.output,
+      cacheRead: row.cacheRead,
+      cacheWrite: row.cacheWrite,
       sessions: row.sessions.length,
     })),
     byProject: state.projectBuckets.map((row) => ({

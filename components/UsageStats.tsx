@@ -319,14 +319,14 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
             />
           </div>
 
-          {visibleProviders.length > 1 && total > 0 && (
+          {total > 0 && (
             <>
               <div className="usage-stats-provider-bar" role="img" aria-label={t("usageStats.dayDetail.providers")}>
                 {visibleProviders.map((p) => (
                   <div
                     key={p.provider}
                     style={{ width: `${(p.tokens / total) * 100}%`, backgroundColor: colorForProvider(p.provider) }}
-                    title={`${p.provider} · ${formatTokens(p.tokens)} · ${formatCost(p.cost)}`}
+                    title={`${p.provider} · ${formatTokens(p.tokens)} · ${formatCost(p.cost)} · ${(() => { const hit = cacheHitRateOf(p); return hit === null ? "—" : `hit ${formatPercent(hit)}`; })()}`}
                   />
                 ))}
               </div>
@@ -340,6 +340,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                       {formatCost(p.cost)}
                       {!costKnown && <span className="usage-stats-unknown"> *</span>}
                     </span>
+                    <span className="usage-stats-hit">{(() => { const hit = cacheHitRateOf(p); return hit === null ? "—" : `hit ${formatPercent(hit)}`; })()}</span>
                   </li>
                 ))}
               </ul>
@@ -353,10 +354,14 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                 headers={[
                   t("usageStats.models.col.model"),
                   t("usageStats.models.col.tokens"),
+                  t("usageStats.models.col.cacheHit"),
                   t("usageStats.models.col.cost"),
                   t("usageStats.models.col.turns"),
                 ]}
-                rows={row.byModel.map((m) => [m.model, formatTokens(m.tokens), formatCost(m.cost), String(m.turns)])}
+                rows={row.byModel.map((m) => {
+                  const hit = cacheHitRateOf(m);
+                  return [m.model, formatTokens(m.tokens), hit === null ? "—" : formatPercent(hit), formatCost(m.cost), String(m.turns)];
+                })}
               />
             </div>
             <div>

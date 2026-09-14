@@ -739,6 +739,8 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.models.title": "累計模型用量",
     "usageStats.models.col.model": "模型",
     "usageStats.models.col.tokens": "Token",
+    "usageStats.models.col.cacheHit": "快取命中",
+    "usageStats.models.col.output": "輸出",
     "usageStats.models.col.cost": "成本",
     "usageStats.models.col.turns": "呼叫次數",
     "usageStats.models.col.sessions": "會話",

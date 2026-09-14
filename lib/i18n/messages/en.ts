@@ -739,6 +739,8 @@ export const enLocale: LocalePlugin = {
     "usageStats.models.title": "All-time model usage",
     "usageStats.models.col.model": "Model",
     "usageStats.models.col.tokens": "Tokens",
+    "usageStats.models.col.cacheHit": "Cache hit",
+    "usageStats.models.col.output": "Output",
     "usageStats.models.col.cost": "Cost",
     "usageStats.models.col.turns": "Calls",
     "usageStats.models.col.sessions": "Sessions",
