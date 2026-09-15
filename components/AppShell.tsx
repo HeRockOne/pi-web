@@ -2433,16 +2433,42 @@ export function AppShell() {
           box-shadow: none;
         }
       }
+      /* React 19.2 SSR expands style shorthands (flex/overflow/background) while the
+         browser normalizes them on parse, so inline styles always mismatch hydration.
+         These layout wrappers are static — keep them in a stylesheet (react#33437). */
+      .app-shell-root {
+        display: flex;
+        width: 100%;
+        height: var(--app-viewport-height, 100dvh);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .app-shell-center {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .app-shell-chat {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+      }
+      .app-shell-topbar {
+        flex-shrink: 0;
+        background: var(--bg-panel);
+      }
+      .app-shell-viewer {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        padding-bottom: env(safe-area-inset-bottom);
+      }
     `}</style>
-    <div style={{
-      display: "flex",
-      width: "100%",
-      height: "var(--app-viewport-height, 100dvh)",
-      paddingLeft: "env(safe-area-inset-left)",
-      paddingRight: "env(safe-area-inset-right)",
-      overflow: "hidden",
-      background: "var(--bg)",
-    }}>
+    <div className="app-shell-root">
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -2488,9 +2514,9 @@ export function AppShell() {
       )}
 
       {/* Center: chat */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div className="app-shell-center">
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ flexShrink: 0, background: "var(--bg-panel)" }}>
+        <div ref={topBarRef} className="app-shell-topbar">
         <div style={{ display: "flex", alignItems: "center", position: "relative", borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
           <button
             onClick={handleSidebarToggle}
@@ -3249,7 +3275,7 @@ export function AppShell() {
         </div>
 
         {/* Chat content */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+        <div className="app-shell-chat">
           {showChat ? (
             <ChatWindow
               key={sessionKey}
@@ -3469,7 +3495,7 @@ export function AppShell() {
         </div>
 
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="app-shell-viewer">
           {activeCwd && (activeFileTabId === EXPLORER_TAB_ID || (!activeFileTab && !terminalTabs.some((tab) => tab.id === activeFileTabId))) ? (
             <div style={{ width: "100%", height: "100%", overflowY: "auto", overflowX: "hidden" }}>
               <FileExplorer
