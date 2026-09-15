@@ -178,7 +178,10 @@ docs/            Focused user and contributor guides
 ```
 
 See [AGENTS.md](./AGENTS.md) for the architecture notes and detailed file map.
-
+See [AGENTS.md](./AGENTS.md) for the development rules loaded at startup. Detailed material is split out and loaded on demand:
+- [Architecture & design decisions](./docs/ARCHITECTURE.md) — component overview, key traps (AgentSession lifecycle, fork, branching, worktrees, file access), dev server troubleshooting
+- [Session file format & CSS variables](./docs/SESSION-FORMAT.md) — `.jsonl` schema and theming tokens
+- [Internationalization](./docs/i18n.md) and [Release process](./docs/release.md) for contributors
 ## License
 
 [MIT](./LICENSE)
