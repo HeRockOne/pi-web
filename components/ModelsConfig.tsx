@@ -84,6 +84,9 @@ interface ModelEntry {
 }
 
 interface ProviderEntry {
+
+  /** Optional HTTP proxy for this provider (per-provider; all its models share it). */
+  proxy?: string;
   baseUrl?: string;
   api?: string;
   apiKey?: string;
@@ -411,6 +414,14 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
           placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
           Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
+        </span>
+      </Field>
+
+      <Field label="Proxy">
+        <TextInput value={provider.proxy ?? ""} onChange={(v) => set("proxy", v || undefined)}
+          placeholder="http://127.0.0.1:7890" mono />
+        <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
+          Requests from this provider go through this proxy; all its models share it. Leave empty to connect directly.
         </span>
       </Field>
 
