@@ -3,22 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
-const customPathStart = source.indexOf("const commitCustomPath = useCallback");
-const customPathEnd = source.indexOf("const handleCustomPathClick", customPathStart);
-const customPathSource = source.slice(customPathStart, customPathEnd);
 
-test("custom cwd selection installs validated identity before changing cwd", () => {
-  assert.notEqual(customPathStart, -1);
-  assert.notEqual(customPathEnd, -1);
-  assert.match(customPathSource, /projectRoot\?: string;[\s\S]*?projectKey\?: string;/);
-
-  const identityUpdate = customPathSource.indexOf("setValidatedProject(");
-  const cwdUpdate = customPathSource.indexOf("setSelectedCwd(");
-  assert.ok(identityUpdate >= 0, "validated project identity is retained");
-  assert.ok(cwdUpdate > identityUpdate, "identity is retained before cwd changes");
+test("project folder rows select the project root as the active cwd", () => {
+  assert.match(source, /const selectProjectRoot = useCallback/);
+  assert.match(source, /onClick=\{\(\) => selectProjectRoot\(row\.project\.key\)\}/);
+  assert.match(source, /if \(project\) setSelectedCwd\(project\.root\)/);
 });
 
-test("custom cwd selection remembers the last validated path for the picker", () => {
-  assert.match(customPathSource, /saveLastCustomCwd\(data\.cwd\)/);
-  assert.match(source, /initialPath=\{customPathValue\}/);
+test("clicking a session moves the effective cwd to that session's worktree", () => {
+  assert.match(source, /if \(s\.cwd\) setSelectedCwd\(s\.cwd\)/);
 });

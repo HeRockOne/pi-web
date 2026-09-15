@@ -2,15 +2,14 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo } from "@/lib/types";
-import { listSessionFamilies } from "@/lib/session-family";
+import { buildSessionTree, flattenSessionTree } from "@/lib/session-tree";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
-import { getProjectActivity, getRecentProjects, sessionsForProject } from "@/lib/project-groups";
+import { getProjectActivity, getRecentProjects, sessionsForProject, type RecentProject } from "@/lib/project-groups";
 import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { formatRelativeTime } from "@/lib/i18n/format";
 import { useI18n } from "@/hooks/useI18n";
-import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { SessionSearch } from "./SessionSearch";
 
@@ -155,33 +154,10 @@ interface ProjectSelection {
   key: string;
 }
 
-interface ValidatedProject {
-  cwd: string;
-  root: string;
-  key: string;
-}
 
 const UNREAD_SESSIONS_STORAGE_KEY = "pi-web:unread-session-ids";
-const LAST_CUSTOM_CWD_STORAGE_KEY = "pi-web:last-custom-cwd";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 
-function loadLastCustomCwd(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.localStorage.getItem(LAST_CUSTOM_CWD_STORAGE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function saveLastCustomCwd(cwd: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(LAST_CUSTOM_CWD_STORAGE_KEY, cwd);
-  } catch {
-    // Persistence is best-effort.
-  }
-}
 
 function loadUnreadSessionIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -383,15 +359,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [projectFilter, setProjectFilter] = useState("");
   const [wtFilter, setWtFilter] = useState("");
-  const [customPathOpen, setCustomPathOpen] = useState(false);
-  const [customPathValue, setCustomPathValue] = useState(loadLastCustomCwd);
-  const [customPathError, setCustomPathError] = useState<string | null>(null);
-  const [customPathValidating, setCustomPathValidating] = useState(false);
-  const [validatedProject, setValidatedProject] = useState<ValidatedProject | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // Tree collapse state (frontend only): project folders and session nodes.
+  const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [collapsedSessionIds, setCollapsedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
   const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
@@ -662,11 +633,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   /** Resolve both display root and stable identity from server-provided data. */
   const projectFor = useCallback((cwd: string | null): ProjectSelection | null => {
     if (!cwd) return null;
-    // /api/cwd/validate resolves identity before a custom path becomes active,
-    // preventing one render with a raw path key from looking like a switch.
-    if (validatedProject?.cwd === cwd) {
-      return projectSelection(validatedProject.root, validatedProject.key);
-    }
     if (worktreeState && worktreeState.forCwd === cwd) {
       return projectSelection(worktreeState.projectRoot, worktreeState.projectKey);
     }
@@ -681,7 +647,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return match
       ? projectSelection(match.projectRoot ?? match.cwd, workspaceKeyOf(match))
       : projectSelection(cwd, cwd);
-  }, [validatedProject, worktreeState, allSessions, projectSelection]);
+  }, [worktreeState, allSessions, projectSelection]);
 
   // A worktree/session refresh can hydrate the stable key without changing
   // cwd, so notify when either changes. The parent treats same-cwd key changes
@@ -783,65 +749,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     : undefined;
   const currentWorktreePath = currentWorktree?.path ?? null;
 
-  const commitCustomPath = useCallback(async (candidate?: string) => {
-    const path = (candidate ?? customPathValue).trim();
-    if (!path || customPathValidating) return;
-
-    setCustomPathValidating(true);
-    setCustomPathError(null);
-    try {
-      const res = await fetch("/api/cwd/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: path }),
-      });
-      const data = await res.json().catch(() => ({})) as {
-        cwd?: string;
-        projectRoot?: string;
-        projectKey?: string;
-        error?: string;
-      };
-      if (!res.ok || data.error || !data.cwd || !data.projectRoot || !data.projectKey) {
-        setCustomPathError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setValidatedProject({
-        cwd: data.cwd,
-        root: data.projectRoot,
-        key: data.projectKey,
-      });
-      saveLastCustomCwd(data.cwd);
-      setCustomPathValue(data.cwd);
-      setSelectedCwd(data.cwd);
-      setCustomPathOpen(false);
-      setDropdownOpen(false);
-    } catch (e) {
-      setCustomPathError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setCustomPathValidating(false);
-    }
-  }, [customPathValue, customPathValidating]);
-
-  const handleCustomPathClick = useCallback(() => {
-    setCustomPathOpen(true);
-    setCustomPathError(null);
-    setDropdownOpen(false);
-  }, []);
-  const handleDefaultCwd = useCallback(async () => {
-    try {
-      const res = await fetch("/api/default-cwd", { method: "POST" });
-      const data = await res.json() as { cwd?: string; error?: string };
-      if (data.cwd) {
-        setSelectedCwd(data.cwd);
-        setCustomPathOpen(false);
-        setCustomPathError(null);
-        setDropdownOpen(false);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const handleCreateWorktree = useCallback(async () => {
     const branch = wtNewBranch.trim();
     if (!branch || wtBusy || !worktreeState) return;
@@ -912,10 +819,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-        setProjectFilter("");
-      }
       if (wtDropdownRef.current && !wtDropdownRef.current.contains(e.target as Node)) {
         setWtDropdownOpen(false);
         setWtNewOpen(false);
@@ -958,10 +861,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [selectedCwd, onNewSession]);
 
   const recentProjects = getRecentProjects(allSessions);
-  const showProjectFilter = recentProjects.length > 8;
-  const visibleProjects = projectFilter.trim()
-    ? recentProjects.filter((project) => project.root.toLowerCase().includes(projectFilter.trim().toLowerCase()))
-    : recentProjects;
 
   // Sessions of every worktree in the selected project are shown together
   const selectedProject = projectFor(selectedCwd);
@@ -973,44 +872,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     [allSessions, runningSessionIds, unreadSessionIds],
   );
 
-  // Any activity in a project other than the one currently selected — shown as
-  // a dot on the (collapsed) selector button so it is visible without opening
-  // the dropdown.
-  const hasOtherWorkspaceActivity = useMemo(
-    () => [...projectActivity.entries()].some(
-      ([key, { running, unread }]) => key !== selectedProject?.key && (running > 0 || unread > 0),
-    ),
-    [projectActivity, selectedProject],
-  );
 
 
-  // Cross-project live sessions: any running (or unread) session whose project
-  // is not the currently selected one. Shown as a pinned section at the top of
-  // the session list so concurrent projects stay visible without switching.
-  const crossProjectActiveSessions = useMemo(() => {
-    const selectedKey = selectedProject?.key ?? null;
-    const seen = new Set<string>();
-    const result: { session: SessionInfo; projectRoot: string; running: boolean; unread: boolean }[] = [];
-    for (const session of allSessions) {
-      if (seen.has(session.id)) continue;
-      const key = workspaceKeyOf(session);
-      if (!key || key === selectedKey) continue;
-      const running = runningSessionIds.has(session.id);
-      const unread = unreadSessionIds.has(session.id);
-      if (!running && !unread) continue;
-      seen.add(session.id);
-      result.push({
-        session,
-        projectRoot: session.projectRoot ?? session.cwd ?? "",
-        running,
-        unread,
-      });
-    }
-    return result.sort((a, b) => b.session.modified.localeCompare(a.session.modified));
-  }, [allSessions, runningSessionIds, unreadSessionIds, selectedProject]);
-  const filteredSessions = selectedProject
-    ? sessionsForProject(allSessions, selectedProject.key)
-    : allSessions;
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1040,29 +903,121 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }
       : null);
 
-  const sessionFamilies = listSessionFamilies(filteredSessions);
+  // Project folders → session trees → one flat array for the virtual scroll.
+  type SidebarRow =
+    | { kind: "project"; project: RecentProject; depth: 0; hasChildren: boolean; collapsed: boolean; projectSessions: SessionInfo[] }
+    | { kind: "session"; session: SessionInfo; depth: number; hasChildren: boolean; collapsed: boolean; guideLayers: number[]; tailLayers: number[] }
+
+  const sidebarRows = useMemo<SidebarRow[]>(() => {
+    const rows: SidebarRow[] = [];
+    for (const project of recentProjects) {
+      const projectSessions = sessionsForProject(allSessions, project.key);
+      const collapsed = collapsedProjectKeys.has(project.key);
+      rows.push({
+        kind: "project",
+        project,
+        depth: 0,
+        hasChildren: projectSessions.length > 0,
+        collapsed,
+        projectSessions,
+      });
+      if (collapsed || projectSessions.length === 0) continue;
+      const tree = buildSessionTree(projectSessions);
+      const treeRows = flattenSessionTree(tree, collapsedSessionIds);
+      for (let i = 0; i < treeRows.length; i += 1) {
+        const row = treeRows[i];
+        // Shift tree-depth layers by one (the project folder occupies layer 0)
+        // and connect the project folder to its session rows: every visible
+        // session row gets the project line, ending with an L on the last one.
+        const isLastVisible = i === treeRows.length - 1;
+        rows.push({
+          ...row,
+          depth: row.depth + 1,
+          guideLayers: [...(isLastVisible ? [] : [0]), ...row.guideLayers.map((d) => d + 1)],
+          tailLayers: [...(isLastVisible ? [0] : []), ...row.tailLayers.map((d) => d + 1)],
+        });
+      }
+    }
+    return rows;
+  }, [allSessions, recentProjects, collapsedProjectKeys, collapsedSessionIds]);
+
+  // Keep the selected session visible: expand its project folder and every
+  // ancestor session whenever the selection changes.
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    const session = allSessions.find((s) => s.id === selectedSessionId);
+    if (!session) return;
+    const key = workspaceKeyOf(session);
+    if (key) {
+      setCollapsedProjectKeys((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+    const ancestors = new Set<string>();
+    let current: SessionInfo | undefined = session;
+    const visited = new Set<string>();
+    while (current) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      const relation: SessionInfo["relation"] = current.relation;
+      const parentId: string | undefined = current.parentSessionId
+        ?? (relation?.kind === "fork" ? relation.originSessionId
+            : relation?.kind === "subagent" ? relation.parentSessionId
+            : undefined);
+      if (!parentId) break;
+      const parent: SessionInfo | undefined = allSessions.find((s) => s.id === parentId);
+      if (!parent) break;
+      ancestors.add(parent.id);
+      current = parent;
+    }
+    if (ancestors.size > 0) {
+      setCollapsedSessionIds((prev) => {
+        let next: Set<string> | null = null;
+        for (const id of ancestors) {
+          if (prev.has(id)) {
+            next ??= new Set(prev);
+            next.delete(id);
+          }
+        }
+        return next ?? prev;
+      });
+    }
+  }, [selectedSessionId, allSessions]);
+
+  const toggleProjectCollapsed = useCallback((key: string) => {
+    setCollapsedProjectKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleSessionCollapsed = useCallback((id: string) => {
+    setCollapsedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectProjectRoot = useCallback((key: string) => {
+    const project = recentProjects.find((p) => p.key === key);
+    if (project) setSelectedCwd(project.root);
+  }, [recentProjects]);
+
 
   const virtualIndices = getSessionListIndices(
-    sessionFamilies.length,
+    sidebarRows.length,
     listScrollTop,
     listViewportH,
-    sessionFamilies.findIndex((family) => family.root.id === focusedSessionId),
+    sidebarRows.findIndex((row) => row.kind === "session" && row.session.id === focusedSessionId),
   );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {customPathOpen && (
-        <DirectoryPicker
-          initialPath={customPathValue}
-          busy={customPathValidating}
-          error={customPathError}
-          onCancel={() => {
-            setCustomPathOpen(false);
-            setCustomPathError(null);
-          }}
-          onSelect={(path) => void commitCustomPath(path)}
-        />
-      )}
       {/* Header */}
       <div
         style={{
@@ -1129,211 +1084,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </svg>
             </button>
           </div>
-        </div>
-
-        {/* CWD picker */}
-        <div ref={dropdownRef} style={{ position: "relative" }}>
-          <button
-            onClick={() => setDropdownOpen((v) => !v)}
-            title={selectedProject?.root ?? selectedCwd ?? ""}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              padding: "6px 10px",
-              background: selectedCwd ? "var(--bg-hover)" : "rgba(37,99,235,0.06)",
-              border: selectedCwd ? "1px solid var(--border)" : "1px solid rgba(37,99,235,0.4)",
-              borderRadius: 7,
-              cursor: "pointer",
-              fontSize: 12,
-              color: "var(--text)",
-              textAlign: "left",
-              transition: "border-color 0.15s, background 0.15s",
-            }}
-          >
-            {selectedCwd ? (
-              <PathLabel
-                text={displayCwd(selectedProject?.root ?? selectedCwd, homeDir)}
-                style={{
-                  flex: 1,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--text)",
-                }}
-              />
-            ) : (
-              <span
-                style={{
-                  flex: 1,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--text-dim)",
-                }}
-              >
-                 {initialSessionId && !restoredRef.current ? "" : t("sidebar.selectProject")}
-              </span>
-            )}
-            {hasOtherWorkspaceActivity && (
-              <span
-                title={t("sidebar.newActivity")}
-                aria-label={t("sidebar.newActivity")}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  flexShrink: 0,
-                  marginLeft: 6,
-                  background: "var(--accent)",
-                }}
-              />
-            )}
-          </button>
-
-          <AnimatedDropdown
-            open={dropdownOpen}
-            style={{
-              position: "absolute",
-              top: "calc(100% + 4px)",
-              left: 0,
-              right: 0,
-              zIndex: 100,
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
-              overflow: "hidden",
-            }}
-          >
-              {showProjectFilter && (
-                <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
-                  <input
-                    value={projectFilter}
-                    onChange={(e) => setProjectFilter(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setProjectFilter("");
-                        setDropdownOpen(false);
-                      }
-                    }}
-                     placeholder={t("sidebar.filterProjects")}
-                    autoFocus
-                    style={{
-                      width: "100%",
-                      fontSize: 11,
-                      fontFamily: "var(--font-mono)",
-                      padding: "5px 8px",
-                      border: "1px solid var(--border)",
-                      borderRadius: 5,
-                      outline: "none",
-                      background: "var(--bg)",
-                      color: "var(--text)",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              )}
-              <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
-                {visibleProjects.map((project) => (
-                  <button
-                    key={project.key}
-                    onClick={() => {
-                      setSelectedCwd(project.root);
-                      setProjectFilter("");
-                      setCustomPathOpen(false);
-                      setCustomPathError(null);
-                      setDropdownOpen(false);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      width: "100%",
-                      padding: "8px 10px",
-                      background: "var(--bg)",
-                      border: "none",
-                      borderBottom: "1px solid var(--border)",
-                      color: project.key === selectedProject?.key ? "var(--text)" : "var(--text-muted)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontSize: 11,
-                      fontFamily: "var(--font-mono)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                    title={project.root}
-                  >
-                    {project.key === selectedProject?.key && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                      </svg>
-                    )}
-                    {project.key !== selectedProject?.key && <span style={{ width: 10, flexShrink: 0 }} />}
-                    <PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} />
-                    {showProjectActivity(projectActivity.get(project.key), t)}
-                  </button>
-                ))}
-                {visibleProjects.length === 0 && projectFilter.trim() && (
-                   <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingProjects")}</div>
-                )}
-              </div>
-
-              {/* Default cwd shortcut */}
-              {!customPathOpen && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDefaultCwd(); }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 7,
-                    width: "100%",
-                    padding: "8px 10px",
-                    background: "none",
-                    border: "none",
-                    borderTop: visibleProjects.length > 0 ? "1px solid var(--border)" : "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontSize: 11,
-                  }}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
-                  </svg>
-                   <span>{t("sidebar.useDefaultDirectory")}</span>
-                </button>
-              )}
-
-              {/* Custom path directory picker */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCustomPathClick();
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: 11,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                  <line x1="5" y1="1" x2="5" y2="9" />
-                  <line x1="1" y1="5" x2="9" y2="5" />
-                </svg>
-                <span>{t("sidebar.customPath")}</span>
-              </button>
-          </AnimatedDropdown>
         </div>
 
         {sessionSearchOpen && (
@@ -1709,48 +1459,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
       </div>
 
-      {crossProjectActiveSessions.length > 0 && (
-        <div style={{ flexShrink: 0, borderBottom: "1px solid var(--border)", padding: "4px 0 2px" }}>
-          <div style={{ padding: "2px 12px 3px", fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-dim)" }}>
-            {t("sidebar.activeElsewhere")}
-          </div>
-          {crossProjectActiveSessions.map(({ session, projectRoot, running, unread }) => {
-            const projectName = projectRoot.split(/[\\\\/]+/).filter(Boolean).pop() ?? projectRoot;
-            const itemTitle = session.name
-              || skillExpansionToCommand(session.firstMessage)?.slice(0, 50)
-              || session.firstMessage.slice(0, 50)
-              || session.id.slice(0, 12);
-            return (
-              <button
-                key={session.id}
-                onClick={() => handleSelectSessionFromList(session)}
-                title={`${projectRoot}\n${itemTitle}`}
-                style={{
-                  display: "flex", alignItems: "center", gap: 7,
-                  width: "100%", padding: "5px 12px",
-                  background: "none", border: "none",
-                  cursor: "pointer", textAlign: "left",
-                  fontSize: 11,
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "var(--text-dim)" }} aria-hidden="true">
-                  <line x1="6" y1="3" x2="6" y2="15" />
-                  <circle cx="18" cy="6" r="3" />
-                  <circle cx="6" cy="18" r="3" />
-                  <path d="M18 9a9 9 0 0 1-9 9" />
-                </svg>
-                <span style={{ flexShrink: 0, maxWidth: "45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>
-                  {projectName}
-                </span>
-                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
-                  {itemTitle}
-                </span>
-                {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* Session list */}
       <SessionSearch open={sessionSearchOpen} query={sessionSearchQuery} refreshKey={sessionListVersion} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSessionFromList}>
@@ -1769,38 +1477,62 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {error}
           </div>
         )}
-        {!loading && !error && sessionFamilies.length === 0 && (
+        {!loading && !error && sidebarRows.length === 0 && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("sidebar.noSessions")}
           </div>
         )}
-        {sessionFamilies.length > 0 && (
+        {sidebarRows.length > 0 && (
           <div
             style={{
               position: "relative",
-              height: sessionFamilies.length * SESSION_LIST_ITEM_HEIGHT,
+              height: sidebarRows.length * SESSION_LIST_ITEM_HEIGHT,
             }}
           >
             {virtualIndices.map((index) => {
-              const family = sessionFamilies[index];
-              const familySessions = [family.root, ...family.subagents];
-              const displaySession = family.latestModified === family.root.modified
-                ? family.root
-                : { ...family.root, modified: family.latestModified };
-              // Bubble blur after the input's save handler before unpinning the row.
+              const row = sidebarRows[index];
+              if (row.kind === "project") {
+                const activity = projectActivity.get(row.project.key);
+                return (
+                  <div
+                    key={row.project.key}
+                    onFocus={() => row.projectSessions[0] && setFocusedSessionId(row.projectSessions[0].id)}
+                    onBlur={() => setFocusedSessionId(null)}
+                    style={{ position: "absolute", top: index * SESSION_LIST_ITEM_HEIGHT, left: 0, right: 0 }}
+                  >
+                    <ProjectFolderRow
+                      label={displayCwd(row.project.root, homeDir)}
+                      sessionCount={row.projectSessions.length}
+                      selected={row.project.key === selectedProject?.key}
+                      running={(activity?.running ?? 0) > 0}
+                      unread={(activity?.unread ?? 0) > 0}
+                      hasChildren={row.hasChildren}
+                      collapsed={row.collapsed}
+                      onToggleCollapse={() => toggleProjectCollapsed(row.project.key)}
+                      onClick={() => selectProjectRoot(row.project.key)}
+                    />
+                  </div>
+                );
+              }
               return (
                 <div
-                  key={family.root.id}
-                  onFocus={() => setFocusedSessionId(family.root.id)}
+                  key={row.session.id}
+                  onFocus={() => setFocusedSessionId(row.session.id)}
                   onBlur={() => setFocusedSessionId(null)}
                   style={{ position: "absolute", top: index * SESSION_LIST_ITEM_HEIGHT, left: 0, right: 0 }}
                 >
                   <SessionItem
-                    session={displaySession}
-                    isSelected={familySessions.some((session) => session.id === selectedSessionId)}
-                    isRunning={familySessions.some((session) => runningSessionIds.has(session.id))}
-                    isUnread={familySessions.some((session) => unreadSessionIds.has(session.id))}
-                    onClick={() => handleSelectSessionFromList(family.root)}
+                    session={row.session}
+                    isSelected={row.session.id === selectedSessionId}
+                    isRunning={runningSessionIds.has(row.session.id)}
+                    isUnread={unreadSessionIds.has(row.session.id)}
+                    depth={row.depth}
+                    guideLayers={row.guideLayers}
+                    tailLayers={row.tailLayers}
+                    hasChildren={row.hasChildren}
+                    collapsed={row.collapsed}
+                    onToggleCollapse={() => toggleSessionCollapsed(row.session.id)}
+                    onClick={() => handleSelectSessionFromList(row.session)}
                     onRenamed={loadSessions}
                     onDeleted={(id) => {
                       onSessionDeleted?.(id);
@@ -2029,47 +1761,6 @@ function UnreadSessionIndicator() {
   );
 }
 
-/**
- * Compact per-project activity badges for the workspace selector dropdown items:
- * a spinning running icon + count and an unread dot + count. Renders nothing
- * when the project has no activity. Counts share the accent / unread colors of
- * the per-session indicators so the two stay visually consistent.
- */
-function showProjectActivity(
-  activity: { running: number; unread: number } | undefined,
-  t: (key: string) => string,
-): ReactNode {
-  if (!activity || (activity.running === 0 && activity.unread === 0)) return null;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
-      {activity.running > 0 && (
-        <span
-          title={t("sidebar.agentRunning")}
-          aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <g>
-              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
-            </g>
-          </svg>
-          {activity.running}
-        </span>
-      )}
-      {activity.unread > 0 && (
-        <span
-          title={t("sidebar.newSessionActivity")}
-          aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          {activity.unread}
-        </span>
-      )}
-    </span>
-  );
-}
 
 function SessionItem({
   session,
@@ -2083,6 +1774,8 @@ function SessionItem({
   hasChildren = false,
   collapsed = false,
   onToggleCollapse,
+  guideLayers,
+  tailLayers,
 }: {
   session: SessionInfo;
   isSelected: boolean;
@@ -2095,6 +1788,10 @@ function SessionItem({
   hasChildren?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Tree depth layers (project = 0) whose guide line runs through this row. */
+  guideLayers?: number[];
+  /** Tree depth layers whose guide line ends here (L-shaped connector). */
+  tailLayers?: number[];
 }) {
   const { locale, t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -2193,6 +1890,12 @@ function SessionItem({
   }, [onRenamed, session.cwd, session.id, session.name, session.path]);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
+  const rowPadding = depth === 0 ? 26 : 14 + depth * 18;
+  const lineX = (layer: number) => 14 + layer * 18 + 8;
+  const guides = guideLayers ?? [];
+  const tails = tailLayers ?? [];
+
+  // Fixed-height outer wrapper — content swaps in place so the list never reflows
   return (
     <div
       onClick={confirmDelete || renaming ? undefined : onClick}
@@ -2200,10 +1903,11 @@ function SessionItem({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); }}
       style={{
+        position: "relative",
         height: SESSION_LIST_ITEM_HEIGHT,
         display: "flex",
         alignItems: "center",
-        paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
+        paddingLeft: rowPadding,
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
@@ -2218,6 +1922,36 @@ function SessionItem({
         overflow: "hidden",
       }}
     >
+      {/* Tree connection lines: full lines for branches still running,
+          half lines + L connector where a branch ends. */}
+      {(guides.length || tails.length) && (
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: rowPadding - 4, pointerEvents: "none" }}>
+          {/* Full lines: ancestor branches still running — includes tail layers
+              of an expanded parent, whose subtree carries the line on. */}
+          {[...guides, ...(hasChildren && !collapsed ? tails : [])].map((layer) => (
+            <div
+              key={`guide-${layer}`}
+              style={{ position: "absolute", left: lineX(layer), top: 0, bottom: 0, width: 1, background: "var(--border)" }}
+            />
+          ))}
+          {tails.filter(() => !(hasChildren && !collapsed)).map((layer) => (
+            <div key={`tail-${layer}`} style={{ position: "absolute", left: lineX(layer), top: 0, height: SESSION_LIST_ITEM_HEIGHT / 2, width: 1, background: "var(--border)" }} />
+          ))}
+          {tails.filter(() => !(hasChildren && !collapsed)).map((layer) => (
+            <div
+              key={`tail-conn-${layer}`}
+              style={{
+                position: "absolute",
+                left: lineX(layer) + 1,
+                top: SESSION_LIST_ITEM_HEIGHT / 2 - 0.5,
+                height: 1,
+                width: Math.max(2, rowPadding - lineX(layer) - 8),
+                background: "var(--border)",
+              }}
+            />
+          ))}
+        </div>
+      )}
       {confirmDelete ? (
         /* ── Delete confirmation: same height, two flat buttons ── */
         <>
@@ -2286,13 +2020,20 @@ function SessionItem({
       ) : (
         /* ── Normal view ── */
         <>
-          {/* Subagent indicator for child sessions */}
-          {depth > 0 && (
+          {/* Child indicator: branch icon for forks, robot for subagents */}
+          {depth > 0 && (session.relation?.kind === "fork" ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <line x1="6" y1="3" x2="6" y2="15" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" />
+            </svg>
+          ) : (
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <rect x="5" y="7" width="14" height="11" rx="2" />
               <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
             </svg>
-          )}
+          ))}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
@@ -2419,6 +2160,89 @@ function SessionItem({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ProjectFolderRow({
+  label,
+  sessionCount,
+  selected,
+  running,
+  unread,
+  hasChildren,
+  collapsed,
+  onToggleCollapse,
+  onClick,
+}: {
+  label: string;
+  sessionCount: number;
+  selected: boolean;
+  running: boolean;
+  unread: boolean;
+  hasChildren: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onClick: () => void;
+}) {
+  const { t } = useI18n();
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        height: SESSION_LIST_ITEM_HEIGHT,
+        display: "flex",
+        alignItems: "center",
+        paddingLeft: 8,
+        paddingRight: 8,
+        cursor: "pointer",
+        // Always-tinted band so project folders read as distinct section
+        // headers, not rows competing with their sessions.
+        background: selected
+          ? "var(--bg-selected)"
+          : hovered ? "var(--bg-hover)" : "rgba(127,127,127,0.07)",
+        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
+        transition: "background 0.1s",
+        gap: 6,
+        overflow: "hidden",
+      }}
+    >
+      {hasChildren ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
+          title={collapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 20, height: 20, padding: 0, flexShrink: 0,
+            background: "none", border: "none",
+            color: "var(--text-dim)", cursor: "pointer",
+            transform: collapsed ? "rotate(-90deg)" : "none",
+            transition: "transform 0.15s",
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="2 3.5 5 6.5 8 3.5" />
+          </svg>
+        </button>
+      ) : (
+        <span style={{ width: 20, flexShrink: 0 }} />
+      )}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+      </svg>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <PathLabel
+          text={label}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--text)" }}
+        />
+        <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, minWidth: 0 }}>
+          {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
+          <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
+        </div>
+      </div>
     </div>
   );
 }

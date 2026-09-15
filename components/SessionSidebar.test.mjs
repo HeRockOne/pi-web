@@ -76,15 +76,10 @@ test("subagent completion stays silent and never becomes unread", () => {
   );
 });
 
-test("includes project activity counts in accessible labels", () => {
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.agentRunning"\)\} \(\$\{activity\.running\}\)`\}/,
-  );
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.newSessionActivity"\)\} \(\$\{activity\.unread\}\)`\}/,
-  );
+test("project activity indicators keep accessible labels", () => {
+  assert.match(source, /aria-label=\{t\("sidebar\.agentRunning"\)\}/);
+  assert.match(source, /aria-label=\{t\("sidebar\.newSessionActivity"\)\}/);
+  assert.match(source, /function ProjectFolderRow/);
 });
 
 test("formats session timestamps with the active locale", () => {
@@ -122,9 +117,20 @@ test("does not expose disk-backed actions for transient sessions", () => {
   assert.match(sessionItemSource, /\{hovered && !session\.transient && \(/);
 });
 
-test("hides subagent rows and aggregates their state into the main session row", () => {
-  assert.match(source, /const sessionFamilies = listSessionFamilies\(filteredSessions\)/);
-  assert.match(source, /familySessions\.some\(\(session\) => session\.id === selectedSessionId\)/);
-  assert.match(source, /familySessions\.some\(\(session\) => runningSessionIds\.has\(session\.id\)\)/);
-  assert.doesNotMatch(source, /function SessionTreeItem/);
+test("renders the session list as a project folder tree", () => {
+  assert.match(source, /const sidebarRows = useMemo<SidebarRow\[\]>\(\(\) => \{/);
+  assert.match(source, /buildSessionTree\(projectSessions\)/);
+  assert.match(source, /flattenSessionTree\(tree, collapsedSessionIds\)/);
+  assert.match(source, /isSelected=\{row\.session\.id === selectedSessionId\}/);
+  assert.match(source, /depth=\{row\.depth\}/);
+  assert.match(source, /guideLayers=\{row\.guideLayers\}/);
+  assert.match(source, /tailLayers=\{row\.tailLayers\}/);
+  assert.match(source, /function ProjectFolderRow/);
+  assert.doesNotMatch(source, /listSessionFamilies/);
+  assert.doesNotMatch(source, /sessionFamilies/);
+  // Tree guide lines + folder band styling
+  assert.match(source, /const rowPadding = depth === 0 \? 26 : 14 \+ depth \* 18;/);
+  assert.match(source, /const lineX = \(layer: number\) => 14 \+ layer \* 18 \+ 8;/);
+  assert.match(source, /\[\.\.\.guides, \.\.\.\(hasChildren && !collapsed \? tails : \[\]\)\]/);
+  assert.match(source, /rgba\(127,127,127,0\.07\)/);
 });
