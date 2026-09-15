@@ -8,7 +8,6 @@ import { ChatWindow } from "./ChatWindow";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { FileViewer } from "./FileViewer";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
-import { ToolbarIconButton } from "./ToolbarIconButton";
 import { TabBar, type Tab } from "./TabBar";
 import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsPanel, SettingsSectionIcon } from "./SettingsPanel";
@@ -675,12 +674,8 @@ export function AppShell() {
   // File browser tab state: lives here because the browser shares the right
   // panel with opened files and terminals.
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
-  const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
-  const [explorerChangesCount, setExplorerChangesCount] = useState(0);
   const [explorerChangesCollapsed, setExplorerChangesCollapsed] = useState(true);
-  const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
-  const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelTabs: Tab[] = [{
     id: EXPLORER_TAB_ID,
     label: translate("files.explorer"),
@@ -3401,77 +3396,6 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />
           </div>
-          <ToolbarIconButton
-            onClick={() => { if (activeCwd) handleOpenTerminal(activeCwd); }}
-            title={translate("terminal.open")}
-            color="var(--text-dim)"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-            </svg>
-          </ToolbarIconButton>
-          {explorerChangesCount > 0 && (
-            <ToolbarIconButton
-              onClick={() => setExplorerChangesCollapsed((v) => !v)}
-              title={translate("sidebar.changedFiles", { count: explorerChangesCount })}
-              ariaPressed={!explorerChangesCollapsed}
-              color={explorerChangesCollapsed ? "var(--text-dim)" : "var(--accent)"}
-              background={explorerChangesCollapsed ? "none" : "var(--bg-selected)"}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M3 12h6" />
-                <path d="M15 12h6" />
-              </svg>
-            </ToolbarIconButton>
-          )}
-          <ToolbarIconButton
-            onClick={() => setFileSearchOpen((open) => !open)}
-            title={translate("sidebar.searchFiles")}
-            ariaPressed={fileSearchOpen}
-            color={fileSearchOpen ? "var(--accent)" : "var(--text-dim)"}
-            background={fileSearchOpen ? "var(--bg-selected)" : "none"}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
-            </svg>
-          </ToolbarIconButton>
-          <ToolbarIconButton
-            onClick={() => fileExplorerRef.current?.openUploadPicker()}
-            disabled={explorerUploadBusy}
-            title={translate("sidebar.uploadFilesTitle")}
-            color="var(--text-dim)"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <path d="m17 8-5-5-5 5" />
-              <path d="M12 3v12" />
-            </svg>
-          </ToolbarIconButton>
-          <ToolbarIconButton
-            onClick={() => {
-              setExplorerRefreshKey((k) => k + 1);
-              setExplorerRefreshDone(true);
-              if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-              explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
-            }}
-            title={translate("sidebar.refreshExplorer")}
-            skipHover={explorerRefreshDone}
-            color={explorerRefreshDone ? "#4ade80" : "var(--text-dim)"}
-            background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
-            marginRight={6}
-          >
-            {explorerRefreshDone ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            )}
-          </ToolbarIconButton>
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
@@ -3505,11 +3429,17 @@ export function AppShell() {
                 refreshKey={explorerRefreshKey}
                 onAtMention={handleAtMention}
                 onAtMentions={handleAtMentions}
-                onUploadBusyChange={setExplorerUploadBusy}
                 changesCollapsed={explorerChangesCollapsed}
-                onChangesCountChange={setExplorerChangesCount}
+                onChangesCollapsedChange={setExplorerChangesCollapsed}
                 fileSearchOpen={fileSearchOpen}
                 onFileSearchOpenChange={setFileSearchOpen}
+                onOpenTerminal={(cwd) => {
+                  if (cwd) {
+                    handleOpenTerminal(cwd);
+                    if (isMobile) setSidebarOpen(false);
+                  }
+                }}
+                onRefresh={() => setExplorerRefreshKey((k) => k + 1)}
               />
             </div>
           ) : activeFileTab?.filePath ? (

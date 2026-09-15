@@ -14,6 +14,7 @@ import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/
 import type { FileIndexEntry } from "@/lib/file-fuzzy";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
 import { useI18n } from "@/hooks/useI18n";
+import { ToolbarIconButton } from "./ToolbarIconButton";
 type Translate = ReturnType<typeof useI18n>["t"];
 
 interface FileEntry {
@@ -38,11 +39,12 @@ interface Props {
   refreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
-  onUploadBusyChange?: (busy: boolean) => void;
   changesCollapsed: boolean;
-  onChangesCountChange?: (count: number) => void;
+  onChangesCollapsedChange?: (collapsed: boolean) => void;
   fileSearchOpen?: boolean;
   onFileSearchOpenChange?: (open: boolean) => void;
+  onOpenTerminal?: (cwd: string) => void;
+  onRefresh?: () => void;
 }
 
 export interface FileExplorerHandle {
@@ -524,11 +526,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   refreshKey,
   onAtMention,
   onAtMentions,
-  onUploadBusyChange,
   changesCollapsed,
-  onChangesCountChange,
+  onChangesCollapsedChange,
   fileSearchOpen = false,
   onFileSearchOpenChange,
+  onOpenTerminal,
+  onRefresh,
 }, ref) {
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
@@ -555,6 +558,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
   const uploadBusy = uploadPhase !== "idle";
   const hasSearchQuery = searchQuery.trim().length > 0;
+  const [refreshDone, setRefreshDone] = useState(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reuse the cached, bounded file index used by @ mentions.
   useEffect(() => {
@@ -746,12 +751,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   }), [uploadBusy]);
 
   useEffect(() => {
-    onUploadBusyChange?.(uploadBusy);
-  }, [onUploadBusyChange, uploadBusy]);
-
-  useEffect(() => () => onUploadBusyChange?.(false), [onUploadBusyChange]);
-
-  useEffect(() => {
     const cwdChanged = prevCwdRef.current !== cwd;
     prevCwdRef.current = cwd;
 
@@ -794,10 +793,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     return () => { cancelled = true; };
   }, [cwd, refreshKey, treeRefreshKey]);
 
-  useEffect(() => {
-    onChangesCountChange?.(gitFiles.length);
-  }, [gitFiles, onChangesCountChange]);
-
   const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
 
   const addUploadedFilesToChat = useCallback(() => {
@@ -810,6 +805,90 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   return (
     <div style={{ minHeight: "100%" }}>
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
+      {/* Explorer toolbar: actions that belong to the file browser itself. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          padding: "4px 8px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+          flexShrink: 0,
+        }}
+      >
+        <ToolbarIconButton
+          onClick={() => onOpenTerminal?.(cwd)}
+          title={t("terminal.open")}
+          color="var(--text-dim)"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+        </ToolbarIconButton>
+        {gitFiles.length > 0 && (
+          <ToolbarIconButton
+            onClick={() => onChangesCollapsedChange?.(!changesCollapsed)}
+            title={t("sidebar.changedFiles", { count: gitFiles.length })}
+            ariaPressed={!changesCollapsed}
+            color={changesCollapsed ? "var(--text-dim)" : "var(--accent)"}
+            background={changesCollapsed ? "none" : "var(--bg-selected)"}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M3 12h6" />
+              <path d="M15 12h6" />
+            </svg>
+          </ToolbarIconButton>
+        )}
+        <ToolbarIconButton
+          onClick={() => onFileSearchOpenChange?.(!fileSearchOpen)}
+          title={t("sidebar.searchFiles")}
+          ariaPressed={fileSearchOpen}
+          color={fileSearchOpen ? "var(--accent)" : "var(--text-dim)"}
+          background={fileSearchOpen ? "var(--bg-selected)" : "none"}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+          </svg>
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          onClick={() => { if (!uploadBusy) uploadInputRef.current?.click(); }}
+          disabled={uploadBusy}
+          title={t("sidebar.uploadFilesTitle")}
+          color="var(--text-dim)"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m17 8-5-5-5 5" />
+            <path d="M12 3v12" />
+          </svg>
+        </ToolbarIconButton>
+        <div style={{ flex: 1 }} />
+        <ToolbarIconButton
+          onClick={() => {
+            setRefreshDone(true);
+            if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+            refreshTimerRef.current = setTimeout(() => setRefreshDone(false), 2000);
+            onRefresh?.();
+          }}
+          title={t("sidebar.refreshExplorer")}
+          skipHover={refreshDone}
+          color={refreshDone ? "#4ade80" : "var(--text-dim)"}
+          background={refreshDone ? "rgba(74,222,128,0.18)" : "none"}
+        >
+          {refreshDone ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          )}
+        </ToolbarIconButton>
+      </div>
       {showUploadFeedback && (
         <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
         {uploadBusy && (
