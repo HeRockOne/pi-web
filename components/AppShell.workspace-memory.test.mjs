@@ -97,6 +97,7 @@ test("New restores the draft after session navigation and workspace auto-restore
         sessionTabs: [],
         isMobile: false,
         activeCwd: cwd,
+        EXPLORER_TAB_ID: "browser",
         activeFileTabId: null,
         newSessionCwd: cwd,
         newSessionDraftId: "initial",

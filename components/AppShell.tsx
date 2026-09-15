@@ -7,6 +7,8 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import type { ChatScrollPosition } from "@/lib/chat-scroll-position";
 import { FileViewer } from "./FileViewer";
+import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
+import { ToolbarIconButton } from "./ToolbarIconButton";
 import { TabBar, type Tab } from "./TabBar";
 import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsPanel, SettingsSectionIcon } from "./SettingsPanel";
@@ -78,6 +80,10 @@ const SESSIONS_PANEL_WIDTH = 460;
 // in the top-bar strip until they close the tab themselves. Snapshots persist
 // in localStorage so the strip survives a page refresh.
 const SESSION_TABS_STORAGE_KEY = "pi-web:session-tabs";
+
+// Right file panel: the file browser is a pinned, non-closable first tab
+// that shares the panel with opened files and terminals.
+const EXPLORER_TAB_ID = "browser";
 const SESSION_TABS_MAX = 30;
 
 interface SessionTabSnapshot {
@@ -666,7 +672,22 @@ export function AppShell() {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [terminalsRestored, setTerminalsRestored] = useState(false);
-  const panelTabs: Tab[] = [...fileTabs, ...terminalTabs.map((tab) => ({
+  // File browser tab state: lives here because the browser shares the right
+  // panel with opened files and terminals.
+  const fileExplorerRef = useRef<FileExplorerHandle>(null);
+  const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
+  const [explorerChangesCount, setExplorerChangesCount] = useState(0);
+  const [explorerChangesCollapsed, setExplorerChangesCollapsed] = useState(true);
+  const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
+  const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panelTabs: Tab[] = [{
+    id: EXPLORER_TAB_ID,
+    label: translate("files.explorer"),
+    filePath: "",
+    kind: "explorer" as const,
+    closable: false,
+  }, ...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,
     filePath: tab.cwd,
@@ -897,8 +918,7 @@ export function AppShell() {
       // project must not linger. Same-project worktree switches keep them.
       setFileTabs([]);
       if (!activeFileTabId || activeFileTabId.startsWith("file:")) {
-        setActiveFileTabId(null);
-        setRightPanelOpen(false);
+        setActiveFileTabId(EXPLORER_TAB_ID);
       }
       // Restore the workspace we switched to: its last open session, or keep
       // the default welcome page when none is remembered.
@@ -921,8 +941,7 @@ export function AppShell() {
     if (activeProjectKeyRef.current !== projectKey) {
       setFileTabs([]);
       if (!activeFileTabId || activeFileTabId.startsWith("file:")) {
-        setActiveFileTabId(null);
-        setRightPanelOpen(false);
+        setActiveFileTabId(EXPLORER_TAB_ID);
       }
       setActiveTopPanel(null);
     }
@@ -1192,9 +1211,6 @@ export function AppShell() {
     setAutoNameStatus({ kind: "idle" });
   }, [selectedSession?.id]);
 
-  const handleExplorerRefresh = useCallback(() => {
-    setExplorerRefreshKey((k) => k + 1);
-  }, []);
 
   const handleSessionForked = useCallback((newSessionId: string) => {
     invalidateWorkspaceRestore();
@@ -1298,11 +1314,17 @@ export function AppShell() {
     const replacement = tab.closing === "restart" ? newTerminalTab(tab.cwd) : null;
     const remaining = terminalTabs.filter((item) => item.id !== tab.id);
     setTerminalTabs((tabs) => tabs.flatMap((item) => item.id !== tab.id ? [item] : replacement ? [replacement] : []));
-    setActiveFileTabId((current) => current !== tab.id ? current : replacement?.id ?? remaining.at(-1)?.id ?? fileTabs.at(-1)?.id ?? null);
+    setActiveFileTabId((current) => current !== tab.id ? current : replacement?.id ?? remaining.at(-1)?.id ?? fileTabs.at(-1)?.id ?? EXPLORER_TAB_ID);
     if (!replacement && !remaining.length && !fileTabs.length) setRightPanelOpen(false);
   };
 
   const handleCloseFileTab = useCallback((tabId: string) => {
+    if (tabId === EXPLORER_TAB_ID) {
+      // The browser tab is pinned; selecting it re-activates it instead.
+      setActiveFileTabId(EXPLORER_TAB_ID);
+      setRightPanelOpen(true);
+      return;
+    }
     if (terminalTabs.some((tab) => tab.id === tabId)) {
       setTerminalTabs((tabs) => tabs.map((tab) => tab.id === tabId && !tab.closing ? { ...tab, closing: "close" } : tab));
       return;
@@ -1315,7 +1337,7 @@ export function AppShell() {
     setActiveFileTabId((cur) => {
       if (cur !== tabId) return cur;
       const remaining = fileTabs.filter((t) => t.id !== tabId);
-      return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? null;
+      return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? EXPLORER_TAB_ID;
     });
   }, [fileTabs, terminalTabs]);
 
@@ -1416,12 +1438,6 @@ export function AppShell() {
         onSessionDeleted={handleSessionDeleted}
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
-        onOpenFile={handleOpenFile}
-        onOpenTerminal={handleOpenTerminal}
-        explorerRefreshKey={explorerRefreshKey}
-        onExplorerRefresh={handleExplorerRefresh}
-        onAtMention={handleAtMention}
-        onAtMentions={handleAtMentions}
         onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
@@ -3359,6 +3375,77 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />
           </div>
+          <ToolbarIconButton
+            onClick={() => { if (activeCwd) handleOpenTerminal(activeCwd); }}
+            title={translate("terminal.open")}
+            color="var(--text-dim)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </ToolbarIconButton>
+          {explorerChangesCount > 0 && (
+            <ToolbarIconButton
+              onClick={() => setExplorerChangesCollapsed((v) => !v)}
+              title={translate("sidebar.changedFiles", { count: explorerChangesCount })}
+              ariaPressed={!explorerChangesCollapsed}
+              color={explorerChangesCollapsed ? "var(--text-dim)" : "var(--accent)"}
+              background={explorerChangesCollapsed ? "none" : "var(--bg-selected)"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M3 12h6" />
+                <path d="M15 12h6" />
+              </svg>
+            </ToolbarIconButton>
+          )}
+          <ToolbarIconButton
+            onClick={() => setFileSearchOpen((open) => !open)}
+            title={translate("sidebar.searchFiles")}
+            ariaPressed={fileSearchOpen}
+            color={fileSearchOpen ? "var(--accent)" : "var(--text-dim)"}
+            background={fileSearchOpen ? "var(--bg-selected)" : "none"}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+            </svg>
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            onClick={() => fileExplorerRef.current?.openUploadPicker()}
+            disabled={explorerUploadBusy}
+            title={translate("sidebar.uploadFilesTitle")}
+            color="var(--text-dim)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m17 8-5-5-5 5" />
+              <path d="M12 3v12" />
+            </svg>
+          </ToolbarIconButton>
+          <ToolbarIconButton
+            onClick={() => {
+              setExplorerRefreshKey((k) => k + 1);
+              setExplorerRefreshDone(true);
+              if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
+              explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
+            }}
+            title={translate("sidebar.refreshExplorer")}
+            skipHover={explorerRefreshDone}
+            color={explorerRefreshDone ? "#4ade80" : "var(--text-dim)"}
+            background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
+            marginRight={6}
+          >
+            {explorerRefreshDone ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            )}
+          </ToolbarIconButton>
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
@@ -3383,7 +3470,23 @@ export function AppShell() {
 
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {activeFileTab?.filePath ? (
+          {activeCwd && (activeFileTabId === EXPLORER_TAB_ID || (!activeFileTab && !terminalTabs.some((tab) => tab.id === activeFileTabId))) ? (
+            <div style={{ width: "100%", height: "100%", overflowY: "auto", overflowX: "hidden" }}>
+              <FileExplorer
+                ref={fileExplorerRef}
+                cwd={activeCwd}
+                onOpenFile={(filePath, fileName, options) => handleOpenFile(filePath, fileName, options)}
+                refreshKey={explorerRefreshKey}
+                onAtMention={handleAtMention}
+                onAtMentions={handleAtMentions}
+                onUploadBusyChange={setExplorerUploadBusy}
+                changesCollapsed={explorerChangesCollapsed}
+                onChangesCountChange={setExplorerChangesCount}
+                fileSearchOpen={fileSearchOpen}
+                onFileSearchOpenChange={setFileSearchOpen}
+              />
+            </div>
+          ) : activeFileTab?.filePath ? (
             <FileViewer
               key={`${activeFileTab.id}:${activeFileTab.viewerRevision ?? 0}`}
               filePath={activeFileTab.filePath}
@@ -3406,10 +3509,8 @@ export function AppShell() {
                 { sourceSessionId: activeFileTab.sourceSessionId },
               )}
             />
-          ) : !terminalTabs.some((tab) => tab.id === activeFileTabId) ? (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-               {translate("files.noneOpen")}
-            </div>
+          ) : terminalTabs.some((tab) => tab.id === activeFileTabId) ? (
+            null
           ) : null}
           {terminalTabs.map((tab) => (
             <div key={tab.id} hidden={tab.id !== activeFileTabId} style={{ width: "100%", height: "100%" }}>
