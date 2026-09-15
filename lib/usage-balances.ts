@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { writePrivateFileAtomicSync } from "./atomic-file";
-import type { UsageStatsIntermediate } from "./usage-stats";
+import type { UsageRecord, UsageStatsIntermediate } from "./usage-stats";
 
 // ============================================================================
 // 类型
@@ -214,4 +214,70 @@ export function computeBalances(
   });
 
   return rows;
+}
+
+// ============================================================================
+// 逐消息余额时间线（余额快照按请求时刻推进）
+// ============================================================================
+
+/**
+ * 每个 provider 的请求时间线：按 ts 升序的累计已扣金额序列。
+ * 对给定的一组消息 timestamp，返回每条的 remaining（balance - 截至该时刻累计已扣）。
+ * 时间戳取全局并集（所有会话共享同一余额，跨会话请求也扣减）。
+ */
+export function computeRemainingSeries(
+  records: readonly UsageRecord[],
+  timestamps: readonly number[],
+  filePath = getBalancesFilePath(),
+): {
+  providers: Record<string, { balance: number | null; remainingSeries: (number | null)[] }>;
+} {
+  const configs = readBalanceConfigs(filePath);
+  // 只为已配置余额（或 usage 中出现）的 provider 构建时间线
+  const interested = new Set<string>([
+    ...Object.keys(configs),
+    ...new Set(records.map((r) => r.model.split("/")[0] ?? r.model)),
+  ]);
+  // 记录按 ts 升序
+  const sorted = [...records].sort((a, b) => a.ts - b.ts);
+  // provider → [{ts, spent}] 累计已扣
+  const timelines: Map<string, { ts: number; spent: number; totalCost: number }[]> = new Map();
+  for (const provider of interested) timelines.set(provider, []);
+  for (const rec of sorted) {
+    const provider = rec.model.split("/")[0] ?? rec.model;
+    const arr = timelines.get(provider);
+    if (!arr) continue;
+    const baseline = configs[provider]?.spentBaseline ?? 0;
+    const totalCost = (arr.length > 0 ? arr[arr.length - 1].totalCost : 0) + rec.cost;
+    // 累计原始成本一次性减基线，下限 0
+    arr.push({ ts: rec.ts, spent: Math.max(0, totalCost - baseline), totalCost });
+  }
+  // 二分查找每个 timestamp 的时刻
+  const result: Record<string, { balance: number | null; remainingSeries: (number | null)[] }> = {};
+  for (const provider of interested) {
+    const arr = timelines.get(provider)!;
+    const balance = configs[provider]?.balance ?? null;
+    const remainingSeries = timestamps.map((ts) => {
+      if (!arr.length) {
+        return balance === null ? null : balance;
+      }
+      // 找到最后一个 spent 且 ts ≤ 给定时刻的条目
+      let lo = 0;
+      let hi = arr.length - 1;
+      let idx = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (arr[mid].ts <= ts) {
+          idx = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      const spent = idx >= 0 ? arr[idx].spent : 0;
+      return balance === null ? null : balance - spent;
+    });
+    result[provider] = { balance, remainingSeries };
+  }
+  return { providers: result };
 }

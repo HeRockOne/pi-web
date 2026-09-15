@@ -730,6 +730,59 @@ declare global {
   } | undefined;
 }
 
+// ============================================================================
+// 记录级时间线缓存（独立于聚合中间态）
+// 供余额时间线查询：全局所有请求按 ts 排序的原始记录。
+// ============================================================================
+
+type CachedUsageTimeline = {
+  fileState: LogFileState | null;
+  records: UsageRecord[];
+};
+
+declare global {
+  var __piUsageTimeline: {
+    cached: CachedUsageTimeline | null;
+    refreshPromise: Promise<void> | null;
+  } | undefined;
+}
+
+/** 增量刷新记录级缓存（单飞）。返回 null = 日志未安装。 */
+async function refreshUsageTimeline(): Promise<void> {
+  const state = (globalThis.__piUsageTimeline ??= { cached: null, refreshPromise: null });
+  const result = await readIncremental(usageLogPath(), state.cached?.fileState ?? null);
+  if (!result.fileState) {
+    state.cached = null;
+    return;
+  }
+  const cached = state.cached;
+  if (result.fullRescan) {
+    state.cached = { fileState: result.fileState, records: result.newRecords };
+  } else if (result.newRecords.length > 0) {
+    state.cached = {
+      fileState: result.fileState,
+      records: cached ? [...cached.records, ...result.newRecords] : result.newRecords,
+    };
+  } else if (cached) {
+    state.cached = { ...cached, fileState: result.fileState };
+  }
+}
+
+/**
+ * 查询全部原始用量记录（按日志追加顺序，未排序）；日志未安装时返回 null。
+ * 与聚合中间态共用同一日志路径与游标逻辑，互不影响。
+ */
+export async function getUsageRecords(): Promise<UsageRecord[] | null> {
+  const state = (globalThis.__piUsageTimeline ??= { cached: null, refreshPromise: null });
+  if (!state.refreshPromise) {
+    state.refreshPromise = refreshUsageTimeline().finally(() => {
+      if (globalThis.__piUsageTimeline) globalThis.__piUsageTimeline.refreshPromise = null;
+    });
+  }
+  await state.refreshPromise;
+  return globalThis.__piUsageTimeline?.cached?.records ?? null;
+}
+
 function usageLogPath(): string {
   return join(getAgentDir(), "analytics", "usage.jsonl");
 }

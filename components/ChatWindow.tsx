@@ -264,6 +264,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     prevSessionRunningRef.current = sessionRunning;
     if (wasRunning && !sessionRunning) loadBalances();
   }, [sessionRunning, loadBalances]);
+
   const isMobile = useIsMobile();
   const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
 
@@ -318,6 +319,53 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
     deferInitialScroll: Boolean(pendingScrollRestore),
   });
+
+  // --- Per-message balance snapshots ---
+  // Each assistant message shows the balance as of the moment it completed,
+  // not the global latest figure. Map message timestamp → { provider: remaining }.
+  const [balancesByTs, setBalancesByTs] = useState<Record<number, Record<string, number>>>({});
+  useEffect(() => {
+    const timestamps: number[] = [];
+    for (const m of messages) {
+      if (m.role === "assistant" && typeof m.timestamp === "number" && Number.isFinite(m.timestamp)) {
+        timestamps.push(m.timestamp);
+      }
+    }
+    if (timestamps.length === 0) return;
+    let cancelled = false;
+    void fetch("/api/usage-balances/timeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timestamps }),
+    })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((data: { providers?: Record<string, { balance: number | null; remainingSeries: (number | null)[] }> } | null) => {
+        if (cancelled || !data?.providers) return;
+        const map: Record<number, Record<string, number>> = {};
+        for (const provider of Object.keys(data.providers)) {
+          const info = data.providers[provider];
+          for (let i = 0; i < timestamps.length; i += 1) {
+            const remaining = info.remainingSeries[i];
+            if (remaining === null) continue;
+            (map[timestamps[i]] ??= {})[provider] = remaining;
+          }
+        }
+        setBalancesByTs(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [messages]);
+  const balancesForMessage = useCallback(
+    (m: AgentMessage): Record<string, number> | null => {
+      if (m.role === "assistant" && typeof m.timestamp === "number" && balancesByTs[m.timestamp]) {
+        return balancesByTs[m.timestamp];
+      }
+      return providerBalances;
+    },
+    [balancesByTs, providerBalances],
+  );
   const sessionBusy = agentRunning || bashRunning;
   const [quotedSelection, setQuotedSelection] = useState<{
     text: string;
@@ -1098,7 +1146,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
                 const view = (
                   <MessageView
-                    balances={providerBalances}
+                    balances={balancesForMessage(msg)}
                     key={`${keyPrefix}-view-${messageKey}`}
                     message={msg}
                     toolResults={toolResultsMap}
