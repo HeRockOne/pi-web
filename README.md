@@ -12,6 +12,8 @@ Local browser UI for the [pi coding agent](https://github.com/earendil-works/pi)
 - **Two ways to branch**: **New session** creates an independent session file from an earlier message; **Edit from here** creates a branch inside the current session.
 - **Project file tools**: browse and upload files, inspect Git diffs, and preview source, Markdown, images, audio, PDFs, and DOCX files with automatic refresh.
 - **Git worktrees**: switch checkouts from the sidebar while keeping sessions from the same repository grouped together.
+- **Usage analytics**: track per-provider spending, balances, and cache hit rates. Set a balance per provider; all of its models share the balance and deduct from it. Message rows show the real cost and remaining provider balance.
+- **Per-provider HTTP proxy**: give a blocked provider its own proxy (e.g. `http://127.0.0.1:7890`) from the Models panel; only that provider's traffic goes through it, while others connect directly.
 - **Web-based configuration**: manage provider login and API keys, models, model tests, plugin packages, and skills without leaving Pi Web.
 - **English, Simplified Chinese, and Traditional Chinese UI**: Pi Web follows the browser language initially and provides a language switcher in the top bar.
 
