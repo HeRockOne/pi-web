@@ -63,7 +63,7 @@ function SectionRow({
         {section.detail ? <span className="system-prompt-composition-path">{section.detail}</span> : null}
       </span>
       <span className="system-prompt-composition-numbers">
-        ≈{section.tokens.toLocaleString("en-US")} · {percent}%
+        ≈ {section.tokens.toLocaleString("en-US")} tokens · {percent}%
       </span>
     </>
   );
@@ -101,6 +101,7 @@ function SectionRow({
 
 function PromptComposition({ prompt, tools, translate }: { prompt: string; tools: ToolEntry[] | null; translate: Translate }) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [compositionExpanded, setCompositionExpanded] = useState(false);
   const analysis = analyzeSystemPrompt(prompt, toToolHints(tools));
   if (analysis.sections.length === 0) return null;
 
@@ -121,7 +122,13 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
 
   return (
     <div className="system-prompt-composition">
-      <div className="system-prompt-composition-head">
+      <button
+        type="button"
+        className="system-prompt-composition-head"
+        aria-expanded={compositionExpanded}
+        onClick={() => setCompositionExpanded((current) => !current)}
+      >
+        <span className={`system-prompt-composition-chevron${compositionExpanded ? " open" : ""}`} aria-hidden="true">▶</span>
         <span className="system-prompt-composition-title">{translate("system.composition")}</span>
         <span
           className="system-prompt-composition-total"
@@ -129,7 +136,7 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
         >
           ≈ {analysis.totalTokens.toLocaleString("en-US")} tokens
         </span>
-      </div>
+      </button>
       <div
         className="system-prompt-composition-bar"
         role="img"
@@ -148,19 +155,21 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
           />
         ))}
       </div>
-      <ul className="system-prompt-composition-list">
-        {rows.map(({ section }) => (
-          <SectionRow
-            key={section.key}
-            section={section}
-            depth={0}
-            totalTokens={analysis.totalTokens}
-            expanded={expandedKeys.has(section.key)}
-            onToggle={() => toggle(section.key)}
-            translate={translate}
-          />
-        ))}
-      </ul>
+      {compositionExpanded ? (
+        <ul className="system-prompt-composition-list">
+          {rows.map(({ section }) => (
+            <SectionRow
+              key={section.key}
+              section={section}
+              depth={0}
+              totalTokens={analysis.totalTokens}
+              expanded={expandedKeys.has(section.key)}
+              onToggle={() => toggle(section.key)}
+              translate={translate}
+            />
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -225,10 +234,26 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-head {
           display: flex;
-          align-items: baseline;
+          align-items: center;
           justify-content: space-between;
           gap: 8px;
-          margin-bottom: 8px;
+          width: 100%;
+          padding: 2px 4px;
+          background: none;
+          border: none;
+          border-radius: 4px;
+          color: inherit;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.1s;
+        }
+        .system-prompt-composition-head:hover {
+          background: var(--bg-hover);
+        }
+        .system-prompt-composition-head .system-prompt-composition-chevron {
+          width: 12px;
+          font-size: 10px;
         }
         .system-prompt-composition-title {
           color: var(--text);
@@ -244,6 +269,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-bar {
           display: flex;
+          margin-top: 8px;
           height: 8px;
           border-radius: 4px;
           overflow: hidden;
@@ -268,7 +294,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           padding: 2px 0 2px 4px;
         }
         .system-prompt-composition-list .is-child {
-          padding-left: 22px;
+          padding-left: 8px;
         }
         .system-prompt-composition-row {
           display: flex;
@@ -311,7 +337,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           border-radius: 2px;
         }
         .system-prompt-composition-label {
-          flex: 1;
+          flex: 0 1 auto;
           min-width: 0;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -326,8 +352,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-numbers {
           flex-shrink: 0;
-          min-width: 96px;
-          text-align: right;
+          margin-left: 8px;
           white-space: nowrap;
           font-family: var(--font-mono);
           font-size: 11px;
@@ -335,6 +360,15 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-list.is-nested {
           margin: 2px 0 4px;
+          padding-left: 10px;
+          gap: 3px;
+          border-left: 1px solid var(--border);
+        }
+        .system-prompt-composition-list.is-nested > li {
+          padding-right: 6px;
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          background: color-mix(in srgb, var(--bg) 35%, var(--bg-panel));
         }
       `}</style>
     </section>
