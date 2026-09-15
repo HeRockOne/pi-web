@@ -15,6 +15,29 @@ import { SessionSearch } from "./SessionSearch";
 // height, so the list can be windowed (only the visible slice is mounted).
 const SESSION_LIST_ITEM_HEIGHT = 54;
 
+// Tree collapse state persists across page reloads (project folders + session branches).
+const TREE_COLLAPSE_STORAGE_KEY = "pi-web:sidebar-tree-collapsed";
+
+interface TreeCollapseSnapshot {
+  projects: string[];
+  sessions: string[];
+}
+
+function readTreeCollapseSnapshot(): TreeCollapseSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(TREE_COLLAPSE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TreeCollapseSnapshot> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      projects: Array.isArray(parsed.projects) ? parsed.projects.filter((x): x is string => typeof x === "string") : [],
+      sessions: Array.isArray(parsed.sessions) ? parsed.sessions.filter((x): x is string => typeof x === "string") : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getSessionListIndices(count: number, scrollTop: number, viewportHeight: number, focusedIndex = -1): number[] {
   const overscan = 8;
   const visibleCount = Math.ceil((viewportHeight || 600) / SESSION_LIST_ITEM_HEIGHT) + overscan * 2;
@@ -294,9 +317,38 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
   const [wtFilter, setWtFilter] = useState("");
-  // Tree collapse state (frontend only): project folders and session nodes.
+  // Tree collapse state: project folders and session nodes. Hydrated from
+  // localStorage after mount (SSR has no storage); writes are skipped until
+  // hydration so the mount-time empty state cannot wipe a persisted snapshot.
   const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [collapsedSessionIds, setCollapsedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const collapseLastSavedRef = useRef<string | null>(null);
+  // Guards the save effect: until hydration ran, the state is the empty initial
+  // set and writing it would wipe a persisted snapshot.
+  const collapseHydratedRef = useRef(false);
+  useEffect(() => {
+    const snapshot = readTreeCollapseSnapshot();
+    collapseLastSavedRef.current = JSON.stringify(snapshot ?? { projects: [], sessions: [] });
+    if (snapshot) {
+      setCollapsedProjectKeys(new Set(snapshot.projects));
+      setCollapsedSessionIds(new Set(snapshot.sessions));
+    }
+    collapseHydratedRef.current = true;
+  }, []);
+  useEffect(() => {
+    if (!collapseHydratedRef.current) return;
+    const snapshot = JSON.stringify({
+      projects: [...collapsedProjectKeys],
+      sessions: [...collapsedSessionIds],
+    });
+    if (snapshot === collapseLastSavedRef.current) return;
+    collapseLastSavedRef.current = snapshot;
+    try {
+      window.localStorage.setItem(TREE_COLLAPSE_STORAGE_KEY, snapshot);
+    } catch {
+      // Storage failures (privacy mode, quota) must not break the tree.
+    }
+  }, [collapsedProjectKeys, collapsedSessionIds]);
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
   const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
