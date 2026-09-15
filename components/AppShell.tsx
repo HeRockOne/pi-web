@@ -2145,7 +2145,7 @@ export function AppShell() {
     // Avg cache hit rate = cache reads / all input-class tokens (same formula as the stats panel).
     const hitDenominator = tokens ? tokens.cacheRead + tokens.cacheWrite + tokens.input : 0;
     const cacheHitRateText = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
-      ? `${(tokens.cacheRead / hitDenominator * 100).toFixed(1)}%`
+      ? `${(tokens.cacheRead / hitDenominator * 100).toFixed(4)}%`
       : null;
 
     let contextColor = "var(--text-muted)";
@@ -3108,7 +3108,7 @@ export function AppShell() {
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatCompact(ctx.tokens) : "?"} / ${formatCompact(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
                        // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
                        ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
-                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(1)}%`]]
+                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(4)}%`]]
                          : []),
                     ];
                     const section = (

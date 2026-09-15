@@ -242,21 +242,28 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
 export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, quoteSelectionEnabled = false, initialPrompt, onInitialPromptConsumed, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
   const [providerBalances, setProviderBalances] = useState<Record<string, number> | null>(null);
-  useEffect(() => {
-    let cancelled = false;
+  const loadBalances = useCallback(() => {
     void fetch("/api/usage-balances")
       .then(async (response) => (response.ok ? response.json() : null))
       .then((data: { providers?: Record<string, { balance: number; spent: number; remaining: number }> } | null) => {
-        if (cancelled || !data?.providers) return;
+        if (!data?.providers) return;
         const map: Record<string, number> = {};
         for (const [provider, info] of Object.entries(data.providers)) map[provider] = info.remaining;
         setProviderBalances(map);
       })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
   }, []);
+  useEffect(() => {
+    loadBalances();
+  }, [loadBalances]);
+  // Refetch balances whenever a running conversation finishes, so the 💰 figure
+  // reflects the latest spend without a page reload.
+  const prevSessionRunningRef = useRef(sessionRunning);
+  useEffect(() => {
+    const wasRunning = prevSessionRunningRef.current;
+    prevSessionRunningRef.current = sessionRunning;
+    if (wasRunning && !sessionRunning) loadBalances();
+  }, [sessionRunning, loadBalances]);
   const isMobile = useIsMobile();
   const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
 

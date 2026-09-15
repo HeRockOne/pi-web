@@ -20,9 +20,9 @@ export function formatCost(n: number): string {
   return `$${Number(n.toPrecision(6)).toString()}`;
 }
 
-/** 百分比格式化：一位小数。 */
+/** 百分比格式化：四位小数。 */
 export function formatPercent(rate: number): string {
-  return `${(rate * 100).toFixed(1)}%`;
+  return `${(rate * 100).toFixed(4)}%`;
 }
 
 /**
