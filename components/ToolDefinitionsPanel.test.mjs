@@ -10,7 +10,10 @@ test("keeps System and Tools in separate adjacent toolbar actions", () => {
   assert.match(appShellSource, /handleSystemInfoToggle\("system", mobile\)[\s\S]*?handleSystemInfoToggle\("tools", mobile\)/);
   assert.match(appShellSource, /activeTopPanel === "system"[\s\S]*?<SystemPromptPanel/);
   assert.match(appShellSource, /activeTopPanel === "tools"[\s\S]*?<ToolDefinitionsPanel/);
-  assert.doesNotMatch(systemSource, /ToolEntry|tools/);
+  // SystemPromptPanel consumes tools only as composition-analysis input (per-plugin attribution);
+  // it must not render tool-definition UI, which stays in ToolDefinitionsPanel.
+  assert.match(systemSource, /toToolHints\(tools\)/);
+  assert.doesNotMatch(systemSource, /tool-definitions|tool-definition-detail|setSelectedToolName/);
   assert.doesNotMatch(systemSource, /system-prompt-heading/);
   assert.doesNotMatch(panelSource, /tool-definitions-heading/);
 });

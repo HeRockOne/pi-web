@@ -163,17 +163,21 @@ export function resizeTerminal(id: string, cols: number, rows: number): boolean 
   return true;
 }
 
+/** node-pty does not support signal-full kills on Windows (it throws for any signal);
+ *  `kill()` without a signal is already a forced close there. */
+const SIGNAL_FORCE = process.platform === "win32" ? undefined : "SIGKILL";
+
 export function killTerminal(id: string, force = false): boolean {
   const record = registry().get(id);
   if (!record) return false;
   if (record.cleanupTimer) clearTimeout(record.cleanupTimer);
   registry().delete(id);
   if (!record.exited) {
-    record.pty.kill(force ? "SIGKILL" : undefined);
+    record.pty.kill(force ? SIGNAL_FORCE : undefined);
     // A shell may trap SIGHUP; explicit close and lease expiry must still finish.
     if (!force) {
       record.cleanupTimer = setTimeout(() => {
-        if (!record.exited) record.pty.kill("SIGKILL");
+        if (!record.exited) record.pty.kill(SIGNAL_FORCE);
       }, 2000);
       record.cleanupTimer.unref?.();
     }
