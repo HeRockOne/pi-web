@@ -1,80 +1,82 @@
 # Pi Web
 
-[中文文档](./README.zh-CN.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+[English](./README.en.md)
 
-Local browser UI for the [pi coding agent](https://github.com/earendil-works/pi). Pi Web uses the same local configuration and session files as pi, so you can browse and resume conversations, run agent turns, configure models and resources, and inspect project files from a browser.
+[pi 编程智能体](https://github.com/earendil-works/pi)的本地浏览器界面。Pi Web 与 pi 共用本机配置和会话文件，可在浏览器中查找和继续对话、运行智能体、配置模型与资源，并查看项目文件。
 
-![Pi Web displaying a pi session with structured Markdown, tool calls, and project navigation](https://raw.githubusercontent.com/agegr/pi-web/main/docs/screenshot2.png)
+中文微信群：请查看 [GitHub Discussions 帖子](https://github.com/agegr/pi-web/discussions/271)。
 
-## Features
+![Pi Web 展示包含结构化 Markdown、工具调用和项目导航的 pi 会话](https://raw.githubusercontent.com/agegr/pi-web/main/docs/screenshot2.png)
 
-- **Session workspace**: browse, resume, rename, export, and delete conversations grouped by project, with running state, context usage, cost, and compaction details.
-- **Two ways to branch**: **New session** creates an independent session file from an earlier message; **Edit from here** creates a branch inside the current session.
-- **Project file tools**: browse and upload files, inspect Git diffs, and preview source, Markdown, images, audio, PDFs, and DOCX files with automatic refresh.
-- **Git worktrees**: switch checkouts from the sidebar while keeping sessions from the same repository grouped together.
-- **Usage analytics**: track per-provider spending, balances, and cache hit rates. Set a balance per provider; all of its models share the balance and deduct from it. Message rows show the real cost and remaining provider balance.
-- **Per-provider HTTP proxy**: give a blocked provider its own proxy (e.g. `http://127.0.0.1:7890`) from the Models panel; only that provider's traffic goes through it, while others connect directly.
-- **Web-based configuration**: manage provider login and API keys, models, model tests, plugin packages, and skills without leaving Pi Web.
-- **English, Simplified Chinese, and Traditional Chinese UI**: Pi Web follows the browser language initially and provides a language switcher in the top bar.
+## 功能
 
-## Quick Start
+- **会话工作区**：按项目查找、继续、重命名、导出和删除对话，并查看运行状态、上下文占用、花费和压缩信息。
+- **两种分支方式**：**新会话**会从较早的消息创建独立会话文件；**从此处编辑**会在当前会话内创建分支。
+- **项目文件工具**：浏览和上传文件、查看 Git Diff，并预览源码、Markdown、图片、音频、PDF 和 DOCX；文件变化后会自动刷新。
+- **Git worktree**：从侧边栏切换 checkout，同时把同一仓库不同 worktree 的会话归在一起。
+- **用量统计**：按供应商追踪花费、余额与缓存命中率。可为每个供应商设置余额，其下所有模型共享该余额并统一扣减；消息行会显示真实花费与剩余余额。
+- **供应商级 HTTP 代理**：被墙的供应商可在模型面板单独配置代理（如 `http://127.0.0.1:7890`），只让该供应商的流量走代理，其他供应商保持直连。
+- **网页配置**：无需离开 Pi Web，即可管理 Provider 登录和 API Key、模型、模型测试、插件包及技能。
+- **英文、简体中文和繁体中文界面**：Pi Web 首次打开时跟随浏览器语言，也可从顶部栏切换语言。
 
-Pi Web requires Node.js 22.19.0 or newer. Check your version with `node --version`, then run:
+## 快速开始
+
+Pi Web 要求 Node.js 22.19.0 或更高版本。先用 `node --version` 检查版本，然后运行：
 
 ```bash
 npx @agegr/pi-web@latest
 ```
 
-The CLI opens a browser after the server is ready. If it does not, open [http://127.0.0.1:30141](http://127.0.0.1:30141). Pi Web listens only on `127.0.0.1` by default.
+服务就绪后，命令行会尝试自动打开浏览器。如果没有打开，请访问 [http://127.0.0.1:30141](http://127.0.0.1:30141)。Pi Web 默认仅监听 `127.0.0.1`。
 
-If no model provider is configured yet, open the **Models** panel to sign in or add an API key.
+如果尚未配置模型 Provider，请打开**模型（Models）**面板登录或添加 API Key。
 
-To install the `pi-web` command globally:
+如需全局安装 `pi-web` 命令：
 
 ```bash
 npm install -g @agegr/pi-web@latest
 pi-web
 ```
 
-To update, stop the running process with `Ctrl+C` and run the same install command again. To uninstall, run `npm uninstall -g @agegr/pi-web`.
+更新前先用 `Ctrl+C` 停止正在运行的进程，再次执行同一条安装命令。卸载时运行 `npm uninstall -g @agegr/pi-web`。
 
-## Configuration
+## 配置
 
-For port and hostname, command-line options override the corresponding environment variables. Either `--no-open` or `PI_WEB_NO_OPEN=1` disables automatic browser opening. Run `pi-web --help` (or `-h`) to print startup options and exit without starting the server. Unknown options exit with an error.
+端口和主机名以命令行参数为准，优先于对应的环境变量。`--no-open` 与 `PI_WEB_NO_OPEN=1` 中任意一个都会关闭自动打开浏览器。运行 `pi-web --help`（或 `-h`）可打印启动选项并以退出码 0 结束，不会启动服务；未知参数会报错并以退出码 1 结束。
 
-| Option or environment variable | Purpose | Default |
+| 参数或环境变量 | 用途 | 默认值 |
 | --- | --- | --- |
-| `--help`, `-h` | Print startup options and exit | — |
-| `--port <port>`, `-p <port>`, or `PORT` | Server port | `30141` |
-| `--hostname <host>`, `-H <host>`, or `PI_WEB_HOSTNAME` | Bind hostname | `127.0.0.1` |
-| `--no-open` or `PI_WEB_NO_OPEN=1` | Do not open a browser automatically | Browser opens |
-| `PI_WEB_SKIP_VERSION_CHECK=1` | Disable Pi Web update checks | Unset |
-| `PI_WEB_ALLOWED_HOSTS` | Additional exact proxy or custom hostnames, comma-separated | Unset |
-| `PI_WEB_PASSWORD` | Enable HTTP Basic Auth; the username is always `pi` | Authentication disabled |
-| `PI_WEB_IDLE_TIMEOUT_MS` | Session idle timeout in milliseconds, up to `2147483647`; `0` disables idle shutdown; invalid or out-of-range values use the default | `600000` (10 min) |
+| `--help`、`-h` | 打印启动选项并退出 | — |
+| `--port <端口>`、`-p <端口>` 或 `PORT` | 服务端口 | `30141` |
+| `--hostname <主机>`、`-H <主机>` 或 `PI_WEB_HOSTNAME` | 监听主机名 | `127.0.0.1` |
+| `--no-open` 或 `PI_WEB_NO_OPEN=1` | 不自动打开浏览器 | 自动打开 |
+| `PI_WEB_SKIP_VERSION_CHECK=1` | 禁用 Pi Web 更新检查 | 未设置 |
+| `PI_WEB_ALLOWED_HOSTS` | 额外允许的代理或自定义主机名，多个值用逗号分隔，必须精确匹配 | 未设置 |
+| `PI_WEB_PASSWORD` | 启用 HTTP Basic Auth，用户名固定为 `pi` | 不启用认证 |
+| `PI_WEB_IDLE_TIMEOUT_MS` | 会话空闲超时毫秒数，最大 `2147483647`；`0` 禁用空闲关闭；无效或越界值使用默认值 | `600000`（10 分钟） |
 
-For example:
+例如：
 
 ```bash
 pi-web --help
 pi-web -p 8080 -H 0.0.0.0 --no-open
 ```
 
-### Remote Access
+### 远程访问
 
-Binding to a non-loopback address exposes an agent that can execute high-privilege actions. On a trusted LAN, require a long random password:
+监听非回环地址会暴露一个可执行高权限操作的智能体。在可信局域网中使用时，请设置足够长的随机密码：
 
 ```bash
-PI_WEB_PASSWORD='a-long-random-password' pi-web --hostname 0.0.0.0
+PI_WEB_PASSWORD='足够长的随机密码' pi-web --hostname 0.0.0.0
 ```
 
-Basic Auth does not encrypt the password in transit. Do not expose Pi Web over plain HTTP to the internet; use HTTPS through a trusted reverse proxy or a trusted VPN. If a reverse proxy sends an external hostname, add that exact name to `PI_WEB_ALLOWED_HOSTS`. This allow-list does not change the address Pi Web binds to.
+Basic Auth 不会加密传输中的密码。不要通过明文 HTTP 将 Pi Web 暴露到互联网；远程访问应使用可信反向代理提供 HTTPS，或通过可信 VPN。如果反向代理传递外部主机名，请把该名称精确加入 `PI_WEB_ALLOWED_HOSTS`。这个白名单不会改变 Pi Web 的监听地址。
 
-### HTTP Proxy
+### HTTP 代理
 
-Server-side model and API requests honor the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables.
+服务端的模型和 API 请求会读取标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。
 
-On macOS or Linux:
+macOS 或 Linux：
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \
@@ -83,7 +85,7 @@ NO_PROXY=localhost,127.0.0.1 \
 npx @agegr/pi-web@latest
 ```
 
-On Windows PowerShell:
+Windows PowerShell：
 
 ```powershell
 $env:HTTP_PROXY = "http://127.0.0.1:7890"
@@ -92,20 +94,17 @@ $env:NO_PROXY = "localhost,127.0.0.1"
 npx @agegr/pi-web@latest
 ```
 
-## Notes
+## 注意事项
 
-- **Agent data**: Pi Web reads pi data from `~/.pi/agent` by default, including session files under `sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`. Set `PI_CODING_AGENT_DIR` to use another pi agent directory.
-- **Filesystem access**: Pi Web must be able to read the agent data directory and the working directories recorded by its sessions. Run Pi Web in the same filesystem environment as pi when sharing existing sessions.
-- **Shared configuration**: the Models panel uses pi's model, settings, and credential storage, so changes are visible to both interfaces.
-- **File access boundary**: the file browser is limited to working directories selected in Pi Web and project or session roots it already knows about; it is not a general filesystem browser.
-- **Git worktrees**: see [Worktrees in Pi Web](./docs/worktrees.md) for switcher visibility, worktree creation, and removal behavior.
+- **智能体数据**：Pi Web 默认读取 `~/.pi/agent` 下的 pi 数据，包括 `sessions/<编码后的工作目录>/<时间戳>_<uuid>.jsonl` 中的会话文件。可通过 `PI_CODING_AGENT_DIR` 指定其他 pi agent 目录。
+- **文件系统访问**：Pi Web 必须能读取智能体数据目录及会话记录中的工作目录。与现有 pi 会话共用数据时，请让 Pi Web 运行在与 pi 相同的文件系统环境中。
+- **共享配置**：模型面板使用 pi 的模型、设置和凭据存储，因此两种界面都能看到相关更改。
+- **文件访问边界**：文件浏览器仅能访问在 Pi Web 中选择过的工作目录，以及它已识别的项目或会话根目录；它不是通用的文件系统浏览器。
+- **Git worktree**：切换器何时显示、如何创建 worktree，以及删除会产生什么影响，见 [Pi Web 里的 Worktree](./docs/worktrees.md)。
 
-### Downstream Session Context Menu
+### 下游会话右键菜单
 
-Electron wrappers and other downstream integrations can provide a session-row
-context menu without patching `SessionSidebar`. Listen for the cancelable
-`pi-web:session-row-contextmenu` browser event and call `preventDefault()`
-synchronously when the integration will handle it:
+Electron 包装器和其他下游集成可以在不修改 `SessionSidebar` 的情况下提供会话行右键菜单。监听可取消的 `pi-web:session-row-contextmenu` 浏览器事件，集成处理时同步调用 `preventDefault()`：
 
 ```js
 window.addEventListener("pi-web:session-row-contextmenu", (event) => {
@@ -118,16 +117,11 @@ window.addEventListener("pi-web:session-row-contextmenu", (event) => {
 });
 ```
 
-The detail object contains `id`, `path`, `cwd`, optional `name`, pointer
-coordinates, and a `refresh()` callback for actions that change the session
-list. If no listener cancels the extension event, Pi Web preserves the
-browser's native context menu. This hook is browser-side and independent of
-Pi agent extensions.
+detail 对象包含 `id`、`path`、`cwd`、可选的 `name`、指针坐标，以及一个用于更改会话列表操作的 `refresh()` 回调。如果没有监听器取消该扩展事件，Pi Web 保留浏览器的原生右键菜单。这个钩子在浏览器端工作，与 pi agent 扩展无关。
 
-### Extension Session Liveness
+### 扩展会话存活
 
-Server-side Pi extensions with detached work can prevent automatic idle
-session eviction through the versioned global registry:
+带有分离工作的服务端 pi 扩展可以通过带版本号的全局注册表阻止自动空闲会话淘汰：
 
 ```js
 const liveness = globalThis[Symbol.for("@agegr/pi-web/session-liveness/v1")];
@@ -141,21 +135,16 @@ const release = liveness?.version === 1
   : () => {};
 ```
 
-Register once per active extension session and call the returned idempotent
-`release` function on session shutdown, replacement, or reload. `isActive`
-must be synchronous, cheap, and scoped to the supplied exact session id or
-file. Provider errors fail safe by preserving that session. This lease only
-affects automatic idle eviction; explicit shutdown and Stop fallback cleanup
-still take precedence.
+每个活动的扩展会话注册一次，并在会话关闭、替换或重载时调用返回的幂等 `release` 函数。`isActive` 必须是同步、廉价且限定在所提供的精确会话 id 或文件上的。Provider 错误时安全失败，保留该会话。此租约只影响自动空闲淘汰；显式关闭和 Stop 回退清理仍然优先。
 
-## Development
+## 开发
 
 ```bash
 npm install
 npm run dev
 ```
 
-The development server runs at [http://127.0.0.1:30141](http://127.0.0.1:30141). Run the common checks with:
+开发服务器运行在 [http://127.0.0.1:30141](http://127.0.0.1:30141)。常用检查命令：
 
 ```bash
 npm test
@@ -163,27 +152,27 @@ node_modules/.bin/tsc --noEmit
 npm run lint
 ```
 
-Do not run `next build` or `npm run build` during normal development. It writes to `.next/` and can interfere with the development server; leave builds for release work.
+日常开发时不要运行 `next build` 或 `npm run build`。它们会写入 `.next/`，可能干扰开发服务器；仅在发布流程中执行构建。
 
-Contributor guides: [Internationalization](./docs/i18n.md) and [Release process](./docs/release.md).
+贡献者文档：[国际化](./docs/i18n.md)和[发布流程](./docs/release.md)。
 
-## Repository Layout
+## 仓库结构
 
 ```text
-app/             Next.js UI and API routes
-components/      React UI components
-hooks/           Client state and interaction hooks
-lib/             Session, agent, model, file, Git, and security logic
-public/          Static assets and PWA files
-bin/             npm CLI entrypoint and launch option parsing
-docs/            Focused user and contributor guides
+app/             Next.js 界面和 API 路由
+components/      React 界面组件
+hooks/           客户端状态和交互 hooks
+lib/             会话、智能体、模型、文件、Git 和安全逻辑
+public/          静态资源和 PWA 文件
+bin/             npm CLI 入口及启动参数解析
+docs/            面向用户和贡献者的专题文档
 ```
 
-See [AGENTS.md](./AGENTS.md) for the architecture notes and detailed file map.
-See [AGENTS.md](./AGENTS.md) for the development rules loaded at startup. Detailed material is split out and loaded on demand:
-- [Architecture & design decisions](./docs/ARCHITECTURE.md) — component overview, key traps (AgentSession lifecycle, fork, branching, worktrees, file access), dev server troubleshooting
-- [Session file format & CSS variables](./docs/SESSION-FORMAT.md) — `.jsonl` schema and theming tokens
-- [Internationalization](./docs/i18n.md) and [Release process](./docs/release.md) for contributors
-## License
+启动时加载的开发规则见 [AGENTS.md](./AGENTS.md)，详细内容按需读取：
+- [架构与设计决策](./docs/ARCHITECTURE.md) — 组件总览、关键陷阱（AgentSession 生命周期、fork、分支、worktree、文件访问）、dev server 排障
+- [会话文件格式与 CSS 变量](./docs/SESSION-FORMAT.md) — `.jsonl` 结构与主题令牌
+- 面向贡献者：[国际化](./docs/i18n.md) 与 [发布流程](./docs/release.md)
+
+## 许可证
 
 [MIT](./LICENSE)
