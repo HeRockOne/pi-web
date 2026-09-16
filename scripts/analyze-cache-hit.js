@@ -41,6 +41,7 @@ const threshold = parseInt(arg("--threshold", "3000"), 10) || 3000;
 const since = arg("--since", "");
 const asJson = args.includes("--json");
 const compressWindowSec = parseInt(arg("--window", "60"), 10) || 60;
+const pricePerM = parseFloat(arg("--price", "")) || 0; // USD/1M input tokens
 
 const sessionsDir = path.join(os.homedir(), ".pi", "agent", "sessions");
 const usageFile = path.join(os.homedir(), ".pi", "agent", "analytics", "usage.jsonl");
@@ -109,6 +110,35 @@ function hitRateOf(input, cacheRead, cacheWrite) {
 }
 const fmtPct = (v) => (v === null ? "  -" : v.toFixed(1).padStart(5));
 const fmtTime = (ts) => new Date(ts).toISOString().slice(11, 19);
+const fmtTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n));
+
+// 估算每次 compress 后的重算损失：事件首条请求的 cacheR 相比事件前基线跌了多少
+function estimateCompressLoss(rows, compressTimes, windowMs) {
+  const events = [];
+  let lastLinkedTs = -1;
+  for (const ct of compressTimes) {
+    // 事件窗口内首条非空请求（压缩后恢复通常 2-3 条请求内完成）
+    let req = null;
+    for (const r of rows) {
+      if (r[0] < ct || r[0] > ct + windowMs) continue;
+      if (r[4] === 0 && r[6] === 0) continue;
+      req = r;
+      break;
+    }
+    if (!req) continue;
+    if (req[0] === lastLinkedTs) continue; // 已被更早的 compress 覆盖
+    lastLinkedTs = req[0];
+    // 基线：该请求前最后一条 cacheR > 0 的请求
+    let base = 0;
+    for (const r of rows) {
+      if (r[0] >= req[0]) break;
+      if (r[6] > 0) base = r[6];
+    }
+    events.push({ ts: ct, firstTs: req[0], baseline: base, firstCacheR: req[6],
+      loss: Math.max(0, base - req[6]) });
+  }
+  return events;
+}
 
 // ---------- 主流程 ----------
 function main() {
@@ -162,12 +192,24 @@ function main() {
   }
 
   const shown = top ? lines.slice(0, top + 4).concat(`… 仅显示前 ${top} 条 (共 ${rows.length} 条，--top 控制)` , "") : lines;
-  console.log(shown.join("\n"));
+  if (!asJson) console.log(shown.join("\n"));
 
   // ---------- 总结 ----------
+  // ---------- compress 重算损失（无条件计算一次）----------
+  const lossEvents = estimateCompressLoss(rows, compressTimes, compressWindowSec * 1000);
+  const totalLoss = lossEvents.reduce((a, e) => a + e.loss, 0);
+  const perEvent = lossEvents.map((e) => ({ t: fmtTime(e.ts), baseline: e.baseline, firstCacheR: e.firstCacheR, loss: e.loss }));
+  const lossJson = { compressCalls: compressTimes.length, lossEvents: lossEvents.length,
+    totalLossTokens: totalLoss,
+    avgLossPerEvent: lossEvents.length ? Math.round(totalLoss / lossEvents.length) : 0,
+    perEvent };
+  if (pricePerM) lossJson.estCostUSD = +(totalLoss / 1e6 * pricePerM).toFixed(3);
+
   if (asJson) {
     const avg = stats.hits.length ? stats.hits.reduce((a, b) => a + b, 0) / stats.hits.length : null;
-    console.log(JSON.stringify({ sessionFile, total: stats.total, compressCalls: compressTimes.length, inputBig: stats.inputBig, cacheDrop: stats.cacheDrop, compressLinked: stats.compressLinked, avgHit: avg ? +avg.toFixed(1) : null }, null, 2));
+    console.log(JSON.stringify({ sessionFile, total: stats.total, compressCalls: compressTimes.length,
+      inputBig: stats.inputBig, cacheDrop: stats.cacheDrop, compressLinked: stats.compressLinked,
+      avgHit: avg ? +avg.toFixed(1) : null, loss: lossJson }, null, 2));
     return;
   }
 
@@ -188,6 +230,16 @@ function main() {
   if (linkedCount) console.log(`  compress 后请求:     ${linkedCount} 条, 平均命中率 ${(linkedHits / linkedCount).toFixed(1)}%`);
   console.log(`  input 暴增 (>${threshold}):  ${stats.inputBig} 条 | cacheR 暴跌: ${stats.cacheDrop} 条`);
   console.log(`  compress 总数:      ${compressTimes.length} 次 (${compressTimes.map(fmtTime).join(", ")})`);
+  if (lossEvents.length) {
+    console.log("");
+    console.log("──────── compress 重算损失 ────────");
+    for (const e of lossEvents.slice(0, 12)) {
+      console.log(`  ${fmtTime(e.ts)}  基线 ${fmtTokens(e.baseline)} → 首条 ${fmtTokens(e.firstCacheR)}  损失 ~${fmtTokens(e.loss)}`);
+    }
+    if (lossEvents.length > 12) console.log(`  … 其余 ${lossEvents.length - 12} 个事件略`);
+    console.log(`  共 ${lossEvents.length} 个有效事件，重算损失合计 ~${fmtTokens(totalLoss)}` +
+      (pricePerM ? ` (≈$${lossJson.estCostUSD})` : "  (--price=<USD/1M> 可估算成本)"));
+  }
   if (stats.compressLinked && stats.cacheDrop) {
     const ratio = (stats.cacheDrop / rows.length * 100).toFixed(0);
     if (stats.cacheDrop >= stats.compressLinked * 0.5) {
