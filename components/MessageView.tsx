@@ -1877,10 +1877,10 @@ function formatUsage(usage: {
   cost: { total: number };
 }, t: (key: string) => string): string {
   const parts = [];
-  if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
-  if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
+  if (usage.input) parts.push(`⬇️ ${usage.input.toLocaleString()}`);
+  if (usage.output) parts.push(`⬆️ ${usage.output.toLocaleString()}`);
+  if (usage.cacheRead) parts.push(`📖 ${usage.cacheRead.toLocaleString()}`);
+  if (usage.cacheWrite) parts.push(`💾 ${usage.cacheWrite.toLocaleString()}`);
   const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
   if (usage.cacheRead > 0 && hitTotal > 0) {
     parts.push(`🎯 ${((usage.cacheRead / hitTotal) * 100).toFixed(4)}%`);
