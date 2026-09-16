@@ -1879,11 +1879,11 @@ function formatUsage(usage: {
   const parts = [];
   if (usage.input) parts.push(`▼ ${usage.input.toLocaleString()} 输入`);
   if (usage.output) parts.push(`▲ ${usage.output.toLocaleString()} 输出`);
-  if (usage.cacheRead) parts.push(`📖 ${usage.cacheRead.toLocaleString()}`);
-  if (usage.cacheWrite) parts.push(`💾 ${usage.cacheWrite.toLocaleString()}`);
+  if (usage.cacheRead) parts.push(`📖 ${usage.cacheRead.toLocaleString()} 缓存读`);
+  if (usage.cacheWrite) parts.push(`💾 ${usage.cacheWrite.toLocaleString()} 缓存写`);
   const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
   if (usage.cacheRead > 0 && hitTotal > 0) {
-    parts.push(`🎯 ${((usage.cacheRead / hitTotal) * 100).toFixed(4)}%`);
+    parts.push(`🎯 ${((usage.cacheRead / hitTotal) * 100).toFixed(4)}% 命中率`);
   }
   if (usage.cost?.total) parts.push(`🔥 ${t("i18n.cost")} ${formatCost(usage.cost.total)}`);
   return parts.join(" · ");
