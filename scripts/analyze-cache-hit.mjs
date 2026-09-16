@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * analyze-cache-hit.js — 缓存命中率波动分析工具
+ * analyze-cache-hit.mjs — 缓存命中率波动分析工具
  *
  * 用途：排查单条请求命中率暴跌的根源。当发现 cacheR 骤降 / input 暴增 / 命中率
  * 跌到 20-55% 时，运行本工具对齐 usage 日志与会话文件的 compress 调用时间戳，
  * 判断是否由 ACP 上下文压缩打破缓存前缀导致。
  *
  * 用法：
- *   node scripts/analyze-cache-hit.js [sessionFile] [--top N] [--threshold=3000]
+ *   node scripts/analyze-cache-hit.mjs [sessionFile] [--top N] [--threshold=3000]
  *
  *   sessionFile  会话 .jsonl 路径；缺省自动选 ~/.pi/agent/sessions 下最近修改的
  *   --top N      只显示最近 N 条请求（默认全部；配合 --threshold 聚焦异常）
@@ -21,11 +21,10 @@
  *   - 对齐：compress 后 N 秒内的首次请求标为 [compress后]
  *   - 总结：compress 相关请求的平均命中率 vs 整体，证明/排除压缩是主因
  */
-"use strict";
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 // ---------- 参数 ----------
 const args = process.argv.slice(2);
