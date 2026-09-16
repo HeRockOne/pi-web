@@ -1881,6 +1881,10 @@ function formatUsage(usage: {
   if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
   if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
   if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
+  const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
+  if (usage.cacheRead > 0 && hitTotal > 0) {
+    parts.push(`🎯 ${((usage.cacheRead / hitTotal) * 100).toFixed(4)}%`);
+  }
   if (usage.cost?.total) parts.push(`🔥 ${t("i18n.cost")} ${formatCost(usage.cost.total)}`);
   return parts.join(" · ");
 }

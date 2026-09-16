@@ -415,6 +415,79 @@ ${bodyHtml}
 </html>`;
 }
 
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  if (!isApiRequestAllowed(request)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
+
+  try {
+    const { path: segments } = await params;
+    const targetPath = filePathFromApiSegments(segments);
+    const sessionId = request.nextUrl.searchParams.get("sessionId");
+
+    const allowedRoots = await getAllowedFileRoots();
+    const allowedByRoot = isFilePathAllowed(targetPath, allowedRoots);
+    const allowedBySessionReference =
+      !allowedByRoot &&
+      await isFilePathReferencedBySession(targetPath, sessionId);
+    if (!allowedByRoot && !allowedBySessionReference) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(targetPath);
+    } catch {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (!stat.isFile()) {
+      return NextResponse.json({ error: "Not a file" }, { status: 400 });
+    }
+
+    if (!allowedBySessionReference && !isExistingFilePathAllowed(targetPath, allowedRoots)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Resolve both sides so a symlink inside an allowed root cannot redirect
+    // writes outside it (same hardening as uploads).
+    const realTarget = fs.realpathSync(targetPath);
+    const realRoots = new Set<string>();
+    for (const root of allowedRoots) {
+      try {
+        realRoots.add(fs.realpathSync(root));
+      } catch {
+        // Ignore stale session roots that no longer exist.
+      }
+    }
+    if (!isFilePathAllowed(realTarget, realRoots)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    let content: string | null = null;
+    try {
+      content = await request.text();
+    } catch {
+      return NextResponse.json({ error: "Failed to read request body" }, { status: 400 });
+    }
+    if (typeof content !== "string") {
+      return NextResponse.json({ error: "Body must be raw text" }, { status: 400 });
+    }
+
+    // Guard: large text edits must go through an editor, not this simple put.
+    if (content.length > TEXT_PREVIEW_MAX_BYTES) {
+      return NextResponse.json({ error: "File too large to save (>256KB)" }, { status: 413 });
+    }
+
+    fs.writeFileSync(targetPath, content, "utf8");
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }

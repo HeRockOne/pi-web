@@ -1166,6 +1166,32 @@ function TextFileViewer({
 
   onStateChangeRef.current = onStateChange;
 
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editingRef = useRef(false);
+  editingRef.current = editing;
+
+  const startEditing = useCallback(() => {
+    if (!data) return;
+    setDraft(data.content);
+    setEditError(null);
+    setEditing(true);
+  }, [data]);
+
+  const cancelEditing = useCallback(() => {
+    setEditing(false);
+    setEditError(null);
+  }, []);
+
+
+  // Leave edit mode when the viewed file changes.
+  useEffect(() => {
+    setEditing(false);
+    setEditError(null);
+  }, [filePath]);
+
   const updateDisplayMode = useCallback((nextDisplayMode: DisplayMode) => {
     viewerStateRef.current.displayMode = nextDisplayMode;
     setDisplayMode(nextDisplayMode);
@@ -1252,6 +1278,33 @@ function TextFileViewer({
     }
   }, [cwd]);
 
+  const saveEditing = useCallback(async () => {
+    if (saving || !data) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      const response = await fetch(getFileApiUrl(filePath, "read", sourceSessionId), {
+        method: "PUT",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body: draft,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? `HTTP ${response.status}`);
+      }
+      setEditing(false);
+      const [refreshed] = await Promise.all([
+        fetchContent(filePath),
+        fetchGitDiff(filePath),
+      ]);
+      void refreshed;
+    } catch (error) {
+      setEditError(String(error instanceof Error ? error.message : error));
+    } finally {
+      setSaving(false);
+    }
+  }, [data, draft, fetchContent, fetchGitDiff, filePath, saving, sourceSessionId]);
+
   // Reset and load the file itself when its identity changes. Live watching is
   // managed separately so pausing it never clears the displayed content.
   useEffect(() => {
@@ -1283,6 +1336,7 @@ function TextFileViewer({
     if (!watchEnabled) return;
 
     const synchronize = () => {
+      if (editingRef.current) return;
       void fetchContent(filePath);
       void fetchGitDiff(filePath);
     };
@@ -1647,6 +1701,42 @@ function TextFileViewer({
                 </button>
               </>
             )}
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void saveEditing()}
+                  disabled={saving}
+                  title={t("files.save")}
+                  className="file-viewer-icon-button"
+                  style={{ color: "var(--text)", background: "var(--bg-selected)" }}
+                >
+                  {saving ? t("files.saving") : t("files.save")}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                  title={t("files.cancel")}
+                  className="file-viewer-icon-button"
+                >
+                  {t("files.cancel")}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={startEditing}
+                title={t("files.edit")}
+                aria-label={t("files.edit")}
+                className="file-viewer-icon-button"
+                style={{ color: "var(--text)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            )}
           </div>
 
           {!isDeletedDiff && <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />}
@@ -1663,7 +1753,50 @@ function TextFileViewer({
         }}
         style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}
       >
-        {effectiveDisplayMode === "diff" && hasGitDiff ? (
+        {editing ? (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            {editError && (
+              <div style={{ padding: "6px 14px", fontSize: 12.5, color: "var(--text-error)", borderBottom: "1px solid var(--border)", background: "var(--bg)", whiteSpace: "pre-wrap" }} role="alert">
+                {t("files.editFailed", { error: editError })}
+              </div>
+            )}
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !event.shiftKey) {
+                event.preventDefault();
+                cancelEditing();
+              }
+              if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                event.preventDefault();
+                void saveEditing();
+              }
+            }}
+            spellCheck={false}
+            autoFocus
+            title={t("files.editHint", { path: getRelativeFilePath(filePath, cwd) })}
+            aria-label={t("files.edit")}
+            style={{
+              width: "100%",
+              height: "100%",
+              minHeight: "100%",
+              border: "none",
+              outline: "none",
+              resize: "none",
+              background: "var(--bg)",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              padding: "10px 14px",
+              whiteSpace: "pre",
+              tabSize: 2,
+            }}
+          />
+          </div>
+        ) : (
+          effectiveDisplayMode === "diff" && hasGitDiff ? (
           <DiffView patch={gitDiff.patch!} />
         ) : isHtml && effectiveDisplayMode === "preview" ? (
           <iframe
@@ -1753,7 +1886,7 @@ function TextFileViewer({
           </div>
         ) : (
           highlightedSource
-        )}
+        ))}
       </div>
     </div>
   );
