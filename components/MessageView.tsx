@@ -1877,8 +1877,8 @@ function formatUsage(usage: {
   cost: { total: number };
 }, t: (key: string) => string): string {
   const parts = [];
-  if (usage.input) parts.push(`⬇️ ${usage.input.toLocaleString()}`);
-  if (usage.output) parts.push(`⬆️ ${usage.output.toLocaleString()}`);
+  if (usage.input) parts.push(`▼ ${usage.input.toLocaleString()} 输入`);
+  if (usage.output) parts.push(`▲ ${usage.output.toLocaleString()} 输出`);
   if (usage.cacheRead) parts.push(`📖 ${usage.cacheRead.toLocaleString()}`);
   if (usage.cacheWrite) parts.push(`💾 ${usage.cacheWrite.toLocaleString()}`);
   const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
