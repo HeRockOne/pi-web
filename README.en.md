@@ -17,6 +17,39 @@ Local browser UI for the [pi coding agent](https://github.com/earendil-works/pi)
 - **Web-based configuration**: manage provider login and API keys, models, model tests, plugin packages, and skills without leaving Pi Web.
 - **English, Simplified Chinese, and Traditional Chinese UI**: Pi Web follows the browser language initially and provides a language switcher in the top bar.
 
+## Release Notes
+
+Local mainline based on official v0.9.1 (forked from agegr/pi-web). Features added or enhanced beyond the official release:
+
+### Sidebar & Sessions
+- **Session file tree**: sidebar sessions shown as a project folder tree, with collapse state persisted across reloads (`36533e5`, `93e0fa1`)
+- **Browser-style session tabs**: switch between sessions like browser tabs in the top bar (`a9a6fba`)
+- **Three-segment top bar layout**: restructured into three sections; panels collapse on outside click or Esc; system prompt composition panel collapsed by default (`12de342`, `0a5c22f`, `96bcd1c`, `a687c36`)
+
+### Usage & Balances
+- **Usage stats panel**: cache hit rate cards, per-provider balance tracking, compact used/total context usage display (`1dd312e`, `814599e`, `b220298`, `83a863f`, `492e3f7`)
+- **Per-message balance snapshots**: each assistant message shows its balance snapshot, real cost, and cache hit rate (4 decimals) at completion time; balances refetched after each run (`173216e`, `dabc868`, `a12818f`, `cd6b6b5`)
+
+### Files & File Tree
+- **File browser moved into the right panel** as a pinned tab; explorer actions merged into the file browser toolbar; Windows CRLF and node-pty test compatibility and style hydration mismatch fixes (`10db5f8`, `bba4616`, `3435e21`, `f475369`)
+- **Inline file editing in the file viewer**: edit and save files directly in the viewer; per-message cache hit rate (`45bd97f`)
+- Dropped/picked files resolved to absolute paths (`80e6dd5`)
+
+### Message Display
+- Provider and per-message thinking level shown in the assistant message header; think-tagged reasoning split into thinking blocks (`1b8296c`, `f825f66`, `a426d90`)
+- **Hierarchical system prompt composition**: per-plugin attribution with token estimates (`801d625`, `09c3056`)
+
+### Proxy & Configuration
+- **Per-provider HTTP proxy routing**: configure a separate proxy for a blocked provider (`a506306`)
+
+### Stability & UX
+- Composer drafts persisted across sessions + context gauge (`79096a7`)
+- Web theme system, UX polish, and accurate tool timing; merged upstream v0.9.0 (`33952d2`, `3e2c3f3`, `6b720de`)
+
+### Docs & Tooling
+- Bilingual README (Simplified Chinese default); split AGENTS.md rules from reference docs (`b04bcfa`, `cae5156`)
+- Cache hit-rate analysis scripts (`scripts/`, `e977cc5`, `70043a0`, `185525b`)
+
 ## Quick Start
 
 Pi Web requires Node.js 22.19.0 or newer. Check your version with `node --version`, then run:
