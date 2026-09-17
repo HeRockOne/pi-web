@@ -210,7 +210,9 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         {prompt && analysis && analysis.segments.length > 0 ? (
           <table className="system-prompt-body-table">
             <tbody>
-              {analysis.segments.map((segment, index) => {
+              {analysis.segments
+                .filter((segment) => prompt.slice(segment.start, segment.end).trim().length > 0)
+                .map((segment, index) => {
                 const label = segment.labelKey
                   ? translate(segment.labelKey)
                   : segment.label && SYNTHETIC_SOURCE_LABELS.has(segment.label)
