@@ -10,6 +10,7 @@ import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { formatRelativeTime } from "@/lib/i18n/format";
 import { useI18n } from "@/hooks/useI18n";
 import { SessionSearch } from "./SessionSearch";
+import { DirectoryPicker } from "./DirectoryPicker";
 
 // Fixed row height for the session list. SessionItem renders at exactly this
 // height, so the list can be windowed (only the visible slice is mounted).
@@ -361,6 +362,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [newProjectValidating, setNewProjectValidating] = useState(false);
+  const [newProjectError, setNewProjectError] = useState<string | null>(null);
   const [sessionSearchQuery, setSessionSearchQuery] = useState("");
   const sessionSearchActive = sessionSearchOpen && Boolean(sessionSearchQuery.trim());
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
@@ -819,15 +823,48 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     onSelectSession(s, false, entryId, blockIndex);
   }, [onSelectSession, openSessionTabs, getSnapshotsForSessions]);
 
-  const handleNewSession = useCallback(() => {
-    if (!selectedCwd) return;
+  const handleNewSession = useCallback((cwd?: string) => {
+    const target = cwd ?? selectedCwd;
+    if (!target) return;
     // Generate a temporary UUID client-side — no backend call needed.
     // Pi will be spawned lazily when the user sends the first message.
     const tempId = typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-    onNewSession?.(tempId, selectedCwd);
+    onNewSession?.(tempId, target);
   }, [selectedCwd, onNewSession]);
+
+  // Open a brand-new project: pick a folder, validate it server-side, then adopt
+  // it as the current cwd so "New session" targets it. Same /api/cwd/validate
+  // contract the old CWD picker used.
+  const handlePickNewProject = useCallback(async (path: string) => {
+    if (!path || newProjectValidating) return;
+    setNewProjectValidating(true);
+    setNewProjectError(null);
+    try {
+      const res = await fetch("/api/cwd/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd: path }),
+      });
+      const data = await res.json().catch(() => ({})) as {
+        cwd?: string;
+        projectRoot?: string;
+        projectKey?: string;
+        error?: string;
+      };
+      if (!res.ok || data.error || !data.cwd || !data.projectRoot || !data.projectKey) {
+        setNewProjectError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setSelectedCwd(data.cwd);
+      setNewProjectOpen(false);
+    } catch (e) {
+      setNewProjectError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNewProjectValidating(false);
+    }
+  }, [newProjectValidating]);
 
   const recentProjects = getRecentProjects(allSessions);
 
@@ -999,42 +1036,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <PiWebTitle />
           <div style={{ display: "flex", gap: 6 }}>
             <button
-              onClick={handleNewSession}
-              disabled={!selectedCwd}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                background: "var(--bg-hover)",
-                border: "1px solid var(--border)",
-                color: selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
-                cursor: selectedCwd ? "pointer" : "not-allowed",
-                height: 32,
-                paddingLeft: 10,
-                paddingRight: 12,
-                borderRadius: 7,
-                fontSize: 12,
-                fontWeight: 500,
-                letterSpacing: "-0.01em",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
+              type="button"
+              onClick={() => {
+                setSessionSearchOpen(false);
+                setWtDropdownOpen(false);
+                setNewProjectOpen(true);
               }}
-             title={selectedCwd ? t("sidebar.newSessionTitle", { path: selectedCwd }) : t("sidebar.selectProject")}
-              onMouseEnter={(e) => {
-                if (!selectedCwd) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
-                e.currentTarget.style.color = "var(--accent)";
-                e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
+              title={t("sidebar.newProject")}
+              aria-label={t("sidebar.newProject")}
+              className="flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-border bg-bg-hover text-text-muted hover:bg-bg-selected hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l1.5 2h9.5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+                <path d="M12 9.5v5M9.5 12h5" />
               </svg>
-              {t("sidebar.new")}
             </button>
             <button
               type="button"
@@ -1053,6 +1068,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </svg>
             </button>
           </div>
+
+        {newProjectOpen && (
+          <DirectoryPicker
+            initialPath={undefined}
+            onCancel={() => setNewProjectOpen(false)}
+            onSelect={handlePickNewProject}
+            busy={newProjectValidating}
+            error={newProjectError ?? undefined}
+          />
+        )}
         </div>
 
         {sessionSearchOpen && (
@@ -1479,6 +1504,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       collapsed={row.collapsed}
                       onToggleCollapse={() => toggleProjectCollapsed(row.project.key)}
                       onClick={() => selectProjectRoot(row.project.key)}
+                      onNewSession={() => handleNewSession(row.project.root)}
                     />
                   </div>
                 );
@@ -1998,6 +2024,7 @@ function ProjectFolderRow({
   collapsed,
   onToggleCollapse,
   onClick,
+  onNewSession,
 }: {
   label: string;
   sessionCount: number;
@@ -2008,6 +2035,7 @@ function ProjectFolderRow({
   collapsed: boolean;
   onToggleCollapse: () => void;
   onClick: () => void;
+  onNewSession?: () => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -2067,6 +2095,30 @@ function ProjectFolderRow({
           <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
         </div>
       </div>
+      {/* New-session action — shown on hover, mirroring session row actions */}
+      {hovered && onNewSession && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onNewSession(); }}
+          title={t("sidebar.newSessionTitle", { path: label })}
+          aria-label={t("i18n.newSession")}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            height: 24, padding: "0 8px",
+            flexShrink: 0,
+            background: "var(--bg)", border: "1px solid var(--border)",
+            borderRadius: 5,
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span style={{ fontSize: 12, lineHeight: 1 }} aria-hidden="true">💬</span>
+          {t("i18n.newSession")}
+        </button>
+      )}
     </div>
   );
 }
