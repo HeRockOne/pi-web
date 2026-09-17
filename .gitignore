@@ -49,3 +49,4 @@ tmp-*.html
 
 # local agent tooling
 /.pi/
+/scripts/dump-system-prompt.ps1
