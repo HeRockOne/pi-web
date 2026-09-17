@@ -24,6 +24,13 @@ export interface ToolHint {
 
 export interface SystemPromptAnalysis {
   sections: PromptSection[];
+  segments: Array<{
+    key: string;
+    labelKey?: string;
+    label?: string;
+    start: number;
+    end: number;
+  }>;
   totalChars: number;
   totalTokens: number;
 }
@@ -77,7 +84,7 @@ function childrenFromSpans(spans: Array<Pick<PromptSection, "key" | "labelKey" |
 export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): SystemPromptAnalysis {
   const totalChars = prompt.length;
   if (totalChars === 0) {
-    return { sections: [], totalChars: 0, totalTokens: 0 };
+    return { sections: [], segments: [], totalChars: 0, totalTokens: 0 };
   }
 
   const guidelineToTool = new Map<string, ToolHint>();
@@ -284,5 +291,26 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   const sections = Array.from(merged.values());
   sections.sort((a, b) => b.tokens - a.tokens);
 
-  return { sections, totalChars, totalTokens: estimateTokensOf(prompt) };
+  // Build ordered non-overlapping segments that fully cover the prompt:
+  // every span contributes its range; gaps between spans land in "other".
+  const ordered = spans
+    .map((span) => ({ key: span.key, labelKey: span.labelKey, label: span.label, start: span.start, end: span.end }))
+    .filter((segment) => segment.end > segment.start)
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const segments: SystemPromptAnalysis["segments"] = [];
+  let segmentCursor = 0;
+  for (const segment of ordered) {
+    if (segment.start > segmentCursor) {
+      segments.push({ key: "other", labelKey: "system.section.other", start: segmentCursor, end: segment.start });
+    }
+    if (segment.end > segmentCursor) {
+      segments.push(segment);
+      segmentCursor = segment.end;
+    }
+  }
+  if (segmentCursor < totalChars) {
+    segments.push({ key: "other", labelKey: "system.section.other", start: segmentCursor, end: totalChars });
+  }
+
+  return { sections, segments, totalChars, totalTokens: estimateTokensOf(prompt) };
 }

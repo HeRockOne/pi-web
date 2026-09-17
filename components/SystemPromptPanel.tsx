@@ -10,6 +10,22 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 
 const SYNTHETIC_SOURCE_LABELS = new Set(["inline", "builtin"]);
 
+
+// 固定 section key → 颜色，保证互不重复；未知 key 回退哈希取色
+const SECTION_COLORS: Record<string, string> = {
+  base: "var(--text-muted)",
+  tools: "rgba(74,158,255,0.85)",
+  guidelines: "rgba(251,146,60,0.85)",
+  context: "rgba(167,139,250,0.85)",
+  skills: "rgba(232,121,249,0.85)",
+  cwd: "rgba(74,222,128,0.85)",
+  other: "rgba(250,204,21,0.85)",
+  custom: "rgba(248,113,113,0.85)",
+};
+
+function sectionColor(key: string): string {
+  return SECTION_COLORS[key] ?? colorForProvider(key);
+}
 interface Props {
   loading: boolean;
   prompt: string | null;
@@ -46,7 +62,7 @@ function SectionRow({
       ? translate("system.section.builtin")
       : section.label ?? section.key;
   const percent = totalTokens > 0 ? Math.round((section.tokens / totalTokens) * 100) : 0;
-  const color = colorForProvider(section.key);
+  const color = sectionColor(section.key);
   const hasChildren = Boolean(section.children && section.children.length > 0);
   const isChild = depth > 0;
   const row = (
@@ -116,7 +132,7 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
 
   const rows = analysis.sections.map((section) => ({
     section,
-    color: colorForProvider(section.key),
+    color: sectionColor(section.key),
     percent: analysis.totalTokens > 0 ? Math.round((section.tokens / analysis.totalTokens) * 100) : 0,
   }));
 
@@ -175,14 +191,46 @@ function PromptComposition({ prompt, tools, translate }: { prompt: string; tools
 }
 
 export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) {
+  const analysis = prompt ? analyzeSystemPrompt(prompt, toToolHints(tools)) : null;
   return (
     <section className="system-prompt-panel" aria-label={translate("system.prompt")}>
       {prompt ? (
         <PromptComposition prompt={prompt} tools={tools} translate={translate} />
       ) : null}
       <div className="system-prompt-scroll">
-        {prompt ? (
-          <div className="system-prompt-text">{prompt}</div>
+        {prompt && analysis && analysis.segments.length > 0 ? (
+          <table className="system-prompt-body-table">
+            <tbody>
+              {analysis.segments.map((segment, index) => {
+                const label = segment.labelKey
+                  ? translate(segment.labelKey)
+                  : segment.label && SYNTHETIC_SOURCE_LABELS.has(segment.label)
+                    ? translate("system.section.builtin")
+                    : segment.label ?? segment.key;
+                const section = analysis.sections.find((s) => s.key === segment.key);
+                const percent = analysis.totalTokens > 0 && section
+                  ? Math.round((section.tokens / analysis.totalTokens) * 100)
+                  : 0;
+                return (
+                  <tr key={index}>
+                    <td className="system-prompt-body-cat">
+                      <span className="system-prompt-body-dot" style={{ background: sectionColor(segment.key) }} />
+                      <span className="system-prompt-body-label">{label}</span>
+                      {section ? (
+                        <span
+                          className="system-prompt-body-tokens"
+                          title={`${section.tokens.toLocaleString("en-US")} tokens · ${percent}%`}
+                        >
+                          ≈ {section.tokens.toLocaleString("en-US")} tokens
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="system-prompt-body-content">{prompt.slice(segment.start, segment.end)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         ) : (
           <div className="system-prompt-empty">
             {prompt === ""
@@ -197,8 +245,8 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
       <style>{`
         .system-prompt-panel {
           display: flex;
-          height: min(600px, 75dvh);
-          min-height: 220px;
+          height: min(500px, 60dvh);
+          min-height: 180px;
           flex-direction: column;
           background: var(--bg-panel);
           border-bottom: 1px solid var(--border);
@@ -209,13 +257,49 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           overflow: auto;
           padding: 12px 16px;
         }
-        .system-prompt-text {
+        .system-prompt-body-table {
+          width: 100%;
+          border-collapse: collapse;
           color: var(--text-muted);
           font-family: var(--font-mono);
           font-size: 12px;
           line-height: 1.6;
-          overflow-wrap: anywhere;
+        }
+        .system-prompt-body-table tr {
+          vertical-align: top;
+        }
+        .system-prompt-body-table tr + tr td {
+          border-top: 2px solid color-mix(in srgb, var(--border) 55%, var(--text));
+        }
+        .system-prompt-body-cat {
+          width: 1%;
+          white-space: nowrap;
+          padding: 4px 10px 4px 0;
+          font-family: var(--font-sans);
+          font-size: 10.5px;
+          font-weight: 600;
+          color: var(--text);
+          border-right: 1px solid color-mix(in srgb, var(--border) 60%, var(--text));
+        }
+        .system-prompt-body-tokens {
+          display: block;
+          margin: 2px 0 0 14px;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          color: var(--text-dim);
+          white-space: nowrap;
+        }
+        .system-prompt-body-dot {
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          margin-right: 6px;
+          border-radius: 2px;
+        }
+        .system-prompt-body-content {
+          padding: 4px 0 4px 12px;
           white-space: pre-wrap;
+          overflow-wrap: anywhere;
         }
         .system-prompt-empty {
           padding: 10px 0;
@@ -319,23 +403,6 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           font-size: 10.5px;
           color: var(--text-muted);
         }
-        .system-prompt-composition-chevron {
-          flex-shrink: 0;
-          display: inline-block;
-          width: 8px;
-          font-size: 8px;
-          color: var(--text-dim);
-          transition: transform 0.12s;
-        }
-        .system-prompt-composition-chevron.open {
-          transform: rotate(90deg);
-        }
-        .system-prompt-composition-dot {
-          flex-shrink: 0;
-          width: 8px;
-          height: 8px;
-          border-radius: 2px;
-        }
         .system-prompt-composition-label {
           flex: 0 1 auto;
           min-width: 0;
@@ -343,12 +410,6 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           text-overflow: ellipsis;
           white-space: nowrap;
           color: var(--text);
-        }
-        .system-prompt-composition-path {
-          margin-left: 6px;
-          color: var(--text-dim);
-          font-family: var(--font-mono);
-          font-size: 10px;
         }
         .system-prompt-composition-numbers {
           flex-shrink: 0;
@@ -369,6 +430,28 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           border: 1px solid var(--border);
           border-radius: 4px;
           background: color-mix(in srgb, var(--bg) 35%, var(--bg-panel));
+        }
+        .system-prompt-composition-chevron {
+          flex-shrink: 0;
+          display: inline-block;
+          width: 8px;
+          font-size: 8px;
+          color: var(--text-dim);
+          transition: transform 0.12s;
+        }
+        .system-prompt-composition-chevron.open {
+          transform: rotate(90deg);
+        }
+        .system-prompt-composition-dot {
+          flex-shrink: 0;
+          width: 8px;
+          height: 8px;
+          border-radius: 2px;
+        }
+        .system-prompt-composition-path {
+          color: var(--text-dim);
+          font-family: var(--font-mono);
+          font-size: 10px;
         }
       `}</style>
     </section>
