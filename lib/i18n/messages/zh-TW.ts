@@ -569,6 +569,8 @@ export const zhTWLocale: LocalePlugin = {
     "models.modelSpecs": "模型規格",
     "models.contextWindow": "上下文視窗（Token）",
     "models.maxOutputTokens": "最大輸出 Token 數",
+    "models.topP": "Top P",
+    "models.temperature": "溫度",
     "models.costPerMillion": "每百萬 Token 費用",
     "models.costInput": "輸入",
     "models.costOutput": "輸出",

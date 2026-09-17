@@ -569,6 +569,8 @@ export const enLocale: LocalePlugin = {
     "models.modelSpecs": "Model specifications",
     "models.contextWindow": "Context window (tokens)",
     "models.maxOutputTokens": "Max output tokens",
+    "models.topP": "Top P",
+    "models.temperature": "Temperature",
     "models.costPerMillion": "Cost per million tokens",
     "models.costInput": "Input",
     "models.costOutput": "Output",

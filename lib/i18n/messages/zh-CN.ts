@@ -572,6 +572,8 @@ export const zhCNLocale: LocalePlugin = {
     "models.modelSpecs": "模型规格",
     "models.contextWindow": "上下文窗口（tokens）",
     "models.maxOutputTokens": "最大输出 tokens",
+    "models.topP": "Top P",
+    "models.temperature": "温度",
     "models.costPerMillion": "每百万 tokens 价格",
     "models.costInput": "输入",
     "models.costOutput": "输出",

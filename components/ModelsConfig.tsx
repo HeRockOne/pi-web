@@ -81,6 +81,7 @@ interface ModelEntry {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown };
   headers?: Record<string, string>;
   compat?: Record<string, unknown>;
+  samplingParams?: Record<string, unknown>;
 }
 
 interface ProviderEntry {
@@ -260,8 +261,8 @@ function SecretTextInput({
   );
 }
 
-function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
+function NumInput({ value, onChange, placeholder, min, max, step }: { value: string; onChange: (v: string) => void; placeholder?: string; min?: number; max?: number; step?: number }) {
+  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} min={min} max={max} step={step} style={inputStyle} />;
 }
 
 function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
@@ -833,6 +834,25 @@ function ModelDetail({
   const catalogUndoRef = useRef<ModelEntry | null>(null);
   const costTemplateRef = useRef(model.cost);
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
+  const getSamplingParam = (key: string): string => {
+    const v = model.samplingParams?.[key];
+    return typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+  };
+  const setSamplingParam = (key: string, value: string, max: number) => {
+    const trimmed = value.trim();
+    const next = { ...(model.samplingParams ?? {}) };
+    if (!trimmed) {
+      delete next[key];
+    } else {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= max) {
+        next[key] = parsed;
+      } else {
+        delete next[key];
+      }
+    }
+    onChange({ ...model, samplingParams: Object.keys(next).length ? next : undefined });
+  };
   const setCost = (key: ModelCostKey, value: string) => {
     const nextDraft = { ...costDraftRef.current, [key]: value };
     const completeCost = parseCompleteModelCost(nextDraft);
@@ -1173,6 +1193,14 @@ function ModelDetail({
           <Field label={t("models.maxOutputTokens")}>
             <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
               onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
+          </Field>
+          <Field label={t("models.topP")}>
+            <NumInput value={getSamplingParam("top_p")}
+              onChange={(v) => setSamplingParam("top_p", v, 1)} placeholder="1" min={0} max={1} step={0.05} />
+          </Field>
+          <Field label={t("models.temperature")}>
+            <NumInput value={getSamplingParam("temperature")}
+              onChange={(v) => setSamplingParam("temperature", v, 2)} placeholder="1" min={0} max={2} step={0.05} />
           </Field>
         </div>
 
