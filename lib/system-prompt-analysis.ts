@@ -329,7 +329,16 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
       }
     }
   }
+  // "other" absorbs the exact residual so top-level sections always sum to
+  // totalTokens: BPE merging means child estimates can slightly exceed the
+  // parent's exact count, so the delta above can drift by a token or two.
   if (!merged.has("other") && otherTally.tokens > 0) merged.set("other", otherTally);
+  const totalTokens = estimateTokensOf(prompt);
+  const otherIdx = sections.findIndex((section) => section.key === "other");
+  if (otherIdx >= 0) {
+    const rest = sections.reduce((sum, section, index) => (index === otherIdx ? sum : sum + section.tokens), 0);
+    sections[otherIdx].tokens = Math.max(0, totalTokens - rest);
+  }
   sections.sort((a, b) => b.tokens - a.tokens);
 
   // Build ordered non-overlapping segments that fully cover the prompt:
