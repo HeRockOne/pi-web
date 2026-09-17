@@ -1,11 +1,14 @@
-// Breaks a composed pi system prompt into labeled sections and estimates
-// token counts with pi's own heuristic (ceil(chars / 4), see
-// pi-agent-core's estimateTokens). Client-safe: no SDK imports.
+// Breaks a composed pi system prompt into labeled sections and counts
+// tokens exactly with js-tiktoken (OpenAI o200k_base — the same encoding
+// pi's model stack uses). Client-safe: js-tiktoken/lite is pure JS and
+// the rank table ships as plain data; no Node/SDK imports.
 //
 // When tool hints (from get_tools) are supplied, guideline bullets are
 // attributed to the plugin that registered them via exact string match
 // against each tool's promptGuidelines.
 
+import { Tiktoken } from "js-tiktoken/lite";
+import o200kBase from "js-tiktoken/ranks/o200k_base";
 export interface PromptSection {
   key: string;
   labelKey?: string;
@@ -37,7 +40,7 @@ export interface SystemPromptAnalysis {
 
 const DEFAULT_BASE_PREFIX = "You are an expert coding assistant operating inside pi";
 const TOOLS_HEADER = "\nAvailable tools:\n";
-const TOOLS_TAIL = "\n\nIn addition to the tools";
+const TOOLS_TAIL = "\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
 const GUIDELINES_HEADER = "\n\nGuidelines:\n";
 const CONTEXT_OPEN = "<project_context>";
 const CONTEXT_CLOSE = "</project_context>";
@@ -49,26 +52,36 @@ const SKILL_NAME_PATTERN = /<name>([^<]*)<\/name>/;
 const CWD_HEADER = "\nCurrent working directory: ";
 const DOCS_INTRO = "Pi documentation (read only when";
 
+let _tiktoken: Tiktoken | undefined;
+function tiktoken(): Tiktoken {
+  if (!_tiktoken) _tiktoken = new Tiktoken(o200kBase);
+  return _tiktoken;
+}
+
+/**
+ * Exact token count using js-tiktoken (OpenAI o200k_base, the same encoding
+ * pi's model stack uses), client-safe: the rank table ships as plain data.
+ */
 export function estimateTokensOf(text: string): number {
-  return Math.ceil(text.length / 4);
+  return tiktoken().encode(text, [], []).length;
 }
 
 function baseLabelKey(prompt: string): string {
   return prompt.startsWith(DEFAULT_BASE_PREFIX) ? "system.section.base" : "system.section.custom";
 }
 
-function toSection(part: Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number }): PromptSection {
+function toSection(part: Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number; text?: string }): PromptSection {
   return {
     key: part.key,
     labelKey: part.labelKey,
     label: part.label,
     detail: part.detail,
     chars: part.chars,
-    tokens: Math.ceil(part.chars / 4),
+    tokens: part.text !== undefined ? estimateTokensOf(part.text) : Math.ceil(part.chars / 4),
   };
 }
 
-function childrenFromSpans(spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number }>): PromptSection[] | undefined {
+function childrenFromSpans(spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number; text?: string }>): PromptSection[] | undefined {
   if (spans.length === 0) return undefined;
   const children = spans.map(toSection).sort((a, b) => b.tokens - a.tokens);
   return children;
@@ -102,9 +115,9 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     label?: string;
     detail?: string;
     chars: number;
+    text: string;
   }
-  const newGroup = (part: Omit<Group, "chars">): Group => ({ ...part, chars: 0 });
-
+  const newGroup = (part: Omit<Group, "chars" | "text">): Group => ({ ...part, chars: 0, text: "" });
   const spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] }> = [];
 
   // Skills block (appended after project context, before the cwd tail),
@@ -116,11 +129,11 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     if (close >= 0) {
       skillsEnd = close + SKILLS_CLOSE.length;
       const block = prompt.slice(skillsStart, skillsEnd);
-      const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number }> = [];
+      const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
       SKILL_BLOCK_PATTERN.lastIndex = 0;
       for (let match = SKILL_BLOCK_PATTERN.exec(block); match; match = SKILL_BLOCK_PATTERN.exec(block)) {
         const name = SKILL_NAME_PATTERN.exec(match[0])?.[1] ?? "skill";
-        groups.push({ key: `skill:${name}`, label: name, chars: match[0].length });
+        groups.push({ key: `skill:${name}`, label: name, chars: match[0].length, text: match[0] });
       }
       spans.push({
         key: "skills",
@@ -185,12 +198,13 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
 
   const carves: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] }> = [];
   const toolsStart = prompt.indexOf(TOOLS_HEADER);
-  const toolsEnd = toolsStart >= 0 ? prompt.indexOf(TOOLS_TAIL, toolsStart) : -1;
+  const toolsTailIdx = toolsStart >= 0 ? prompt.indexOf(TOOLS_TAIL, toolsStart) : -1;
+  const toolsEnd = toolsTailIdx >= 0 ? toolsTailIdx + TOOLS_TAIL.length : -1;
   if (toolsStart >= 0 && toolsEnd > toolsStart && toolsStart < headEnd) {
     const blockStart = toolsStart + 1;
     const block = prompt.slice(blockStart, toolsEnd);
     const lines = block.split("\n");
-    const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number }> = [];
+    const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
     for (let i = 0; i < lines.length; i += 1) {
       const toolMatch = /^- ([^:]+): /.exec(lines[i]);
       if (!toolMatch) continue;
@@ -200,6 +214,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
         label: name,
         detail: toolSourceByName.get(name),
         chars: lines[i].length + (i < lines.length - 1 ? 1 : 0),
+        text: lines[i] + (i < lines.length - 1 ? "\n" : ""),
       });
     }
     carves.push({
@@ -242,6 +257,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
         group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
       }
       group.chars += lineEnd - cursor + (nextNewline >= 0 ? 1 : 0);
+      group.text += line + (nextNewline >= 0 ? "\n" : "");
       groups.set(group.key, group);
       cursor = lineEnd + 1;
     }
@@ -264,28 +280,39 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
 
   // Merge spans per key and account for everything the markers missed.
   const accounted = new Array<boolean>(totalChars).fill(false);
-  const merged = new Map<string, PromptSection & { sectionChildren?: PromptSection[] }>();
+  const merged = new Map<string, PromptSection & { sectionChildren?: PromptSection[]; __text?: string }>();
+  const makeSection = (part: Parameters<typeof toSection>[0]): PromptSection & { sectionChildren?: PromptSection[]; __text?: string } => {
+    const section = toSection(part) as PromptSection & { __text?: string };
+    section.__text = part.text ?? "";
+    return section;
+  };
   for (const span of spans) {
     if (span.end > span.start) {
       for (let i = span.start; i < span.end; i += 1) accounted[i] = true;
     }
+    const spanText = prompt.slice(span.start, span.end);
     const existing = merged.get(span.key);
     if (existing) {
       existing.chars += Math.max(0, span.end - span.start);
-      existing.tokens = Math.ceil(existing.chars / 4);
+      existing.__text = (existing.__text ?? "") + spanText;
+      existing.tokens = estimateTokensOf(existing.__text);
     } else {
-      const section = toSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start) });
+      const section = makeSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start), text: spanText });
       if (span.children && span.children.length > 0) section.children = span.children;
       merged.set(span.key, section);
     }
   }
 
   let otherChars = 0;
+  let otherText = "";
   for (let i = 0; i < totalChars; i += 1) {
-    if (!accounted[i]) otherChars += 1;
+    if (!accounted[i]) {
+      otherChars += 1;
+      otherText += prompt[i];
+    }
   }
   if (otherChars > 0) {
-    merged.set("other", toSection({ key: "other", labelKey: "system.section.other", chars: otherChars }));
+    merged.set("other", toSection({ key: "other", labelKey: "system.section.other", chars: otherChars, text: otherText }));
   }
 
   const sections = Array.from(merged.values());
