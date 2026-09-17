@@ -316,6 +316,20 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   }
 
   const sections = Array.from(merged.values());
+  // Parents with children should read as the sum of their children; the
+  // scaffolding delta (intro text, wrapper tags) rolls into "other" so the
+  // visible numbers add up while totalTokens stays exact.
+  let otherTally = merged.get("other") ?? { key: "other", labelKey: "system.section.other", chars: 0, tokens: 0 };
+  for (const section of sections) {
+    if (section.children && section.children.length > 0) {
+      const childSum = section.children.reduce((sum, child) => sum + child.tokens, 0);
+      if (section.tokens > childSum) {
+        otherTally.tokens += section.tokens - childSum;
+        section.tokens = childSum;
+      }
+    }
+  }
+  if (!merged.has("other") && otherTally.tokens > 0) merged.set("other", otherTally);
   sections.sort((a, b) => b.tokens - a.tokens);
 
   // Build ordered non-overlapping segments that fully cover the prompt:
