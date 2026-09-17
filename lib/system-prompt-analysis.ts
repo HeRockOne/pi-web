@@ -14,6 +14,7 @@ export interface PromptSection {
   labelKey?: string;
   label?: string;
   detail?: string;
+  text?: string;
   chars: number;
   tokens: number;
   children?: PromptSection[];
@@ -76,6 +77,7 @@ function toSection(part: Pick<PromptSection, "key" | "labelKey" | "label" | "det
     labelKey: part.labelKey,
     label: part.label,
     detail: part.detail,
+    text: part.text,
     chars: part.chars,
     tokens: part.text !== undefined ? estimateTokensOf(part.text) : Math.ceil(part.chars / 4),
   };
@@ -145,15 +147,27 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     }
   }
 
-  // Working-directory tail (last line of the prompt).
+  // Working-directory tail (last line of the prompt). Extension-injected
+  // sections (deepseek router, ACP context rules, etc.) may be appended
+  // after the cwd line; the cwd span stops at the first such marker so
+  // injected content lands in "other" instead of inflating cwd.
   const cwdStart = prompt.lastIndexOf(CWD_HEADER);
   if (cwdStart >= 0 && (skillsStart < 0 || cwdStart > skillsStart)) {
+    const injectionMarkers = [
+      "<!-- pi-deepseek-router:start -->",
+      "<!-- ", "\nACP context management\n", "\n## DeepSeek Router\n"
+    ];
+    let cwdEnd = totalChars;
+    for (const marker of injectionMarkers) {
+      const at = prompt.indexOf(marker, cwdStart);
+      if (at >= 0 && at < cwdEnd) cwdEnd = at;
+    }
     spans.push({
       key: "cwd",
       labelKey: "system.section.cwd",
       start: cwdStart,
-      end: totalChars,
-      detail: prompt.slice(cwdStart + CWD_HEADER.length),
+      end: cwdEnd,
+      detail: prompt.slice(cwdStart + CWD_HEADER.length, cwdEnd),
     });
   }
 
@@ -280,11 +294,9 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
 
   // Merge spans per key and account for everything the markers missed.
   const accounted = new Array<boolean>(totalChars).fill(false);
-  const merged = new Map<string, PromptSection & { sectionChildren?: PromptSection[]; __text?: string }>();
-  const makeSection = (part: Parameters<typeof toSection>[0]): PromptSection & { sectionChildren?: PromptSection[]; __text?: string } => {
-    const section = toSection(part) as PromptSection & { __text?: string };
-    section.__text = part.text ?? "";
-    return section;
+  const merged = new Map<string, PromptSection>();
+  const makeSection = (part: Parameters<typeof toSection>[0]): PromptSection => {
+    return toSection(part);
   };
   for (const span of spans) {
     if (span.end > span.start) {
@@ -294,8 +306,8 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     const existing = merged.get(span.key);
     if (existing) {
       existing.chars += Math.max(0, span.end - span.start);
-      existing.__text = (existing.__text ?? "") + spanText;
-      existing.tokens = estimateTokensOf(existing.__text);
+      existing.text = (existing.text ?? "") + spanText;
+      existing.tokens = estimateTokensOf(existing.text);
     } else {
       const section = makeSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start), text: spanText });
       if (span.children && span.children.length > 0) section.children = span.children;
@@ -319,7 +331,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   // Parents with children should read as the sum of their children; the
   // scaffolding delta (intro text, wrapper tags) rolls into "other" so the
   // visible numbers add up while totalTokens stays exact.
-  let otherTally = merged.get("other") ?? { key: "other", labelKey: "system.section.other", chars: 0, tokens: 0 };
+  const otherTally = merged.get("other") ?? { key: "other", labelKey: "system.section.other", chars: 0, tokens: 0 } as PromptSection;
   for (const section of sections) {
     if (section.children && section.children.length > 0) {
       const childSum = section.children.reduce((sum, child) => sum + child.tokens, 0);

@@ -64,14 +64,16 @@ function SectionRow({
   const percent = totalTokens > 0 ? Math.round((section.tokens / totalTokens) * 100) : 0;
   const color = sectionColor(section.key);
   const hasChildren = Boolean(section.children && section.children.length > 0);
+  const hasBody = Boolean(section.text && section.text.trim().length > 0);
   const isChild = depth > 0;
+  const expandable = hasChildren || hasBody;
   const row = (
     <>
       <span
         className="system-prompt-composition-dot"
         style={{ background: color, opacity: isChild ? 0.65 : 1 }}
       />
-      {hasChildren ? (
+      {expandable ? (
         <span className={`system-prompt-composition-chevron${expanded ? " open" : ""}`} aria-hidden="true">▶</span>
       ) : null}
       <span className="system-prompt-composition-label">
@@ -83,7 +85,7 @@ function SectionRow({
       </span>
     </>
   );
-  if (!hasChildren) {
+  if (!expandable) {
     return <li className={isChild ? "is-child" : undefined}>{row}</li>;
   }
   return (
@@ -97,19 +99,26 @@ function SectionRow({
         {row}
       </button>
       {expanded ? (
-        <ul className="system-prompt-composition-list is-nested">
-          {section.children!.map((child) => (
-            <SectionRow
-              key={child.key}
-              section={child}
-              depth={depth + 1}
-              totalTokens={totalTokens}
-              expanded={false}
-              onToggle={() => {}}
-              translate={translate}
-            />
-          ))}
-        </ul>
+        <div className="system-prompt-composition-expanded">
+          {hasChildren && section.children ? (
+            <ul className="system-prompt-composition-list is-nested">
+              {section.children.map((child) => (
+                <SectionRow
+                  key={child.key}
+                  section={child}
+                  depth={depth + 1}
+                  totalTokens={totalTokens}
+                  expanded={false}
+                  onToggle={() => {}}
+                  translate={translate}
+                />
+              ))}
+            </ul>
+          ) : null}
+          {hasBody ? (
+            <pre className="system-prompt-composition-body">{section.text}</pre>
+          ) : null}
+        </div>
       ) : null}
     </li>
   );
@@ -424,6 +433,24 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           padding-left: 10px;
           gap: 3px;
           border-left: 1px solid var(--border);
+        }
+        .system-prompt-composition-expanded {
+          min-width: 0;
+        }
+        .system-prompt-composition-body {
+          margin: 6px 2px 2px;
+          padding: 8px 10px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--bg);
+          color: var(--text-muted);
+          font-family: var(--font-mono);
+          font-size: 11px;
+          line-height: 1.6;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          max-height: 260px;
+          overflow-y: auto;
         }
         .system-prompt-composition-list.is-nested > li {
           padding-right: 6px;
