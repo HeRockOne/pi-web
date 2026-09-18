@@ -397,7 +397,7 @@ function BalanceBar({ balance, remaining }: { balance: number; remaining: number
   );
 }
 
-/** 余额编辑区：每供应商一行（余额 / 已扣 / 剩余 / 充值+重置），充值走叠加（POST add），重置已扣走基线重置。 */
+/** 余额编辑区：每供应商一行（余额 / 已扣 / 剩余 / 操作），充值走叠加（POST add），重置余额直接覆盖（POST balance），重置已扣走基线重置。 */
 function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onChanged: () => void }) {
   const { t } = useI18n();
   const [rechargeDrafts, setRechargeDrafts] = useState<Record<string, string>>({});
@@ -448,6 +448,35 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
       if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
       setSaved(row.provider);
       window.setTimeout(() => setSaved(null), 1600);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** 重置余额：把余额直接设置为输入值（覆盖），已扣/基线不动。 */
+  const resetBalance = async (row: BalanceSnapshotRow) => {
+    const raw = rechargeDrafts[row.provider] ?? "";
+    const value = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
+      setError(t("usageStats.balance.invalid"));
+      return;
+    }
+    setBusy(row.provider);
+    setError("");
+    try {
+      const response = await fetch("/api/usage-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: row.provider, balance: value }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
+      setSaved(row.provider);
+      window.setTimeout(() => setSaved(null), 1600);
+      setRechargeDrafts((prev) => ({ ...prev, [row.provider]: "" }));
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -510,6 +539,9 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                       />
                       <ConfigButton onClick={() => void recharge(row)} disabled={busy === row.provider}>
                         {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
+                      </ConfigButton>
+                      <ConfigButton onClick={() => void resetBalance(row)} disabled={busy === row.provider}>
+                        {t("usageStats.balance.resetBalance")}
                       </ConfigButton>
                       {row.balance !== null && (
                         <ConfigButton onClick={() => void resetSpent(row)} disabled={busy === row.provider}>

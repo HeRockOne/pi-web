@@ -723,6 +723,8 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.balance.col.actions": "操作",
     "usageStats.balance.rechargePlaceholder": "充值金額",
     "usageStats.balance.recharge": "充值",
+    "usageStats.balance.resetBalance": "重設餘額",
+
     "usageStats.balance.saved": "已儲存",
     "usageStats.balance.reset": "重置已扣",
     "usageStats.balance.invalid": "充值金額必須是非負數",
