@@ -456,21 +456,15 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
     }
   };
 
-  /** 重置余额：把余额直接设置为输入值（覆盖），已扣/基线不动。 */
+  /** 重置余额：把余额清零（balance = 0），已扣/基线不动。 */
   const resetBalance = async (row: BalanceSnapshotRow) => {
-    const raw = rechargeDrafts[row.provider] ?? "";
-    const value = Number(raw);
-    if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
-      setError(t("usageStats.balance.invalid"));
-      return;
-    }
     setBusy(row.provider);
     setError("");
     try {
       const response = await fetch("/api/usage-stats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: row.provider, balance: value }),
+        body: JSON.stringify({ provider: row.provider, balance: 0 }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);

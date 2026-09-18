@@ -723,7 +723,8 @@ export const enLocale: LocalePlugin = {
     "usageStats.balance.col.actions": "Actions",
     "usageStats.balance.rechargePlaceholder": "Top-up amount",
     "usageStats.balance.recharge": "Top up",
-    "usageStats.balance.resetBalance": "Set balance",
+    "usageStats.balance.resetBalance": "Reset balance",
+
 
     "usageStats.balance.saved": "Saved",
     "usageStats.balance.reset": "Reset spent",
