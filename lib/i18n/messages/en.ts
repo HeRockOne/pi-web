@@ -725,9 +725,6 @@ export const enLocale: LocalePlugin = {
     "usageStats.balance.recharge": "Top up",
     "usageStats.balance.saved": "Saved",
     "usageStats.balance.reset": "Reset spent",
-    "usageStats.balance.undo": "Undo",
-    "usageStats.balance.undoConfirm": "Undo the last change to {provider}'s balance?",
-
     "usageStats.balance.invalid": "Top-up amount must be non-negative",
     "usageStats.balance.empty": "No providers yet. Usage records will appear here.",
     "usageStats.cards.month": "This month",

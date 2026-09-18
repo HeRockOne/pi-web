@@ -725,9 +725,6 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.balance.recharge": "充值",
     "usageStats.balance.saved": "已儲存",
     "usageStats.balance.reset": "重置已扣",
-    "usageStats.balance.undo": "撤销",
-    "usageStats.balance.undoConfirm": "撤销对 {provider} 余额的最近一次更改？",
-
     "usageStats.balance.invalid": "充值金額必須是非負數",
     "usageStats.balance.empty": "暫無供應商，用量記錄出現後會顯示於此。",
     "usageStats.cards.month": "本月",

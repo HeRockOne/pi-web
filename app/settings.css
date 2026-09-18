@@ -1738,13 +1738,13 @@
   table-layout: fixed;
   /* 列宽合计约 700px：窄容器（含移动端）交给 wrap 横向滚动，避免压缩供应商列。
      双类选择器保证特异性高于 .usage-stats-table 的 min-width:400px。 */
-  min-width: 800px;
+  min-width: 720px;
 }
 .usage-stats-balance-table th:nth-child(1) { width: 130px; }
 .usage-stats-balance-table th:nth-child(2) { width: 110px; }
 .usage-stats-balance-table th:nth-child(3) { width: 90px; }
 .usage-stats-balance-table th:nth-child(4) { width: 150px; }
-.usage-stats-balance-table th:nth-child(5) { width: 320px; }
+.usage-stats-balance-table th:nth-child(5) { width: 240px; }
 .usage-stats-balance-table td {
   vertical-align: middle;
   overflow-wrap: break-word;
