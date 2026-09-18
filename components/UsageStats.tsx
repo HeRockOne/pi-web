@@ -458,6 +458,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
 
   /** 重置余额：把余额清零（balance = 0），已扣/基线不动。 */
   const resetBalance = async (row: BalanceSnapshotRow) => {
+    if (!window.confirm(t("usageStats.balance.resetBalanceConfirm", { provider: row.provider }))) return;
     setBusy(row.provider);
     setError("");
     try {

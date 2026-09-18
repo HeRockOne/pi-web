@@ -724,6 +724,8 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.balance.rechargePlaceholder": "充值金額",
     "usageStats.balance.recharge": "充值",
     "usageStats.balance.resetBalance": "重設餘額",
+    "usageStats.balance.resetBalanceConfirm": "確定將 {provider} 的餘額重設為 0？此操作無法復原。",
+
 
     "usageStats.balance.saved": "已儲存",
     "usageStats.balance.reset": "重置已扣",
