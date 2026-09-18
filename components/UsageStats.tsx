@@ -397,18 +397,19 @@ function BalanceBar({ balance, remaining }: { balance: number; remaining: number
   );
 }
 
-/** 余额编辑区：每供应商一行（余额输入 / 已扣 / 剩余 / 保存+重置），保存走 POST /api/usage-stats。 */
+/** 余额编辑区：每供应商一行（余额 / 已扣 / 剩余 / 充值+重置），充值走叠加（POST add），重置已扣走基线重置。 */
 function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onChanged: () => void }) {
   const { t } = useI18n();
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [rechargeDrafts, setRechargeDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const save = async (row: BalanceSnapshotRow, resetSpent: boolean) => {
-    const raw = drafts[row.provider] ?? (row.balance !== null ? String(row.balance) : "");
-    const value = raw.trim() === "" ? null : Number(raw);
-    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+  /** 叠加充值：新余额 = 现有余额 + 金额，已扣/基线不动。 */
+  const recharge = async (row: BalanceSnapshotRow) => {
+    const raw = rechargeDrafts[row.provider] ?? "";
+    const value = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
       setError(t("usageStats.balance.invalid"));
       return;
     }
@@ -418,13 +419,35 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
       const response = await fetch("/api/usage-stats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: row.provider, balance: value, resetSpent }),
+        body: JSON.stringify({ provider: row.provider, add: value }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
       setSaved(row.provider);
       window.setTimeout(() => setSaved(null), 1600);
-      setDrafts((prev) => ({ ...prev, [row.provider]: value === null ? "" : String(value) }));
+      setRechargeDrafts((prev) => ({ ...prev, [row.provider]: "" }));
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** 重置已扣：把扣减基线设为当前累计成本（已扣从 0 重新累计），余额不动。 */
+  const resetSpent = async (row: BalanceSnapshotRow) => {
+    setBusy(row.provider);
+    setError("");
+    try {
+      const response = await fetch("/api/usage-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: row.provider, balance: row.balance, resetSpent: true }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
+      setSaved(row.provider);
+      window.setTimeout(() => setSaved(null), 1600);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -458,16 +481,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                     {!row.costKnown && <span className="usage-stats-unknown"> *</span>}
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className="usage-stats-balance-input"
-                      value={drafts[row.provider] ?? (row.balance !== null ? String(row.balance) : "")}
-                      placeholder={t("usageStats.balance.placeholder")}
-                      aria-label={`${row.provider} ${t("usageStats.balance.col.balance")}`}
-                      onChange={(event) => setDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
-                    />
+                    <span className="usage-stats-balance-total">{row.balance === null ? "—" : formatCost(row.balance)}</span>
                   </td>
                   <td>{formatCost(row.spent)}</td>
                   <td>
@@ -484,11 +498,21 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                   </td>
                   <td>
                     <div className="usage-stats-balance-actions">
-                      <ConfigButton onClick={() => void save(row, false)} disabled={busy === row.provider}>
-                        {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.save")}
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="usage-stats-balance-input"
+                        value={rechargeDrafts[row.provider] ?? ""}
+                        placeholder={t("usageStats.balance.rechargePlaceholder")}
+                        aria-label={`${row.provider} ${t("usageStats.balance.recharge")}`}
+                        onChange={(event) => setRechargeDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
+                      />
+                      <ConfigButton onClick={() => void recharge(row)} disabled={busy === row.provider}>
+                        {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
                       </ConfigButton>
                       {row.balance !== null && (
-                        <ConfigButton onClick={() => void save(row, true)} disabled={busy === row.provider}>
+                        <ConfigButton onClick={() => void resetSpent(row)} disabled={busy === row.provider}>
                           {t("usageStats.balance.reset")}
                         </ConfigButton>
                       )}

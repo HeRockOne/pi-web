@@ -1698,6 +1698,12 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+.usage-stats-balance-total {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 .usage-stats-balance-input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -1732,13 +1738,13 @@
   table-layout: fixed;
   /* 列宽合计约 700px：窄容器（含移动端）交给 wrap 横向滚动，避免压缩供应商列。
      双类选择器保证特异性高于 .usage-stats-table 的 min-width:400px。 */
-  min-width: 700px;
+  min-width: 720px;
 }
-.usage-stats-balance-table th:nth-child(1) { width: auto; min-width: 150px; }
-.usage-stats-balance-table th:nth-child(2) { width: 130px; }
+.usage-stats-balance-table th:nth-child(1) { width: 130px; }
+.usage-stats-balance-table th:nth-child(2) { width: 110px; }
 .usage-stats-balance-table th:nth-child(3) { width: 90px; }
 .usage-stats-balance-table th:nth-child(4) { width: 150px; }
-.usage-stats-balance-table th:nth-child(5) { width: 180px; }
+.usage-stats-balance-table th:nth-child(5) { width: 240px; }
 .usage-stats-balance-table td {
   vertical-align: middle;
   overflow-wrap: break-word;
@@ -1788,12 +1794,18 @@
   vertical-align: -1px;
 }
 .usage-stats-legend-name {
+  display: inline-block;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-right: 6px;
   color: var(--text);
+  vertical-align: -2px;
+}
+/* 余额表：供应商列固定 130px，名称截断避免撑爆表格 */
+.usage-stats-balance-table .usage-stats-legend-name {
+  max-width: 95px;
 }
 .usage-stats-provider-legend span:last-child {
   font-variant-numeric: tabular-nums;

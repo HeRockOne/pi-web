@@ -20,10 +20,10 @@ export async function GET() {
 }
 
 /**
- * POST 设置/清除某供应商余额。
- * body: { provider, balance, resetSpent? }
- *  - balance: 非负金额；null = 清除该供应商配置。
- *  - resetSpent: true 时把扣减基线重置为当前累计成本（已扣从 0 重新累计）。
+ * POST 管理某供应商余额。
+ * body: { provider, balance?, add?, resetSpent? }
+ *  - balance: 非负金额；null = 清除该供应商配置（覆盖设置）。
+ *  - add: 非负金额；提供时在现有余额上叠加充值（已扣/基线不动，balance 参数忽略）。
  */
 export async function POST(request: Request) {
   try {
@@ -31,23 +31,35 @@ export async function POST(request: Request) {
       provider?: unknown;
       balance?: unknown;
       resetSpent?: unknown;
+      add?: unknown;
     };
     if (typeof body.provider !== "string" || body.provider.trim().length === 0) {
       return NextResponse.json({ error: "provider is required" }, { status: 400 });
     }
     const provider = body.provider.trim();
+    const add = body.add;
     const balance = body.balance;
-    if (balance !== null && (typeof balance !== "number" || !Number.isFinite(balance) || balance < 0)) {
+    // add 提供时（叠加充值）无需 balance 字段；仅 balance 模式校验
+    if (add === undefined && balance !== null && (typeof balance !== "number" || !Number.isFinite(balance) || balance < 0)) {
       return NextResponse.json({ error: "balance must be a non-negative number or null" }, { status: 400 });
+    }
+    if (add !== undefined && (typeof add !== "number" || !Number.isFinite(add) || add < 0)) {
+      return NextResponse.json({ error: "add must be a non-negative number" }, { status: 400 });
     }
 
     const intermediate = await getUsageStatsIntermediate();
     const costs = intermediate ? aggregateProviderCosts(intermediate) : new Map<string, never>();
     const currentCost = costs.get(provider)?.cost ?? 0;
-    saveProviderBalance(provider, balance as number | null, {
+    const opts = {
       resetSpent: body.resetSpent === true,
       currentCost,
-    });
+    };
+    if (add !== undefined) {
+      // 叠加充值：新余额 = 现有余额 + add（首次无配置从 0 起）
+      saveProviderBalance(provider, null, { ...opts, add });
+    } else {
+      saveProviderBalance(provider, balance as number | null, opts);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(

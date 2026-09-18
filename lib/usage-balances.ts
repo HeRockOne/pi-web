@@ -103,14 +103,16 @@ export function readBalanceConfigs(filePath = getBalancesFilePath()): Record<str
 }
 
 /**
- * 写入某个供应商的余额配置。balance 为 null 时清除该供应商配置；
- * resetSpent 为 true 时把 spentBaseline 设为 currentCost（重置已扣基线）。
+ * 写入某个供应商的余额配置。
+ *  - balance 为 null 且未传 add：清除该供应商配置；
+ *  - opts.add 提供：叠加充值，新余额 = 现有余额（无则 0）+ add；
+ *  - resetSpent 为 true 时把 spentBaseline 设为 currentCost（重置已扣基线）。
  * 更新后返回该供应商的完整配置（未设置时为 null）。
  */
 export function saveProviderBalance(
   provider: string,
   balance: number | null,
-  opts: { resetSpent?: boolean; currentCost?: number } = {},
+  opts: { resetSpent?: boolean; currentCost?: number; add?: number } = {},
   filePath = getBalancesFilePath(),
 ): ProviderBalanceConfig | null {
   const configs = readBalanceConfigs(filePath);
@@ -122,11 +124,17 @@ export function saveProviderBalance(
         ? Math.max(0, opts.currentCost ?? 0)
         : 0;
 
-  if (balance === null) {
+  let nextBalance = balance;
+  if (opts.add !== undefined) {
+    // 叠加充值：在现有余额（无则从 0 起）上直接增加，已扣/基线不受影响
+    nextBalance = Math.max(0, (existing?.balance ?? 0) + opts.add);
+  }
+
+  if (nextBalance === null) {
     delete configs[provider];
   } else {
     configs[provider] = {
-      balance,
+      balance: nextBalance,
       spentBaseline: baseline,
       updatedAt: Date.now(),
     };
