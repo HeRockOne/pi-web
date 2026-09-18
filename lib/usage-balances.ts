@@ -29,6 +29,8 @@ export type ProviderBalanceConfig = {
   spentBaseline: number;
   /** 最近一次更新的 Unix ms */
   updatedAt: number;
+  /** 上一次写入前的完整配置快照（支持撤销）；null = 此前未配置；undefined = 不撤销 */
+  lastOp?: ProviderBalanceConfig | null;
 };
 
 /** 下发前端的每供应商余额行。 */
@@ -44,6 +46,8 @@ export type BalanceSnapshotRow = {
   costKnown: boolean;
   /** 是否在 usage.jsonl 中出现过（无用量但配置了余额也展示） */
   hasUsage: boolean;
+  /** 是否有可撤销的最近一次写入（lastOp 快照存在） */
+  canUndo: boolean;
 };
 
 type StoredBalanceFile = {
@@ -74,10 +78,16 @@ function parseStoredEntry(entry: unknown): ProviderBalanceConfig | null {
   const { balance, spentBaseline, updatedAt } = entry as StoredEntry;
   if (balance !== null && !isFiniteNumber(balance)) return null;
   if (!isFiniteNumber(spentBaseline) || !isFiniteNumber(updatedAt)) return null;
+  let lastOp: ProviderBalanceConfig | null | undefined;
+  if (entry && typeof entry === "object" && "lastOp" in (entry as object) && (entry as StoredEntry).lastOp !== undefined) {
+    const raw = (entry as StoredEntry).lastOp;
+    lastOp = raw === null ? null : parseStoredEntry(raw);
+  }
   return {
     balance: balance === null ? null : Math.max(0, balance as number),
     spentBaseline: Math.max(0, spentBaseline as number),
     updatedAt: updatedAt as number,
+    ...(lastOp === undefined ? {} : { lastOp }),
   };
 }
 
@@ -137,9 +147,35 @@ export function saveProviderBalance(
       balance: nextBalance,
       spentBaseline: baseline,
       updatedAt: Date.now(),
+      // 记录写入前的快照用于撤销（null = 此前未配置）
+      lastOp: existing ? { ...existing } : null,
     };
   }
 
+  mkdirSync(dirname(filePath), { recursive: true });
+  writePrivateFileAtomicSync(
+    filePath,
+    JSON.stringify({ version: 1, balances: configs }, null, 2),
+  );
+  return configs[provider] ?? null;
+}
+
+/**
+ * 撤销该供应商最近一次写入（恢复 lastOp 快照；若快照为 null 则清除配置）。
+ * 快照自带上一轮快照，可连续撤销。返回恢复后的配置；无可撤销操作时返回 null 且不写盘。
+ */
+export function undoProviderBalance(
+  provider: string,
+  filePath = getBalancesFilePath(),
+): ProviderBalanceConfig | null | undefined {
+  const configs = readBalanceConfigs(filePath);
+  const existing = configs[provider];
+  if (!existing || !("lastOp" in existing)) return undefined;
+  if (existing.lastOp === null) {
+    delete configs[provider];
+  } else {
+    configs[provider] = { ...(existing.lastOp as ProviderBalanceConfig), updatedAt: Date.now() };
+  }
   mkdirSync(dirname(filePath), { recursive: true });
   writePrivateFileAtomicSync(
     filePath,
@@ -198,6 +234,7 @@ export function computeBalances(
       remaining: config?.balance === null || config?.balance === undefined ? null : config.balance - spent,
       costKnown: usageInfo?.costKnown ?? true,
       hasUsage,
+      canUndo: config !== undefined && "lastOp" in config,
     });
   };
 

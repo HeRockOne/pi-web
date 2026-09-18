@@ -456,6 +456,29 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
     }
   };
 
+  /** 撤销最近一次写入（恢复快照；连续撤销可回退多步）。 */
+  const undoBalance = async (row: BalanceSnapshotRow) => {
+    if (!window.confirm(t("usageStats.balance.undoConfirm", { provider: row.provider }))) return;
+    setBusy(row.provider);
+    setError("");
+    try {
+      const response = await fetch("/api/usage-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: row.provider, undo: true }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
+      setSaved(row.provider);
+      window.setTimeout(() => setSaved(null), 1600);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div>
       <div className="usage-stats-table-wrap">
@@ -511,6 +534,11 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                       <ConfigButton onClick={() => void recharge(row)} disabled={busy === row.provider}>
                         {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
                       </ConfigButton>
+                      {row.canUndo && (
+                        <ConfigButton onClick={() => void undoBalance(row)} disabled={busy === row.provider}>
+                          {t("usageStats.balance.undo")}
+                        </ConfigButton>
+                      )}
                       {row.balance !== null && (
                         <ConfigButton onClick={() => void resetSpent(row)} disabled={busy === row.provider}>
                           {t("usageStats.balance.reset")}
