@@ -1759,12 +1759,14 @@ function SessionItem({
         paddingLeft: rowPadding,
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
+        margin: "0 6px",
+        borderRadius: 8,
         background: confirmDelete
           ? "rgba(239,68,68,0.06)"
-          : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete
-          ? "2px solid #ef4444"
-          : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+          : isSelected
+            ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+            : hovered ? "var(--bg-hover)" : "transparent",
+        borderLeft: confirmDelete ? "2px solid #ef4444" : "2px solid transparent",
         transition: "background 0.1s",
         opacity: deleting ? 0.5 : 1,
         gap: 6,
@@ -2046,11 +2048,11 @@ function ProjectFolderRow({
         paddingLeft: 8,
         paddingRight: 8,
         cursor: "pointer",
-        // Always-tinted band so project folders read as distinct section
-        // headers, not rows competing with their sessions. Selected stays
-        // subtle (accent icon + label only) so the filled session row keeps
-        // the strongest "current" marker.
-        background: hovered ? "var(--bg-hover)" : "rgba(127,127,127,0.07)",
+        // macOS-style section headers: no tinted band; folder icon + mono
+        // path carry the hierarchy. Hover is an inset pill like session rows.
+        margin: "0 6px",
+        borderRadius: 8,
+        background: hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: "2px solid transparent",
         transition: "background 0.1s",
         gap: 6,

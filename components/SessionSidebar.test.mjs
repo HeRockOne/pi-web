@@ -128,9 +128,11 @@ test("renders the session list as a project folder tree", () => {
   assert.match(source, /function ProjectFolderRow/);
   assert.doesNotMatch(source, /listSessionFamilies/);
   assert.doesNotMatch(source, /sessionFamilies/);
-  // Tree guide lines + folder band styling
+  // Tree guide lines + macOS-style inset pill rows (no tinted band; the
+  // selected session row is an accent-tinted pill)
   assert.match(source, /const rowPadding = depth === 0 \? 26 : 14 \+ depth \* 18;/);
   assert.match(source, /const lineX = \(layer: number\) => 14 \+ layer \* 18 \+ 8;/);
   assert.match(source, /\[\.\.\.guides, \.\.\.\(hasChildren && !collapsed \? tails : \[\]\)\]/);
-  assert.match(source, /rgba\(127,127,127,0\.07\)/);
+  assert.match(source, /color-mix\(in srgb, var\(--accent\) 15%, transparent\)/);
+  assert.doesNotMatch(source, /rgba\(127,127,127,0\.07\)/);
 });
