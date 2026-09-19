@@ -10,6 +10,7 @@ import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { formatRelativeTime } from "@/lib/i18n/format";
 import { useI18n } from "@/hooks/useI18n";
 import { SessionSearch } from "./SessionSearch";
+import { ChevronDownIcon, MorphChevron } from "./Icons";
 import { DirectoryPicker } from "./DirectoryPicker";
 
 // Fixed row height for the session list. SessionItem renders at exactly this
@@ -1155,9 +1156,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     {worktreeState.worktrees.length}
                   </span>
                 )}
-                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <polyline points="2 3.5 5 6.5 8 3.5" />
-                </svg>
+                <ChevronDownIcon size={9} strokeWidth={1.8} style={{ flexShrink: 0 }} />
               </button>
 
               <AnimatedDropdown
@@ -1938,13 +1937,9 @@ function SessionItem({
                 width: 20, height: 20, padding: 0, flexShrink: 0,
                 background: "none", border: "none",
                 color: "var(--text-dim)", cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
+              <MorphChevron open={!collapsed} />
             </button>
           )}
 
@@ -2071,13 +2066,9 @@ function ProjectFolderRow({
             width: 20, height: 20, padding: 0, flexShrink: 0,
             background: "none", border: "none",
             color: "var(--text-dim)", cursor: "pointer",
-            transform: collapsed ? "rotate(-90deg)" : "none",
-            transition: "transform 0.15s",
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="2 3.5 5 6.5 8 3.5" />
-          </svg>
+          <MorphChevron open={!collapsed} />
         </button>
       ) : (
         <span style={{ width: 20, flexShrink: 0 }} />

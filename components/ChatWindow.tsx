@@ -1,5 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
+import { ChevronDownIcon } from "./Icons";
 import Image from "next/image";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -1734,9 +1735,7 @@ function ExtensionDialog({
               flexShrink: 0,
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="2 3.5 5 6.5 8 3.5" />
-            </svg>
+            <ChevronDownIcon strokeWidth={1.6} />
           </button>
         </div>
 
@@ -2051,9 +2050,7 @@ function ExtensionCustomPanel({
                 flexShrink: 0,
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
+              <ChevronDownIcon strokeWidth={1.6} />
             </button>
             <button
               onClick={() => onInput(request, "\x03")}
