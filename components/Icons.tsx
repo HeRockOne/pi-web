@@ -7,11 +7,14 @@ import { MorphIcon } from "morphicons/react";
 // state animation). One-off decorative SVGs stay inline next to their
 // markup — the duplication data doesn't justify a full catalog here.
 
+// MorphIcon's canonical grid is 24×24 (lucide standard); our legacy chevron
+// lives on a 10×10 grid, so the points below are the 10-grid shape scaled
+// by 2.4. Feeding 10-grid coordinates directly renders a tiny glyph.
 const CHEVRON_DOWN = [
-  ["polyline", { points: "2 3.5 5 6.5 8 3.5" }],
+  ["polyline", { points: "4.8 8.4 12 15.6 19.2 8.4" }],
 ] as const;
 const CHEVRON_RIGHT = [
-  ["polyline", { points: "3.5 2 6.5 5 3.5 8" }],
+  ["polyline", { points: "8.4 4.8 15.6 12 8.4 19.2" }],
 ] as const;
 
 export function ChevronDownIcon({
@@ -77,7 +80,8 @@ export function MorphVolumeIcon({
 }
 
 /** Collapse/expand chevron: springs between pointing-right (collapsed) and
- *  pointing-down (open) instead of a hard CSS rotate. */
+ *  pointing-down (open) instead of a hard CSS rotate. `strokeWidth` keeps
+ *  the legacy 10×10-grid convention (1.6/1.8) and is rescaled internally. */
 export function MorphChevron({
   open,
   size = 10,
@@ -93,7 +97,7 @@ export function MorphChevron({
     <MorphIcon
       icon={open ? CHEVRON_DOWN : CHEVRON_RIGHT}
       size={size}
-      strokeWidth={strokeWidth}
+      strokeWidth={strokeWidth * 2.4}
       spring="snappy"
       reducedMotion="user"
       style={style}
