@@ -34,11 +34,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
       role="tablist"
       style={{
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
+        gap: 2,
         background: "var(--bg-panel)",
         overflowX: "auto",
         flexShrink: 0,
         height: 36,
+        padding: "4px 6px 0",
       }}
     >
       {tabs.map((tab) => {
@@ -65,6 +67,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               }
             }}
             onClick={() => onSelectTab(tab.id)}
+            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
             onMouseDown={(e) => {
               if (e.button === 1) e.preventDefault();
             }}
@@ -78,11 +82,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              height: 36,
+              height: 32,
               paddingLeft: 12,
               paddingRight: 6,
-              borderRight: "1px solid var(--border)",
-              background: isActive ? "var(--bg)" : "var(--bg-panel)",
+              borderRadius: "8px 8px 0 0",
+              background: isActive ? "var(--bg)" : "transparent",
+              boxShadow: isActive ? "var(--shadow-sm)" : "none",
               cursor: "pointer",
               fontSize: 12,
               color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -91,7 +96,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
-              transition: "background 0.1s, color 0.1s",
+              transition: "background 0.15s, color 0.15s, box-shadow 0.15s",
             }}
           >
             <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>

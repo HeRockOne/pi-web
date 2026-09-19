@@ -150,6 +150,27 @@ body {
   flex-direction: column;
 }
 
+/* Motion baseline: buttons that don't declare their own transitions still
+   get hover/press feedback. Transform is deliberately excluded so inline
+   rotate()/scale() icon states aren't clobbered. Inline transition styles
+   on individual buttons override this entirely. */
+button,
+[role="button"] {
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .terminal-panel {
   display: grid;
   grid-template-rows: 38px auto minmax(0, 1fr);

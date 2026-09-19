@@ -28,8 +28,19 @@ import { useI18n } from "@/hooks/useI18n";
 import { useChatAppearance } from "@/hooks/useChatAppearance";
 import type { ToolPreset } from "@/lib/tool-presets";
 import { ModelSelector, type ModelSelectorOption } from "./ModelSelector";
+import { MorphIcon } from "morphicons/react";
 
 export { filterModelOptions } from "./ModelSelector";
+
+// Lucide icon data (IconNode format) for the morphing send/stop button —
+// one persistent button that springs between the two states.
+const SEND_ICON_NODE = [
+  ["line", { x1: "22", y1: "2", x2: "11", y2: "13" }],
+  ["polygon", { points: "22 2 15 22 11 13 2 9 22 2" }],
+] as const;
+const STOP_ICON_NODE = [
+  ["rect", { x: "5", y: "5", width: "14", height: "14", rx: "2" }],
+] as const;
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -2311,9 +2322,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
           />
 
-          {isStreaming ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
-              {onSteer && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
+              {isStreaming && onSteer && (
                 <button
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
@@ -2338,7 +2348,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </svg>
                 </button>
               )}
-              {onFollowUp && (
+              {isStreaming && onFollowUp && (
                 <button
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
@@ -2366,35 +2376,35 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
               )}
             </div>
-          ) : (
             <button
-              onClick={handleSend}
-              disabled={!value.trim() && !attachedImages.length}
+              onClick={isStreaming ? onAbort : handleSend}
+              disabled={!isStreaming && !value.trim() && !attachedImages.length}
               style={{
                 flexShrink: 0,
-                alignSelf: "flex-end",
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px",
-                background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
-                border: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "7px 12px",
+                minHeight: 33,
+                background: isStreaming ? "rgba(239,68,68,0.08)" : (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
+                border: isStreaming ? "1px solid rgba(239,68,68,0.3)" : "none",
                 borderRadius: 8,
-                color: (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
-                cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
+                color: isStreaming ? "#ef4444" : (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
+                cursor: !isStreaming && !value.trim() && !attachedImages.length ? "not-allowed" : "pointer",
+                boxShadow: !isStreaming && (value.trim() || attachedImages.length) ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
+                transition: "background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s",
               }}
-              aria-label={t("chat.send")}
-              title={t("chat.send")}
+              onMouseEnter={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
+              onMouseLeave={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+              aria-label={isStreaming ? t("chat.stop") : t("chat.send")}
+              title={isStreaming ? t("chat.stopAgent") : t("chat.send")}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
+              <MorphIcon
+                icon={isStreaming ? STOP_ICON_NODE : SEND_ICON_NODE}
+                size={16}
+                strokeWidth={2}
+                spring="snappy"
+                reducedMotion="user"
+              />
             </button>
-          )}
           </div>
         </div>
 
@@ -2529,7 +2539,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
                 borderRadius: 10,
                 background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+                boxShadow: "var(--shadow-md)",
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
@@ -2745,33 +2755,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   )}
                 </button>
               </div>
-            )}
-
-            {isStreaming && (
-              <button
-                onClick={onAbort}
-                 title={t("chat.stopAgent")}
-                aria-label={t("chat.stop")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 10px",
-                  height: 32,
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: 9,
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: "nowrap", letterSpacing: "-0.01em",
-                  transition: "background 0.12s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-              >
-                <svg width="11" height="11" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                  <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
-                </svg>
-              </button>
             )}
 
             {onSoundToggle !== undefined && (
