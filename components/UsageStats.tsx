@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
+import { UsageBalanceTrendChart, UsageCostTrendChart, UsageModelRankChart, UsageProjectRankChart } from "./UsageStatsCharts";
 import type { UsageAggregated, UsageDayRow } from "@/lib/usage-stats";
 import type { BalanceSnapshotRow } from "@/lib/usage-balances";
 import {
@@ -628,6 +629,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             <BalanceSection rows={balances} onChanged={load} />
 
             <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.balanceTrend.title")}</SectionTitle>
+            <UsageBalanceTrendChart daily={data.daily} />
+
+            <div className="usage-stats-divider" />
             <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
 
             <div className="usage-stats-divider" />
@@ -672,6 +677,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             <UsageHeatmap data={data} />
 
             <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.costTrend.title")}</SectionTitle>
+            <UsageCostTrendChart data={data} />
+
+            <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.daily.title")}</SectionTitle>
             <UsageDailyChart data={data} />
 
@@ -695,6 +704,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             />
 
             <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.modelRank.title")}</SectionTitle>
+            <UsageModelRankChart data={data} />
+
+            <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.projects.title")}</SectionTitle>
             <UsageTable
               headers={[
@@ -710,6 +723,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                 String(p.turns),
               ])}
             />
+
+            <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.projectRank.title")}</SectionTitle>
+            <UsageProjectRankChart data={data} />
           </>
         )}
 

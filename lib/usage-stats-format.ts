@@ -78,6 +78,7 @@ export type RangeMode = "day" | "week" | "month";
 export type UsageChartBucket = {
   label: string;
   tokens: number;
+  cost: number;
   byProvider: Array<{ provider: string; tokens: number }>;
 };
 
@@ -85,7 +86,7 @@ const DAY_MS = 24 * 3600 * 1000;
 
 /** 构造日（近 30 天）/ 周（近 12 周起始日）/ 月（近 12 月）桶；tokens===0 的桶丢弃。 */
 export function buildBuckets(
-  rows: Array<{ day: string; totals: { tokens: number }; byProvider: Array<{ provider: string; tokens: number }> }>,
+  rows: Array<{ day: string; totals: { tokens: number; cost?: number }; byProvider: Array<{ provider: string; tokens: number }> }>,
   mode: RangeMode,
   now: Date,
 ): UsageChartBucket[] {
@@ -105,6 +106,7 @@ export function buildBuckets(
       .map((r) => ({
         label: r.day.slice(5),
         tokens: r.totals.tokens,
+        cost: r.totals.cost ?? 0,
         byProvider: r.byProvider
           .filter((p) => p.tokens > 0)
           .map((p) => ({ provider: p.provider, tokens: p.tokens })),
@@ -125,10 +127,11 @@ export function buildBuckets(
     }
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { label: mode === "week" ? key.slice(5) : key, tokens: 0, byProvider: [] };
+      bucket = { label: mode === "week" ? key.slice(5) : key, tokens: 0, cost: 0, byProvider: [] };
       buckets.set(key, bucket);
     }
     bucket.tokens += r.totals.tokens;
+    bucket.cost += r.totals.cost ?? 0;
     for (const p of r.byProvider) {
       if (p.tokens <= 0) continue;
       const existing = bucket.byProvider.find((b) => b.provider === p.provider);

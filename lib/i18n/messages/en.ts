@@ -765,6 +765,12 @@ export const enLocale: LocalePlugin = {
     "usageStats.models.col.sessions": "Sessions",
     "usageStats.projects.title": "All-time project usage",
     "usageStats.projects.col.project": "Project",
+    "usageStats.costTrend.title": "Cost trend",
+    "usageStats.modelRank.title": "Model cost ranking",
+    "usageStats.projectRank.title": "Project cost ranking",
+    "usageStats.balanceTrend.title": "Balance trend",
+    "usageStats.balanceTrend.empty": "No balance data to chart",
+    "usageStats.rank.cost": "Cost",
     "usageStats.table.empty": "No data",
   },
 };

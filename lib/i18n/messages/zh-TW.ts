@@ -764,6 +764,12 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.models.col.sessions": "會話",
     "usageStats.projects.title": "累計專案用量",
     "usageStats.projects.col.project": "專案",
+    "usageStats.costTrend.title": "費用趨勢",
+    "usageStats.modelRank.title": "模型費用排行",
+    "usageStats.projectRank.title": "專案費用排行",
+    "usageStats.balanceTrend.title": "餘額走勢",
+    "usageStats.balanceTrend.empty": "暫無可繪製的餘額數據",
+    "usageStats.rank.cost": "費用",
     "usageStats.table.empty": "暫無資料",
   },
 };

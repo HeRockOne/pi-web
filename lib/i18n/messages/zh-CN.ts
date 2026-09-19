@@ -764,6 +764,12 @@ export const zhCNLocale: LocalePlugin = {
     "usageStats.models.col.sessions": "会话",
     "usageStats.projects.title": "累计项目用量",
     "usageStats.projects.col.project": "项目",
+    "usageStats.costTrend.title": "费用趋势",
+    "usageStats.modelRank.title": "模型费用排行",
+    "usageStats.projectRank.title": "项目费用排行",
+    "usageStats.balanceTrend.title": "余额走势",
+    "usageStats.balanceTrend.empty": "暂无可绘制的余额数据",
+    "usageStats.rank.cost": "费用",
     "usageStats.table.empty": "暂无数据",
   },
 };
