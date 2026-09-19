@@ -1045,7 +1045,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               }}
               title={t("sidebar.newProject")}
               aria-label={t("sidebar.newProject")}
-              className="flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-border bg-bg-hover text-text-muted hover:bg-bg-selected hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+              className="flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-bg-hover hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l1.5 2h9.5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
@@ -1062,7 +1062,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               aria-label={t("sidebar.toggleSessionSearch")}
               aria-expanded={sessionSearchOpen}
               aria-controls="session-search-input"
-              className={`flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-border hover:bg-bg-selected focus-visible:outline-2 focus-visible:outline-accent ${sessionSearchOpen ? "bg-bg-selected text-accent" : "bg-bg-hover text-text-muted"}`}
+              className={`flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-accent ${sessionSearchOpen ? "bg-bg-selected text-accent" : "text-text-muted"}`}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
@@ -1782,11 +1782,11 @@ function SessionItem({
           {[...guides, ...(hasChildren && !collapsed ? tails : [])].map((layer) => (
             <div
               key={`guide-${layer}`}
-              style={{ position: "absolute", left: lineX(layer), top: 0, bottom: 0, width: 1, background: "var(--border)" }}
+              style={{ position: "absolute", left: lineX(layer), top: 0, bottom: 0, width: 1, background: "color-mix(in srgb, var(--border) 45%, transparent)" }}
             />
           ))}
           {tails.filter(() => !(hasChildren && !collapsed)).map((layer) => (
-            <div key={`tail-${layer}`} style={{ position: "absolute", left: lineX(layer), top: 0, height: SESSION_LIST_ITEM_HEIGHT / 2, width: 1, background: "var(--border)" }} />
+            <div key={`tail-${layer}`} style={{ position: "absolute", left: lineX(layer), top: 0, height: SESSION_LIST_ITEM_HEIGHT / 2, width: 1, background: "color-mix(in srgb, var(--border) 45%, transparent)" }} />
           ))}
           {tails.filter(() => !(hasChildren && !collapsed)).map((layer) => (
             <div
@@ -1797,7 +1797,7 @@ function SessionItem({
                 top: SESSION_LIST_ITEM_HEIGHT / 2 - 0.5,
                 height: 1,
                 width: Math.max(2, rowPadding - lineX(layer) - 8),
-                background: "var(--border)",
+                background: "color-mix(in srgb, var(--border) 45%, transparent)",
               }}
             />
           ))}
@@ -2097,11 +2097,11 @@ function ProjectFolderRow({
           aria-label={t("i18n.newSession")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-            height: 24, padding: "0 8px",
+            height: 24, padding: "0 10px",
             flexShrink: 0,
-            background: "var(--bg)", border: "1px solid var(--border)",
-            borderRadius: 5,
-            color: "var(--text-muted)",
+            background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "none",
+            borderRadius: 999,
+            color: "var(--accent)",
             cursor: "pointer",
             fontSize: 11,
             fontWeight: 500,
