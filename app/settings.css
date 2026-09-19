@@ -1732,6 +1732,56 @@
   display: flex;
   gap: 6px;
   align-items: center;
+  /* Hover-revealed actions: rows stay quiet until the pointer (or keyboard)
+     arrives. Focus-within keeps inline editing visible without a pointer. */
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.usage-stats-balance-table tr:hover .usage-stats-balance-actions,
+.usage-stats-balance-table tr:focus-within .usage-stats-balance-actions,
+.usage-stats-balance-actions.is-open {
+  opacity: 1;
+}
+.usage-stats-balance-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.usage-stats-balance-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.usage-stats-balance-btn.is-primary {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.usage-stats-balance-btn.is-primary:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.usage-stats-balance-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.usage-stats-balance-saved {
+  font-size: 11px;
+  color: #30a46c;
+  white-space: nowrap;
+}
+.usage-stats-balance-table tr.is-dormant td {
+  opacity: 0.55;
+}
+.usage-stats-balance-table tr.is-dormant:hover td {
+  opacity: 1;
 }
 /* 固定列宽：保存后出现“重置已扣”按钮 / 进度条时不引起表格弹跳 */
 .usage-stats-table.usage-stats-balance-table {

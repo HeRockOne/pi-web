@@ -402,11 +402,12 @@ function BalanceBar({ balance, remaining }: { balance: number; remaining: number
 function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onChanged: () => void }) {
   const { t } = useI18n();
   const [rechargeDrafts, setRechargeDrafts] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  /** 叠加充值：新余额 = 现有余额 + 金额，已扣/基线不动。 */
+  /** 叠加充值：新余额 = 现有余额 + 金额，已扣/基线不动。成功后收起行内编辑。 */
   const recharge = async (row: BalanceSnapshotRow) => {
     const raw = rechargeDrafts[row.provider] ?? "";
     const value = Number(raw);
@@ -427,6 +428,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
       setSaved(row.provider);
       window.setTimeout(() => setSaved(null), 1600);
       setRechargeDrafts((prev) => ({ ...prev, [row.provider]: "" }));
+      setEditing(null);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -498,8 +500,10 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
             {rows.map((row) => {
               const remaining = row.remaining;
               const negative = remaining !== null && remaining < 0;
+              // 从未配置且无扣费的 provider：降噪显示，只保留「充值」设置初始余额
+              const dormant = row.balance === null && row.spent === 0;
               return (
-                <tr key={row.provider}>
+                <tr key={row.provider} className={dormant ? "is-dormant" : undefined}>
                   <td>
                     <span className="usage-stats-legend-dot" style={{ background: colorForProvider(row.provider) }} />
                     <span className="usage-stats-legend-name">{row.provider}</span>
@@ -522,29 +526,71 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                     )}
                   </td>
                   <td>
-                    <div className="usage-stats-balance-actions">
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className="usage-stats-balance-input"
-                        value={rechargeDrafts[row.provider] ?? ""}
-                        placeholder={t("usageStats.balance.rechargePlaceholder")}
-                        aria-label={`${row.provider} ${t("usageStats.balance.recharge")}`}
-                        onChange={(event) => setRechargeDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
-                      />
-                      <ConfigButton onClick={() => void recharge(row)} disabled={busy === row.provider}>
-                        {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
-                      </ConfigButton>
-                      <ConfigButton onClick={() => void resetBalance(row)} disabled={busy === row.provider}>
-                        {t("usageStats.balance.resetBalance")}
-                      </ConfigButton>
-                      {row.balance !== null && (
-                        <ConfigButton onClick={() => void resetSpent(row)} disabled={busy === row.provider}>
-                          {t("usageStats.balance.reset")}
-                        </ConfigButton>
-                      )}
-                    </div>
+                    {editing === row.provider ? (
+                      <div className="usage-stats-balance-actions is-open">
+                        <input
+                          autoFocus
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className="usage-stats-balance-input"
+                          value={rechargeDrafts[row.provider] ?? ""}
+                          placeholder={t("usageStats.balance.rechargePlaceholder")}
+                          aria-label={`${row.provider} ${t("usageStats.balance.recharge")}`}
+                          onChange={(event) => setRechargeDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void recharge(row);
+                            else if (event.key === "Escape") setEditing(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="usage-stats-balance-btn is-primary"
+                          onClick={() => void recharge(row)}
+                          disabled={busy === row.provider}
+                        >
+                          {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
+                        </button>
+                        <button
+                          type="button"
+                          className="usage-stats-balance-btn"
+                          onClick={() => setEditing(null)}
+                        >
+                          {t("i18n.cancel")}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="usage-stats-balance-actions">
+                        {saved === row.provider && <span className="usage-stats-balance-saved">{t("usageStats.balance.saved")}</span>}
+                        <button
+                          type="button"
+                          className="usage-stats-balance-btn is-primary"
+                          onClick={() => setEditing(row.provider)}
+                        >
+                          {t("usageStats.balance.recharge")}
+                        </button>
+                        {row.balance !== null && row.spent > 0 && (
+                          <button
+                            type="button"
+                            className="usage-stats-balance-btn"
+                            onClick={() => void resetSpent(row)}
+                            disabled={busy === row.provider}
+                          >
+                            {t("usageStats.balance.reset")}
+                          </button>
+                        )}
+                        {row.balance !== null && (
+                          <button
+                            type="button"
+                            className="usage-stats-balance-btn"
+                            onClick={() => void resetBalance(row)}
+                            disabled={busy === row.provider}
+                          >
+                            {t("usageStats.balance.resetBalance")}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
