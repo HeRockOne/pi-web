@@ -2052,11 +2052,11 @@ function ProjectFolderRow({
         paddingRight: 8,
         cursor: "pointer",
         // Always-tinted band so project folders read as distinct section
-        // headers, not rows competing with their sessions.
-        background: selected
-          ? "var(--bg-selected)"
-          : hovered ? "var(--bg-hover)" : "rgba(127,127,127,0.07)",
-        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
+        // headers, not rows competing with their sessions. Selected stays
+        // subtle (accent icon + label only) so the filled session row keeps
+        // the strongest "current" marker.
+        background: hovered ? "var(--bg-hover)" : "rgba(127,127,127,0.07)",
+        borderLeft: "2px solid transparent",
         transition: "background 0.1s",
         gap: 6,
         overflow: "hidden",
@@ -2088,7 +2088,7 @@ function ProjectFolderRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <PathLabel
           text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--text)" }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: selected ? "var(--accent)" : "var(--text)" }}
         />
         <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, minWidth: 0 }}>
           {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
