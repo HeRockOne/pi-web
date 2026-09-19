@@ -2258,19 +2258,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             style={{
               minWidth: 0,
               display: "flex",
-              flexDirection: compact ? "column" : "row",
-              gap: 8,
-              alignItems: compact ? "stretch" : "center",
+              flexDirection: "column",
+              gap: compact ? 8 : 0,
+              alignItems: "stretch",
               background: "var(--bg)",
               border: compact ? "none" : `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && (onSteer || onFollowUp)
                 ? "rgba(234,179,8,0.4)"
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
               borderRadius: compact ? 0 : 14,
-              padding: compact ? 0 : "10px 10px 10px 14px",
+              padding: compact ? 0 : "10px 10px 0 14px",
               boxShadow: compact ? "none" : "var(--shadow-md)",
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
           >
+          <div style={(compact ? { display: "contents" } : { display: "flex", alignItems: "center", gap: 8, minWidth: 0 }) as React.CSSProperties}>
           <textarea
             ref={textareaRef}
             className="chat-input-textarea"
@@ -2407,143 +2408,112 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               />
             </button>
           </div>
-        </div>
 
-        {/* Bash mode status label */}
-        {bashMode && (
-          <div className="text-xs px-2 py-1" style={{ color: bashExcluded ? "var(--text-muted)" : "var(--accent)", marginTop: 4 }}>
-             {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
-          </div>
-        )}
+          {bashMode && (
+            <div className="text-xs" style={{ color: bashExcluded ? "var(--text-muted)" : "var(--accent)", padding: "0 0 4px" }}>
+              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
+            </div>
+          )}
 
-        {/* Bottom bar: left | center (context) | right */}
-        {!compact && <div style={{
-          marginTop: 8,
-          display: isMobile ? "grid" : "flex",
-          gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
-          alignItems: "center",
-          gap: 6,
-        }}>
-
-          {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
-          <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-             title={t("chat.attachImage")}
-              style={{
-                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: 32, height: 32, padding: 0,
-                background: "none", border: "none",
-                borderRadius: 9,
-                color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer",
-                opacity: 1,
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-            </button>
-            {/* Model selector - visible always, disabled while the session or switch is busy */}
-            {(modelOptions.length > 0 || model || modelError) && onModelChange && (
-              <ModelSelector
-                options={modelOptions}
-                value={model}
-                onChange={onModelChange}
-                disabled={isStreaming}
-                busy={modelSwitching}
-                isAutoSelection={isAutoModelSelection}
-              />
-            )}
-          </div>
-
-          {/* spacer */}
-          {!isMobile && <div style={{ flex: 1 }} />}
-
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
-          <div ref={controlsMenuRef} style={{
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            position: "relative",
-            marginLeft: isMobile ? 0 : "auto",
-          }}>
-            {isMobile && (
-              <button
-                type="button"
-                 title={controlsMenuOpen ? undefined : t("chat.moreControls")}
-                 aria-label={t("chat.moreControls")}
-                aria-expanded={controlsMenuOpen}
-                aria-hidden={controlsMenuOpen || undefined}
-                tabIndex={controlsMenuOpen ? -1 : undefined}
-                onClick={() => {
-                  setControlsMenuOpen(true);
-                }}
-                style={{
-                  display: "flex",
+          {!compact && (
+            <>
+              <div style={{ height: 1, flexShrink: 0, margin: "6px -10px 0 -14px", background: "color-mix(in srgb, var(--border) 55%, transparent)" }} />
+              <div ref={controlsMenuRef} style={{ display: "flex", alignItems: "center", gap: 2, position: "relative", padding: "3px 0 6px" }}>
+                {isMobile && (
+                  <button
+                    type="button"
+                    title={controlsMenuOpen ? undefined : t("chat.moreControls")}
+                    aria-label={t("chat.moreControls")}
+                    aria-expanded={controlsMenuOpen}
+                    onClick={() => {
+                      setControlsMenuOpen(true);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                      height: 28, padding: "0 10px", flexShrink: 0,
+                      background: controlsMenuOpen ? "var(--bg-hover)" : "none",
+                      border: "none", borderRadius: 7,
+                      color: "var(--text-muted)",
+                      cursor: "pointer", fontSize: 12, fontWeight: 500,
+                      transition: "background 0.12s, color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--bg-hover)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = controlsMenuOpen ? "var(--bg-hover)" : "none";
+                      e.currentTarget.style.color = "var(--text-muted)";
+                    }}
+                  >
+                    {t("chat.moreControls")}
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="3 6.2 5 8.2 7 6.2" />
+                    </svg>
+                  </button>
+                )}
+                {isMobile && <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title={t("chat.attachFile")}
+                  aria-label={t("chat.attachFile")}
+                  style={{
+                    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 28, padding: 0,
+                    background: "none", border: "none",
+                    borderRadius: 7,
+                    color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
+                    cursor: "pointer",
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                    e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
+                <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
+                <div style={{ flex: isMobile ? "1 1 auto" : "0 1 auto", minWidth: 0, display: "flex", alignItems: "center" }}>
+                  {(modelOptions.length > 0 || model || modelError) && onModelChange && (
+                    <ModelSelector
+                      options={modelOptions}
+                      value={model}
+                      onChange={onModelChange}
+                      disabled={isStreaming}
+                      busy={modelSwitching}
+                      isAutoSelection={isAutoModelSelection}
+                    />
+                  )}
+                </div>
+                <div style={{ flex: 1 }} />
+                <div style={{
+                  display: isMobile ? (controlsMenuOpen ? "flex" : "none") : "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  height: 32,
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: "var(--text-muted)",
-                  cursor: controlsMenuOpen ? "default" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  visibility: controlsMenuOpen ? "hidden" : "visible",
-                  pointerEvents: controlsMenuOpen ? "none" : "auto",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                {t("chat.moreControls")}
-              </button>
-            )}
-            <div style={{
-              display: isMobile ? (controlsMenuOpen ? "flex" : "none") : "flex",
-              alignItems: "center",
-              gap: isMobile ? 1 : 2,
-              ...(isMobile ? {
-                position: "absolute",
-                right: 0,
-                bottom: 0,
-                zIndex: 60,
-                padding: 1,
-                width: "max-content",
-                maxWidth: "calc(100vw - 32px)",
-                flexWrap: "nowrap",
-                justifyContent: "flex-end",
-                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                borderRadius: 10,
-                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
-                boxShadow: "var(--shadow-md)",
-                backdropFilter: "blur(10px)",
-              } : null),
-            }}>
+                  gap: isMobile ? 1 : 0,
+                  ...(isMobile ? {
+                    position: "absolute",
+                    left: 0,
+                    bottom: "calc(100% + 8px)",
+                    zIndex: 60,
+                    padding: 1,
+                    width: "max-content",
+                    maxWidth: "calc(100vw - 32px)",
+                    flexWrap: "nowrap",
+                    justifyContent: "flex-end",
+                    border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                    borderRadius: 12,
+                    background: "var(--surface-2)",
+                    boxShadow: "var(--shadow-lg)",
+                    backdropFilter: "blur(10px)",
+                  } : null),
+                }}>
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button
@@ -2553,12 +2523,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                    aria-label={t("chat.changeReasoningLabel")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
+                    padding: isMobile ? "0 6px" : "0 8px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    height: 28,
                     background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
-                    borderRadius: 9,
+                    borderRadius: 7,
                     color: "var(--text-muted)",
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
@@ -2586,9 +2556,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <div style={{
                     position: "absolute", bottom: "calc(100% + 6px)",
                     ...(isMobile ? { left: 0 } : { right: 0 }),
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 180,
+                    zIndex: 100, background: "var(--surface-2)", border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+                    borderRadius: "var(--radius-overlay)", boxShadow: "var(--shadow-lg)", padding: 5,
+                    overflow: "hidden", minWidth: 200,
                   }}>
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
@@ -2607,11 +2577,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
+                            borderRadius: 10,
+                            background: isActive ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
                             border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            color: isActive ? "var(--accent)" : "var(--text-muted)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
+                            fontWeight: isActive ? 500 : 400,
                             whiteSpace: "nowrap",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -2641,12 +2612,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   aria-label={t("chat.changeToolPreset")}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
+                    padding: isMobile ? "0 6px" : "0 8px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    height: 28,
                     background: toolDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
-                    borderRadius: 9,
+                    borderRadius: 7,
                     color: "var(--text-muted)",
                     cursor: isStreaming ? "not-allowed" : "pointer",
                     fontSize: 12,
@@ -2674,9 +2645,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     bottom: "calc(100% + 6px)",
                     right: isMobile ? undefined : 0,
                     left: isMobile ? 0 : undefined,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 120,
+                    zIndex: 100, background: "var(--surface-2)", border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+                    borderRadius: "var(--radius-overlay)", boxShadow: "var(--shadow-lg)", padding: 5,
+                    overflow: "hidden", minWidth: 140,
                   }}>
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
@@ -2693,11 +2664,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
+                            borderRadius: 10,
+                            background: isActive ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
                             border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            color: isActive ? "var(--accent)" : "var(--text-muted)",
                             cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
+                            fontWeight: isActive ? 500 : 400,
                             whiteSpace: "nowrap",
                           }}
                           onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -2715,6 +2687,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
+            {!isStreaming && onCompact && (
+              <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
+            )}
 
             {!isStreaming && onCompact && (
               <div>
@@ -2723,12 +2698,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   disabled={isStreaming && !isCompacting}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
+                    padding: isMobile ? "0 6px" : "0 8px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    height: 28,
                     background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
                     border: "none",
-                    borderRadius: 9,
+                    borderRadius: 7,
                     color: isCompacting ? "#ef4444" : "var(--text-muted)",
                     cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
                     fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
@@ -2765,12 +2740,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                  aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: isMobile ? 32 : 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
                   padding: 0,
                   background: "none",
                   border: "none",
-                  borderRadius: 9,
+                  borderRadius: 7,
                   color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
                   cursor: "pointer",
                   opacity: soundEnabled ? 1 : 0.55,
@@ -2805,14 +2780,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 36,
-                  height: 32,
+                  width: 32,
+                  height: 28,
                   padding: 0,
                   marginLeft: 0,
                   background: "var(--bg-hover)",
                   border: "none",
                   borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                  borderRadius: "0 9px 9px 0",
+                  borderRadius: "0 11px 11px 0",
                   color: "var(--text)",
                   cursor: "pointer",
                   transition: "background 0.12s, color 0.12s",
@@ -2831,9 +2806,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </button>
             )}
             </div>
+              </div>
+            </>
+          )}
           </div>
-
-        </div>}
+        </div>
       </div>
     </fieldset>
   );

@@ -127,11 +127,11 @@ export function ModelSelector({
         gap: 6,
         width: isMobile ? "100%" : undefined,
         maxWidth: isMobile ? "100%" : 220,
-        height: 32,
-        padding: isMobile ? "8px 10px" : "8px 12px",
+        height: 28,
+        padding: isMobile ? "0 8px" : "0 10px",
         overflow: "hidden",
         border: "none",
-        borderRadius: 9,
+        borderRadius: 7,
         background: open ? "var(--bg-hover)" : "none",
         color: "var(--text-muted)",
         cursor: locked ? "not-allowed" : "pointer",
@@ -242,10 +242,10 @@ export function ModelSelector({
               flexDirection: "column",
               maxHeight,
               overflow: "hidden",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              background: "var(--bg)",
-              boxShadow: openAbove ? "0 -4px 16px rgba(0,0,0,0.10)" : "0 4px 16px rgba(0,0,0,0.10)",
+              border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+              borderRadius: 12,
+              background: "var(--surface-2)",
+              boxShadow: "var(--shadow-lg)",
             }}
           >
             {showFilter && (
@@ -318,7 +318,7 @@ function ModelOptionButton({ active, label, onClick }: { active: boolean; label:
       role="option"
       aria-selected={active}
       onClick={onClick}
-      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 12px", border: "none", background: active ? "var(--bg-selected)" : "none", color: active ? "var(--text)" : "var(--text-muted)", cursor: "pointer", fontSize: 12, fontWeight: active ? 600 : 400, textAlign: "left", whiteSpace: "nowrap" }}
+      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 12px", border: "none", borderRadius: 10, background: active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none", color: active ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontSize: 12, fontWeight: active ? 500 : 400, textAlign: "left", whiteSpace: "nowrap" }}
       onMouseEnter={(event) => { if (!active) event.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(event) => { if (!active) event.currentTarget.style.background = "none"; }}
     >
