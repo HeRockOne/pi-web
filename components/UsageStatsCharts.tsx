@@ -6,7 +6,7 @@
  * （POST /api/usage-balances/timeline，逐日 23:59:59 采样）。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
