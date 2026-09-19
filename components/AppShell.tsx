@@ -1634,7 +1634,7 @@ export function AppShell() {
         aria-label={translate("topbar.sessions")}
         style={{
           display: "flex", alignItems: "center", flex: "1 1 auto", minWidth: 0,
-          height: "100%", overflow: "hidden", borderRight: "1px solid var(--border)",
+          height: "100%", overflow: "hidden",
         }}
       >
         <div
@@ -2337,7 +2337,7 @@ export function AppShell() {
           visibility: covered ? "hidden" : "visible",
           pointerEvents: covered ? "none" : "auto",
           background: rightPanelOpen ? "var(--bg-selected)" : "none",
-          border: "none", borderLeft: "1px solid var(--border)",
+          border: "none",
           color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
           cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
         }}
