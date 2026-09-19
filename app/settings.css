@@ -1732,15 +1732,6 @@
   display: flex;
   gap: 6px;
   align-items: center;
-  /* Hover-revealed actions: rows stay quiet until the pointer (or keyboard)
-     arrives. Focus-within keeps inline editing visible without a pointer. */
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.usage-stats-balance-table tr:hover .usage-stats-balance-actions,
-.usage-stats-balance-table tr:focus-within .usage-stats-balance-actions,
-.usage-stats-balance-actions.is-open {
-  opacity: 1;
 }
 .usage-stats-balance-btn {
   display: inline-flex;
