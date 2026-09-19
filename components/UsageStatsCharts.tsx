@@ -16,6 +16,7 @@ import {
   Cell,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,6 +31,7 @@ import {
   type RangeMode,
 } from "@/lib/usage-stats-format";
 import type { UsageAggregated, UsageDayRow } from "@/lib/usage-stats";
+import type { BalanceSnapshotRow } from "@/lib/usage-balances";
 
 type TooltipEntry = {
   dataKey?: string | number;
@@ -209,9 +211,7 @@ export function UsageProjectRankChart({ data }: { data: UsageAggregated }) {
   );
 }
 
-// ── 余额走势（多 provider 折线，逐日采样自余额时间线接口） ──────────────────
-
-type BalanceProviderSeries = { name: string; series: (number | null)[] };
+// ── 余额走势（多 provider 折线：从当前余额按每日费用回推整条曲线） ────────────
 
 function UsageBalanceTrendTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
@@ -229,39 +229,34 @@ function UsageBalanceTrendTooltip({ active, payload, label }: ChartTooltipProps)
   );
 }
 
-export function UsageBalanceTrendChart({ daily }: { daily: UsageDayRow[] }) {
+export function UsageBalanceTrendChart({ daily, balances }: { daily: UsageDayRow[]; balances: BalanceSnapshotRow[] }) {
   const { t } = useI18n();
-  const [providers, setProviders] = useState<BalanceProviderSeries[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Balance configs are baseline-relative ("remaining = balance - spent since
+  // the last reset"), so replaying past timestamps yields flat lines — the
+  // config knows nothing about pre-reset spending. Reconstruct instead: walk
+  // the window backwards from the current remaining, undoing each day's
+  // per-provider cost, so the slope reflects real burn rate.
+  const providers = useMemo(() => {
+    const rows: Array<{ name: string; cap: number | null; series: number[] }> = [];
+    for (const snap of balances) {
+      if (snap.remaining === null) continue;
+      const costPerDay = daily.map((r) => r.byProvider.find((bp) => bp.provider === snap.provider)?.cost ?? 0);
+      const series = new Array<number>(daily.length);
+      let remaining = snap.remaining;
+      for (let i = daily.length - 1; i >= 0; i--) {
+        series[i] = remaining;
+        remaining += costPerDay[i];
+      }
+      rows.push({ name: snap.provider, cap: snap.balance, series });
+    }
+    return rows;
+  }, [daily, balances]);
 
-  useEffect(() => {
-    if (daily.length === 0) return;
-    let cancelled = false;
-    const timestamps = daily.map((r) => new Date(`${r.day}T23:59:59`).getTime());
-    fetch("/api/usage-balances/timeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timestamps }),
-    })
-      .then((response) => response.json())
-      .then((res: { providers?: Record<string, { remainingSeries?: (number | null)[] }> }) => {
-        if (cancelled) return;
-        const rows = Object.entries(res.providers ?? {})
-          .map(([name, value]) => ({ name, series: value.remainingSeries ?? [] }))
-          .filter((entry) => entry.series.some((v) => v !== null));
-        setProviders(rows);
-      })
-      .catch(() => { if (!cancelled) setFailed(true); });
-    return () => { cancelled = true; };
-  }, [daily]);
-
-  if (failed) return <div className="usage-stats-hint">{t("usageStats.error")}</div>;
-  if (!providers) return <div className="usage-stats-hint">{t("usageStats.loading")}</div>;
   if (providers.length === 0) return <div className="usage-stats-hint">{t("usageStats.balanceTrend.empty")}</div>;
 
   const rows = daily.map((r, i) => {
     const row: Record<string, string | number | null> = { label: r.day.slice(5) };
-    for (const p of providers) row[p.name] = p.series[i] ?? null;
+    for (const p of providers) row[p.name] = p.series[i];
     return row;
   });
 
@@ -274,6 +269,14 @@ export function UsageBalanceTrendChart({ daily }: { daily: UsageDayRow[] }) {
         <Tooltip cursor={{ stroke: "var(--border)" }} content={<UsageBalanceTrendTooltip />} />
         {providers.map((p) => (
           <Line key={p.name} dataKey={p.name} name={p.name} type="monotone" stroke={colorForProvider(p.name)} strokeWidth={2} dot={false} connectNulls={false} />
+        ))}
+        {providers.filter((p) => p.cap !== null).map((p) => (
+          <ReferenceLine
+            key={`${p.name}-cap`}
+            y={p.cap as number}
+            strokeDasharray="4 3"
+            stroke="color-mix(in srgb, var(--text-dim) 55%, transparent)"
+          />
         ))}
       </LineChart>
     </ResponsiveContainer>

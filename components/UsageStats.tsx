@@ -630,7 +630,7 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
 
             <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.balanceTrend.title")}</SectionTitle>
-            <UsageBalanceTrendChart daily={data.daily} />
+            <UsageBalanceTrendChart daily={data.daily} balances={balances} />
 
             <div className="usage-stats-divider" />
             <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
