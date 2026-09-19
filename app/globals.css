@@ -291,6 +291,16 @@ button,
   background: color-mix(in srgb, var(--text-dim) 70%, transparent);
 }
 
+/* Top-bar stats capsule: one quiet instrument cluster. Sibling dividers give
+   "everything but the first" a hairline regardless of which stats are
+   conditionally rendered this session. */
+.topbar-capsule > span {
+  padding: 2px 10px;
+}
+.topbar-capsule > span + span {
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
 
 .extension-status-shelf {
   display: flex;

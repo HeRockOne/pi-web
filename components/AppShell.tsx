@@ -2192,24 +2192,32 @@ export function AppShell() {
         aria-label={translate("session.title")}
         aria-pressed={activeTopPanel === "session"}
         aria-hidden={covered ? true : undefined}
-        className={mobile ? "mobile-session-stats" : undefined}
+        className={mobile ? "mobile-session-stats" : "topbar-capsule"}
+        data-topbar-active={!mobile && activeTopPanel === "session" ? "true" : undefined}
         data-mobile-toolbar-stats={mobile ? "true" : undefined}
         style={{
           marginLeft: mobile ? 0 : "auto",
           display: "flex", alignItems: "center", justifyContent: "flex-end",
           flex: mobile ? 1 : undefined,
+          alignSelf: mobile ? undefined : "center",
           minWidth: 0,
-          gap: mobile ? 7 : 10,
-          paddingLeft: mobile ? 6 : 12,
-          paddingRight: mobile ? 6 : 12,
-          height: "100%",
+          gap: mobile ? 7 : 0,
+          paddingLeft: mobile ? 6 : 4,
+          paddingRight: mobile ? 6 : 4,
+          height: mobile ? "100%" : 26,
+          borderRadius: mobile ? undefined : 999,
           overflow: "hidden",
           visibility: covered ? "hidden" : "visible",
           pointerEvents: covered ? "none" : "auto",
-          background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
-          border: "none",
-          borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
-          fontSize: 11, color: "var(--text-muted)",
+          background: mobile
+            ? (activeTopPanel === "session" ? "var(--bg-selected)" : "none")
+            : activeTopPanel === "session"
+              ? "color-mix(in srgb, var(--accent) 14%, transparent)"
+              : "color-mix(in srgb, var(--bg) 55%, var(--bg-panel))",
+          border: mobile
+            ? "none"
+            : `1px solid ${activeTopPanel === "session" ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)"}`,
+          fontSize: mobile ? 11 : 12, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
           transition: "color 0.1s, background 0.1s",
