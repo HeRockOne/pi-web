@@ -41,8 +41,8 @@
   width: min(var(--config-panel-width), calc(100vw - 16px));
   height: min(var(--config-panel-height), calc(100dvh - 16px));
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-overlay);
+  box-shadow: var(--shadow-lg);
 }
 
 .config-panel-header {
@@ -769,9 +769,9 @@
   max-height: calc(100dvh - 16px);
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-overlay);
   background: var(--bg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-lg);
 }
 
 .settings-dialog-header {
@@ -1912,7 +1912,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-md);
   padding: 8px 10px;
   font-size: 12px;
 }

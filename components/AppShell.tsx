@@ -2358,14 +2358,14 @@ export function AppShell() {
           transform: translateY(0);
           filter: blur(0);
           background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
-          box-shadow: 0 18px 44px rgba(37,99,235,0.16);
+          box-shadow: 0 18px 44px color-mix(in srgb, var(--accent) 16%, transparent);
         }
         100% {
           opacity: 1;
           transform: translateY(0);
           filter: blur(0);
           background: var(--bg-panel);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+          box-shadow: var(--shadow-md);
         }
       }
       @keyframes session-info-light-wash {
