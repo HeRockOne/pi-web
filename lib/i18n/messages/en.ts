@@ -725,6 +725,7 @@ export const enLocale: LocalePlugin = {
     "usageStats.balance.recharge": "Top up",
     "usageStats.balance.resetBalance": "Reset balance",
     "usageStats.balance.resetBalanceConfirm": "Reset {provider}'s balance to 0? This cannot be undone.",
+    "usageStats.balance.resetSpentConfirm": "Reset {provider}'s spent? Spent will re-accumulate from 0; the balance is unchanged.",
 
 
 

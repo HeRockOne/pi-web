@@ -439,6 +439,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
 
   /** 重置已扣：把扣减基线设为当前累计成本（已扣从 0 重新累计），余额不动。 */
   const resetSpent = async (row: BalanceSnapshotRow) => {
+    if (!window.confirm(t("usageStats.balance.resetSpentConfirm", { provider: row.provider }))) return;
     setBusy(row.provider);
     setError("");
     try {
