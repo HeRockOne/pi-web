@@ -617,8 +617,6 @@ export function ChatMinimap({
         position: "relative",
         cursor: "pointer",
         userSelect: "none",
-        borderLeft: "1px solid var(--border)",
-        background: "var(--bg-panel)",
         overflow: "visible",
       }}
     >
@@ -665,7 +663,7 @@ export function ChatMinimap({
                 borderRadius: 4,
                 background: isActive ? "color-mix(in srgb, var(--accent) 30%, transparent)" : "color-mix(in srgb, var(--text-dim) 18%, transparent)",
                 border: `1.5px solid ${isActive ? "var(--accent)" : "color-mix(in srgb, var(--text-dim) 55%, transparent)"}`,
-                boxShadow: isActive ? "0 0 0 2px var(--bg-panel)" : "none",
+                boxShadow: isActive ? "0 0 0 2px var(--bg)" : "none",
                 transition: "transform 0.1s, background 0.1s",
                 transform: isNearest ? "scale(1.25)" : "scale(1)",
               }}

@@ -1,8 +1,8 @@
 .preview {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 100%;
+  top: 8px;
+  bottom: 8px;
+  right: calc(100% + 6px);
   z-index: 100;
   width: 320px;
   overflow-x: hidden;
@@ -10,9 +10,10 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
-  background: var(--bg);
-  border-left: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  box-shadow: -10px 0 26px rgba(0, 0, 0, 0.07);
+  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: var(--radius-overlay);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
   cursor: default;
   user-select: text;

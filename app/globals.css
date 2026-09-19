@@ -300,6 +300,10 @@ button,
 .topbar-capsule > span + span {
   border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
+/* Floating top bar: dropdown triggers light up as accent pills while open. */
+.app-shell-topbar button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
 
 
 .extension-status-shelf {
@@ -1430,7 +1434,11 @@ span.token.table {
   .sidebar-container {
     position: relative;
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    /* Floating rounded card to match the composer/top-bar capsule language. */
+    margin: 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    transition: width 0.2s ease, min-width 0.2s ease, margin 0.2s ease;
   }
   .sidebar-container.sidebar-open {
     width: var(--sidebar-width, 260px);
@@ -1439,7 +1447,8 @@ span.token.table {
   .sidebar-container.sidebar-closed {
     width: 0;
     min-width: 0;
-    border-right: none !important;
+    margin: 0;
+    border: none !important;
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
@@ -1456,7 +1465,11 @@ span.token.table {
 @media (min-width: 960px) {
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    /* Floating rounded card, mirroring the left sidebar. */
+    margin: 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    transition: width 0.2s ease, min-width 0.2s ease, margin 0.2s ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -1466,7 +1479,8 @@ span.token.table {
   .right-panel-container.right-panel-closed {
     width: 0;
     min-width: 0;
-    border-left: none !important;
+    margin: 0;
+    border: none !important;
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {

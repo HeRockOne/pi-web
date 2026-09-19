@@ -1500,7 +1500,7 @@ export function AppShell() {
       style={{
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-        background: "none", border: "none", borderRight: "1px solid var(--border)",
+        background: "none", border: "none", borderRadius: 999,
         color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
@@ -1543,7 +1543,7 @@ export function AppShell() {
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
         background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
-        border: "none", borderRight: "1px solid var(--border)",
+        border: "none", borderRadius: 999,
         color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
       }}
@@ -1590,8 +1590,8 @@ export function AppShell() {
           display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
           height: "100%", padding: mobile ? 0 : "0 12px",
-          background: "none", border: "none", borderRight: "1px solid var(--border)",
-          borderTop: activeTopPanel === "sessions" ? "2px solid var(--accent)" : "2px solid transparent",
+          background: "none", border: "none", borderRadius: 999,
+          
           color: activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)",
           cursor: "pointer", flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
           transition: "color 0.1s, background 0.1s", position: mobile ? "relative" : undefined,
@@ -1762,11 +1762,12 @@ export function AppShell() {
       aria-label={translate("chat.moreControls")}
       aria-haspopup="menu"
       aria-expanded={activeTopPanel === "more"}
+      aria-pressed={activeTopPanel === "more"}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
         background: activeTopPanel === "more" ? "var(--bg-selected)" : "none",
-        border: "none", borderRight: "1px solid var(--border)",
+        border: "none", borderRadius: 999,
         color: activeTopPanel === "more" ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
       }}
@@ -1801,7 +1802,6 @@ export function AppShell() {
           padding: mobileBanner ? "6px 12px" : "0 12px",
           background: mobileBanner ? "color-mix(in srgb, #d97706 8%, var(--bg-panel))" : "none",
           border: "none",
-          borderRight: mobileBanner ? "none" : "1px solid var(--border)",
           borderBottom: mobileBanner ? "1px solid var(--border)" : "none",
           color: "#d97706",
           cursor: "pointer",
@@ -1856,8 +1856,7 @@ export function AppShell() {
             padding: mobile ? 0 : "0 12px",
             background: "none",
             border: "none",
-            borderTop: "2px solid transparent",
-            borderRight: "1px solid var(--border)",
+            
             color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
             cursor: selectedSession ? "pointer" : "not-allowed",
             opacity: selectedSession ? 1 : 0.45,
@@ -1937,8 +1936,7 @@ export function AppShell() {
                 width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
                 height: "100%", padding: mobile ? 0 : "0 12px",
                 background: "none", border: "none",
-                borderTop: "2px solid transparent",
-                borderRight: "1px solid var(--border)",
+                
                 color: isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)",
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
@@ -1990,8 +1988,7 @@ export function AppShell() {
               height: "100%", padding: mobile ? 0 : "0 12px",
               background: activeTopPanel === "agents" ? "var(--bg-selected)" : "none",
               border: "none",
-              borderTop: activeTopPanel === "agents" ? "2px solid var(--accent)" : "2px solid transparent",
-              borderRight: "1px solid var(--border)",
+              
               color: activeTopPanel === "agents" ? "var(--text)" : "var(--text-muted)",
               cursor: "pointer", flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
               transition: "color 0.1s, background 0.1s",
@@ -2027,8 +2024,7 @@ export function AppShell() {
               width: TOP_BAR_ICON_BUTTON_SIZE, height: "100%", padding: 0,
               background: activeTopPanel === "branches" ? "var(--bg-selected)" : "none",
               border: "none",
-              borderTop: activeTopPanel === "branches" ? "2px solid var(--accent)" : "2px solid transparent",
-              borderRight: "1px solid var(--border)",
+              
               color: activeTopPanel === "branches" ? "var(--text)" : "var(--text-muted)",
               cursor: "pointer", flexShrink: 0,
             }}
@@ -2067,8 +2063,7 @@ export function AppShell() {
             height: "100%", padding: mobile ? 0 : "0 12px",
             background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
             border: "none",
-            borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRight: "1px solid var(--border)",
+            
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
@@ -2104,8 +2099,7 @@ export function AppShell() {
             height: "100%", padding: mobile ? 0 : "0 12px",
             background: activeTopPanel === "tools" ? "var(--bg-selected)" : "none",
             border: "none",
-            borderTop: activeTopPanel === "tools" ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRight: "1px solid var(--border)",
+            
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "tools" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
@@ -2468,7 +2462,6 @@ export function AppShell() {
       }
       .app-shell-topbar {
         flex-shrink: 0;
-        background: var(--bg-panel);
       }
       .app-shell-viewer {
         flex: 1;
@@ -2501,7 +2494,6 @@ export function AppShell() {
         style={{
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -2526,7 +2518,7 @@ export function AppShell() {
       <div className="app-shell-center">
         {/* Top bar with sidebar toggle */}
         <div ref={topBarRef} className="app-shell-topbar">
-        <div style={{ display: "flex", alignItems: "center", position: "relative", borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
+        <div style={{ display: "flex", alignItems: "center", position: "relative", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
           <button
             onClick={handleSidebarToggle}
              title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
@@ -2534,7 +2526,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
+              background: "none", border: "none",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -2578,7 +2570,7 @@ export function AppShell() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
                     background: mobileToolbarMoreOpen ? "var(--bg-selected)" : "none",
-                    border: "none", borderRight: "1px solid var(--border)",
+                    border: "none",
                     color: mobileToolbarMoreOpen ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
                   }}
@@ -2770,12 +2762,12 @@ export function AppShell() {
                   role="menu"
                   aria-label={translate("common.language")}
                   style={{
-                    background: "var(--bg-panel)",
-                    borderLeft: "1px solid var(--border)",
-                    borderRight: "1px solid var(--border)",
-                    borderBottom: "1px solid var(--border)",
+                    background: "var(--surface-2)",
+                    border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+                    borderRadius: "var(--radius-overlay)",
+                    boxShadow: "var(--shadow-lg)",
                     overflow: "hidden",
-                    padding: 4,
+                    padding: 5,
                   }}
                 >
                   {supportedLocales.map((plugin) => (
@@ -2791,8 +2783,8 @@ export function AppShell() {
                       style={{
                         display: "flex", alignItems: "center",
                         width: "100%", height: 34, padding: "0 10px",
-                        border: "none", borderRadius: 4,
-                        background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
+                        border: "none", borderRadius: 10,
+                        background: locale === plugin.id ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
                         transition: "background 0.1s",
                       }}
@@ -2824,14 +2816,14 @@ export function AppShell() {
         style={{
           display: "flex", alignItems: "center", gap: 8,
           width: "100%", height: 34, padding: "0 10px",
-          border: "none", borderRadius: 4,
-          background: opts.active ? "var(--bg-selected)" : "transparent",
+          border: "none", borderRadius: 10,
+          background: opts.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
           color: opts.disabled ? "var(--text-dim)" : opts.active ? "var(--accent)" : "var(--text)",
           cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
           transition: "background 0.1s",
         }}
         onMouseEnter={(e) => { if (!opts.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = opts.active ? "var(--bg-selected)" : "transparent"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = opts.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent"; }}
       >
         <span style={{ display: "flex", color: opts.disabled ? "var(--text-dim)" : "var(--text-muted)", flexShrink: 0 }}>{icon}</span>
         <span style={{ flex: 1 }}>{label}</span>
@@ -2853,11 +2845,11 @@ export function AppShell() {
         role="menu"
         aria-label={translate("chat.moreControls")}
         style={{
-          background: "var(--bg-panel)",
-          borderLeft: "1px solid var(--border)",
-          borderRight: "1px solid var(--border)",
-          borderBottom: "1px solid var(--border)",
-          overflow: "hidden", padding: 4,
+          background: "var(--surface-2)",
+          border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+          borderRadius: "var(--radius-overlay)",
+          boxShadow: "var(--shadow-lg)",
+          overflow: "hidden", padding: 5,
         }}
       >
         {item("history", translate("history.label"), icon(
@@ -2899,11 +2891,11 @@ export function AppShell() {
                   role="menu"
                   aria-label={translate("topbar.sessions")}
                   style={{
-                    background: "var(--bg-panel)",
-                    borderLeft: "1px solid var(--border)",
-                    borderRight: "1px solid var(--border)",
-                    borderBottom: "1px solid var(--border)",
-                    overflow: "hidden auto", maxHeight: "min(60vh, 480px)", padding: 4,
+                    background: "var(--surface-2)",
+                    border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+                    borderRadius: "var(--radius-overlay)",
+                    boxShadow: "var(--shadow-lg)",
+                    overflow: "hidden auto", maxHeight: "min(60vh, 480px)", padding: 5,
                   }}
                 >
                   {sessionsPanelShowPinned && (
@@ -3388,7 +3380,6 @@ export function AppShell() {
           "--right-panel-width": `${rightPanelResizer.width}px`,
           display: "flex",
           flexDirection: "column",
-          borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
         } as React.CSSProperties}
       >
