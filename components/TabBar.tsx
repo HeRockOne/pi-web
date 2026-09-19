@@ -86,7 +86,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               paddingLeft: 12,
               paddingRight: 6,
               borderRadius: "8px 8px 0 0",
-              background: isActive ? "var(--bg)" : "transparent",
+              background: isActive ? "color-mix(in srgb, var(--accent) 16%, var(--bg))" : "transparent",
               boxShadow: isActive ? "var(--shadow-sm)" : "none",
               cursor: "pointer",
               fontSize: 12,

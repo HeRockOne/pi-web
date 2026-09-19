@@ -662,9 +662,9 @@ export function ChatMinimap({
               style={{
                 width: 8,
                 height: 8,
-                borderRadius: 2,
-                background: isActive ? "rgba(128,128,128,0.42)" : "rgba(128,128,128,0.16)",
-                border: `1.5px solid ${isActive ? "rgba(128,128,128,0.95)" : "rgba(128,128,128,0.58)"}`,
+                borderRadius: 4,
+                background: isActive ? "color-mix(in srgb, var(--accent) 30%, transparent)" : "color-mix(in srgb, var(--text-dim) 18%, transparent)",
+                border: `1.5px solid ${isActive ? "var(--accent)" : "color-mix(in srgb, var(--text-dim) 55%, transparent)"}`,
                 boxShadow: isActive ? "0 0 0 2px var(--bg-panel)" : "none",
                 transition: "transform 0.1s, background 0.1s",
                 transform: isNearest ? "scale(1.25)" : "scale(1)",

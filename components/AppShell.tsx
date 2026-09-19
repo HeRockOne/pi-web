@@ -1437,7 +1437,7 @@ export function AppShell() {
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
       />
-      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
+      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4, borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)", background: "color-mix(in srgb, var(--bg) 35%, var(--bg-panel))" }}>
         {([
           ["models", translate("common.models")],
           ["skills", translate("common.skills")],
