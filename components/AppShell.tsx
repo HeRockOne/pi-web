@@ -2143,10 +2143,12 @@ export function AppShell() {
         : String(value);
     const costText = cost > 0 ? (cost >= 0.01 ? `$${cost.toFixed(2)}` : `<$0.01`) : null;
     // Avg cache hit rate = cache reads / all input-class tokens (same formula as the stats panel).
+    // Capsule shows 1 decimal to stay compact; tooltip and the expanded panel keep 4.
     const hitDenominator = tokens ? tokens.cacheRead + tokens.cacheWrite + tokens.input : 0;
-    const cacheHitRateText = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
-      ? `${(tokens.cacheRead / hitDenominator * 100).toFixed(4)}%`
+    const cacheHitRate = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
+      ? tokens.cacheRead / hitDenominator * 100
       : null;
+    const cacheHitRateText = cacheHitRate !== null ? `${cacheHitRate.toFixed(1)}%` : null;
 
     let contextColor = "var(--text-muted)";
     let desktopContextText: string | null = null;
@@ -2156,8 +2158,8 @@ export function AppShell() {
       if (percent !== null && percent > 90) contextColor = "#ef4444";
       else if (percent !== null && percent > 70) contextColor = "rgba(234,179,8,0.95)";
       desktopContextText = contextUsage.tokens !== null
-        ? `${formatCompact(contextUsage.tokens)} / ${formatCompact(contextUsage.contextWindow)}`
-        : `? / ${formatCompact(contextUsage.contextWindow)}`;
+        ? `${formatCompact(contextUsage.tokens)}/${formatCompact(contextUsage.contextWindow)}`
+        : `?/${formatCompact(contextUsage.contextWindow)}`;
       mobileContextText = percent !== null ? `${percent.toFixed(0)}%` : null;
     }
 
@@ -2167,7 +2169,7 @@ export function AppShell() {
       tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
       tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
       tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
-      if (cacheHitRateText) tooltipParts.push(`${translate("session.cacheHitRate")}: ${cacheHitRateText}`);
+      if (cacheHitRate !== null) tooltipParts.push(`${translate("session.cacheHitRate")}: ${cacheHitRate.toFixed(4)}%`);
       if (cost > 0) tooltipParts.push(`cost: $${cost.toFixed(4)}`);
     }
     if (contextUsage?.contextWindow) {
@@ -2202,8 +2204,8 @@ export function AppShell() {
           alignSelf: mobile ? undefined : "center",
           minWidth: 0,
           gap: mobile ? 7 : 0,
-          paddingLeft: mobile ? 6 : 4,
-          paddingRight: mobile ? 6 : 4,
+          paddingLeft: mobile ? 6 : 2,
+          paddingRight: mobile ? 6 : 2,
           height: mobile ? "100%" : 26,
           borderRadius: mobile ? undefined : 999,
           overflow: "hidden",
@@ -2217,7 +2219,7 @@ export function AppShell() {
           border: mobile
             ? "none"
             : `1px solid ${activeTopPanel === "session" ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)"}`,
-          fontSize: mobile ? 11 : 12, color: "var(--text-muted)",
+          fontSize: 11, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
           transition: "color 0.1s, background 0.1s",
@@ -2265,28 +2267,40 @@ export function AppShell() {
           </>
         ) : (
           <>
-            {tokens && tokens.input > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
-                </svg>
-                {formatCompact(tokens.input)}
+            {tokens && (tokens.input > 0 || tokens.output > 0 || tokens.cacheRead > 0) && (
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                {tokens.input > 0 && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
+                    </svg>
+                    {formatCompact(tokens.input)}
+                  </span>
+                )}
+                {tokens.output > 0 && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
+                    </svg>
+                    {formatCompact(tokens.output)}
+                  </span>
+                )}
+                {tokens.cacheRead > 0 && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
+                    </svg>
+                    {formatCompact(tokens.cacheRead)}
+                  </span>
+                )}
               </span>
             )}
-            {tokens && tokens.output > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {cacheHitRateText && (
+              <span style={{ display: "flex", alignItems: "center", gap: 3 }} title={translate("session.cacheHitRate")}>
                 <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
+                  <circle cx="5" cy="5" r="3.6" /><circle cx="5" cy="5" r="1" />
                 </svg>
-                {formatCompact(tokens.output)}
-              </span>
-            )}
-            {tokens && tokens.cacheRead > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                </svg>
-                {formatCompact(tokens.cacheRead)}
+                {cacheHitRateText}
               </span>
             )}
             {costText && (
@@ -2295,19 +2309,11 @@ export function AppShell() {
               </span>
             )}
             {desktopContextText && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4, color: contextColor }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 3, color: contextColor }}>
                 <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
                 </svg>
                 {desktopContextText}
-              </span>
-            )}
-            {cacheHitRateText && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }} title={translate("session.cacheHitRate")}>
-                <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                </svg>
-                {cacheHitRateText}
               </span>
             )}
           </>
