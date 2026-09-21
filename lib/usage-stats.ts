@@ -16,6 +16,8 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { statSync } from "node:fs";
+import { buildModelCostMap, repricedCost, type ModelCostWithPeak } from "./usage-peak-pricing";
 
 // ============================================================================
 // 类型（对应 PiDeck shared/types/usageStats.ts）
@@ -750,18 +752,23 @@ declare global {
 /** 增量刷新记录级缓存（单飞）。返回 null = 日志未安装。 */
 async function refreshUsageTimeline(): Promise<void> {
   const state = (globalThis.__piUsageTimeline ??= { cached: null, refreshPromise: null });
-  const result = await readIncremental(usageLogPath(), state.cached?.fileState ?? null);
+  const { map: costMap, changed: pricingChanged } = modelCostMapIfChanged();
+  const result = await readIncremental(
+    usageLogPath(),
+    pricingChanged ? null : (state.cached?.fileState ?? null),
+  );
   if (!result.fileState) {
     state.cached = null;
     return;
   }
   const cached = state.cached;
+  const newRecords = applyPeakPricing(result.newRecords, costMap);
   if (result.fullRescan) {
-    state.cached = { fileState: result.fileState, records: result.newRecords };
-  } else if (result.newRecords.length > 0) {
+    state.cached = { fileState: result.fileState, records: newRecords };
+  } else if (newRecords.length > 0) {
     state.cached = {
       fileState: result.fileState,
-      records: cached ? [...cached.records, ...result.newRecords] : result.newRecords,
+      records: cached ? [...cached.records, ...newRecords] : newRecords,
     };
   } else if (cached) {
     state.cached = { ...cached, fileState: result.fileState };
@@ -787,21 +794,62 @@ function usageLogPath(): string {
   return join(getAgentDir(), "analytics", "usage.jsonl");
 }
 
+let pricingCache: { mtimeMs: number; map: Map<string, ModelCostWithPeak> } | null = null;
+
+/** 探测 models.json 的 mtime；变化时重建峰谷价格映射（mtime=0 = 文件不存在）。 */
+function modelCostMapIfChanged(): { map: Map<string, ModelCostWithPeak>; changed: boolean } {
+  const modelsPath = join(getAgentDir(), "models.json");
+  let mtimeMs = 0;
+  try {
+    mtimeMs = statSync(modelsPath).mtimeMs;
+  } catch {
+    mtimeMs = 0;
+  }
+  if (pricingCache && pricingCache.mtimeMs === mtimeMs) {
+    return { map: pricingCache.map, changed: false };
+  }
+  const map = mtimeMs === 0 ? new Map<string, ModelCostWithPeak>() : buildModelCostMap();
+  pricingCache = { mtimeMs, map };
+  return { map, changed: true };
+}
+
+/** 按峰谷定价重算记录 cost；未配置 peak 的模型保持 pi-tracker 原值。 */
+function applyPeakPricing(
+  records: UsageRecord[],
+  map: Map<string, ModelCostWithPeak>,
+): UsageRecord[] {
+  if (map.size === 0) return records;
+  let changed = false;
+  const out = records.map((r) => {
+    const cost = map.get(r.model);
+    const c = cost ? repricedCost(r, cost) : null;
+    if (c === null) return r;
+    changed = true;
+    return { ...r, cost: c, costKnown: true };
+  });
+  return changed ? out : records;
+}
+
 /** 增量刷新（单飞：并发请求共享同一次执行，防止同一批记录被合并两次）。 */
 async function refreshUsageStats(): Promise<void> {
   const state = (globalThis.__piUsageStats ??= { cached: null, refreshPromise: null });
-  const result = await readIncremental(usageLogPath(), state.cached?.fileState ?? null);
+  const { map: costMap, changed: pricingChanged } = modelCostMapIfChanged();
+  const result = await readIncremental(
+    usageLogPath(),
+    pricingChanged ? null : (state.cached?.fileState ?? null),
+  );
   if (!result.fileState) {
     state.cached = null;
     return;
   }
+  const newRecords = applyPeakPricing(result.newRecords, costMap);
 
   const cached = state.cached;
   if (result.fullRescan) {
     // 全量重扫：整体替换（0 条 = 文件被清空，必须提交空态，防止旧中间态复活双计）
-    state.cached = { fileState: result.fileState, intermediate: intermediateFromRecords(result.newRecords) };
+    state.cached = { fileState: result.fileState, intermediate: intermediateFromRecords(newRecords) };
   } else if (result.newRecords.length > 0) {
-    const delta = intermediateFromRecords(result.newRecords);
+    const delta = intermediateFromRecords(newRecords);
     state.cached = {
       fileState: result.fileState,
       intermediate: cached ? mergeIntermediates(cached.intermediate, delta) : delta,

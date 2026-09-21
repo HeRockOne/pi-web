@@ -9,6 +9,7 @@ import {
   setLastSettingsSelection,
 } from "@/lib/settings-navigation";
 import {
+  MODEL_COST_KEYS,
   hasModelCostDraftValue,
   modelCostToDraft,
   parseCompleteModelCost,
@@ -18,6 +19,10 @@ import {
   type HeaderRow,
   type ModelCostDraft,
   type ModelCostKey,
+  parseCompletePeakPricing,
+  peakPricingToDraft,
+  type PeakHourDraft,
+  type PeakPricingDraft,
 } from "./models-config-helpers";
 import {
   ConfigButton,
@@ -36,6 +41,7 @@ import {
   ConfigSplitView,
 } from "./SettingsUi";
 import { ProviderIcon } from "./ProviderIcon";
+import type { PeakPricingConfig } from "@/lib/usage-peak-pricing";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,7 +84,7 @@ interface ModelEntry {
   input?: string[];
   contextWindow?: number;
   maxTokens?: number;
-  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown };
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown; peak?: PeakPricingConfig };
   headers?: Record<string, string>;
   compat?: Record<string, unknown>;
   samplingParams?: Record<string, unknown>;
@@ -289,6 +295,100 @@ function Check({ label, checked, onChange }: { label: string; checked: boolean; 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <ConfigSectionTitle>{children}</ConfigSectionTitle>;
 }
+// ── Peak pricing modal ────────────────────────────────────────────────────────
+
+function PeakPricingModal({
+  draft,
+  invalid,
+  onChange,
+  onSave,
+  onClose,
+}: {
+  draft: PeakPricingDraft;
+  invalid: boolean;
+  onChange: (draft: PeakPricingDraft) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const set = (changes: Partial<PeakPricingDraft>) => onChange({ ...draft, ...changes });
+  const setHour = (idx: number, changes: Partial<PeakHourDraft>) => {
+    const hours = draft.hours.map((h, i) => (i === idx ? { ...h, ...changes } : h));
+    set({ hours });
+  };
+  const addHour = () => set({ hours: [...draft.hours, { start: "", end: "" }] });
+  const removeHour = (idx: number) => set({ hours: draft.hours.filter((_, i) => i !== idx) });
+  const rateLabels: Record<ModelCostKey, string> = {
+    input: t("models.costInput"),
+    output: t("models.costOutput"),
+    cacheRead: t("models.costCacheRead"),
+    cacheWrite: t("models.costCacheWrite"),
+  };
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: 480, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+          {t("models.peakPricing")}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+          <Check label={t("models.peakEnable")} checked={draft.enabled} onChange={(v) => set({ enabled: v })} />
+          {draft.enabled && (
+            <>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase" }}>
+                {t("models.peakHours")}
+              </div>
+              {draft.hours.map((h, idx) => (
+                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <NumInput value={h.start} onChange={(v) => setHour(idx, { start: v })} placeholder="9" />
+                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>–</span>
+                  <NumInput value={h.end} onChange={(v) => setHour(idx, { end: v })} placeholder="12" />
+                  <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{t("models.peakHourSuffix")}</span>
+                  <button type="button" onClick={() => removeHour(idx)}
+                    style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 6, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: 11 }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addHour}
+                style={{ alignSelf: "flex-start", padding: "3px 10px", borderRadius: 6, border: "1px dashed var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: 11 }}>
+                + {t("models.peakAdd")}
+              </button>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase" }}>
+                {t("models.peakRates")}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+                {MODEL_COST_KEYS.map((key) => (
+                  <Field key={key} label={rateLabels[key]}>
+                    <NumInput value={draft[key]} onChange={(v) => set({ [key]: v } as Partial<PeakPricingDraft>)} placeholder="0" />
+                  </Field>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{t("models.peakHint")}</div>
+              {invalid && (
+                <div aria-live="polite" style={{ color: "#d97706", fontSize: 10 }}>{t("models.peakInvalid")}</div>
+              )}
+            </>
+          )}
+        </div>
+        <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={onClose}
+            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 12 }}>
+            {t("models.peakCancel")}
+          </button>
+          <button type="button" onClick={onSave}
+            style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", fontSize: 12 }}>
+            {t("models.peakSave")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
@@ -829,6 +929,10 @@ function ModelDetail({
   const [costEditing, setCostEditing] = useState(false);
   const [costDraft, setCostDraft] = useState<ModelCostDraft>(() => modelCostToDraft(model.cost));
   const costDraftRef = useRef(costDraft);
+  const [peakOpen, setPeakOpen] = useState(false);
+  const [peakDraft, setPeakDraft] = useState<PeakPricingDraft>(() => peakPricingToDraft(model.cost?.peak));
+  const peakDraftRef = useRef(peakDraft);
+  const [peakInvalid, setPeakInvalid] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const catalogRequestIdRef = useRef(0);
   const catalogUndoRef = useRef<ModelEntry | null>(null);
@@ -878,6 +982,47 @@ function ModelDetail({
     setCostDraft(nextDraft);
     setCostEditing(true);
   };
+  const openPeakModal = () => {
+    const next = peakPricingToDraft(model.cost?.peak);
+    peakDraftRef.current = next;
+    setPeakDraft(next);
+    setPeakInvalid(false);
+    setPeakOpen(true);
+  };
+
+  const updatePeakDraft = (next: PeakPricingDraft) => {
+    peakDraftRef.current = next;
+    setPeakDraft(next);
+    setPeakInvalid(false);
+  };
+
+  const savePeak = () => {
+    const draft = peakDraftRef.current;
+    const parsed = parseCompletePeakPricing(draft);
+    if (draft.enabled && !parsed) {
+      setPeakInvalid(true);
+      return;
+    }
+    const nextModel = { ...model };
+    const base = model.cost ?? {};
+    if (parsed) {
+      nextModel.cost = { ...base, peak: parsed };
+    } else if ("peak" in base) {
+      const rest = { ...base };
+      delete rest.peak;
+      nextModel.cost = Object.keys(rest).length > 0 ? rest : undefined;
+    }
+    onChange(nextModel);
+    setPeakOpen(false);
+  };
+
+  const peakSummary = (() => {
+    const peak = model.cost?.peak;
+    if (!peak || peak.hours.length === 0) return null;
+    return peak.hours
+      .map((h) => `${String(h.start).padStart(2, "0")}:00–${String(h.end).padStart(2, "0")}:00`)
+      .join(" · ");
+  })();
   const testSummary = (() => {
     if (testState.phase === "idle") return null;
      if (testState.phase === "testing") return t("i18n.testingModel");
@@ -1046,6 +1191,7 @@ function ModelDetail({
     : t("models.providerDefaults");
 
   return (
+    <>
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
          <SectionTitle>{t("i18n.model")}</SectionTitle>
@@ -1237,6 +1383,25 @@ function ModelDetail({
             </div>
           )}
         </div>
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase" }}>
+              {t("models.peakPricing")}
+            </span>
+            {model.cost?.peak ? (
+              <span style={{ fontSize: 11, color: "var(--accent)" }}>
+                {t("models.peakEnabled")}{peakSummary ? ` · ${peakSummary}` : ""}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t("models.peakDisabled")}</span>
+            )}
+            <button
+              type="button"
+              onClick={openPeakModal}
+              style={{ padding: "2px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}
+            >
+              {t("models.peakConfigure")}
+            </button>
+          </div>
       </section>
 
       <section style={{ borderTop: "1px solid var(--border)", paddingTop: 4 }}>
@@ -1326,6 +1491,16 @@ function ModelDetail({
         )}
       </section>
     </div>
+    {peakOpen && (
+      <PeakPricingModal
+        draft={peakDraft}
+        invalid={peakInvalid}
+        onChange={updatePeakDraft}
+        onSave={savePeak}
+        onClose={() => setPeakOpen(false)}
+      />
+    )}
+    </>
   );
 }
 
