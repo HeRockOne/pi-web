@@ -593,8 +593,9 @@ export const zhCNLocale: LocalePlugin = {
     "models.peakHourSuffix": "点（本地时间）",
     "models.peakAdd": "添加时段",
     "models.peakRates": "峰时价格（每百万 tokens）",
-    "models.peakHint": "谷时使用上方基础价格。用量按每条请求所在的小时（本地时区）重新计价。",
-    "models.peakInvalid": "请填写至少一个有效峰时段（0-23 点）和全部四项峰时价格。",
+    "models.peakOffHours": "谷时段（其余时间自动）：",
+    "models.peakHint": "未填写的峰时价格自动沿用上方基础价格（谷时价）。用量按每条请求所在的小时（本地时区）重新计价。",
+    "models.peakInvalid": "请填写至少一个有效峰时段（0-23 点）和至少一项峰时价格。",
     "models.peakSave": "保存",
     "models.peakCancel": "取消",
 

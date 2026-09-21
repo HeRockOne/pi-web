@@ -105,12 +105,19 @@ export function peakPricingToDraft(peak?: PeakPricingConfig): PeakPricingDraft {
 /** 峰时段 0-23 小时制整数，可跨午夜（start > end）。非法时段被过滤。 */
 function parsePeakHours(draft: PeakPricingDraft): { start: number; end: number }[] {
   return draft.hours
+    .map((h) => ({ start: h.start.trim(), end: h.end.trim() }))
+    .filter((h) => h.start !== "" && h.end !== "")
     .map((h) => ({ start: Number(h.start), end: Number(h.end) }))
     .filter((h) => Number.isInteger(h.start) && Number.isInteger(h.end) && h.start >= 0 && h.start <= 23 && h.end >= 0 && h.end <= 24);
 }
 
-/** 完整解析峰谷配置；未启用或数据不完整返回 undefined。 */
-export function parseCompletePeakPricing(draft: PeakPricingDraft): PeakPricingConfig | undefined {
+/** 峰时价解析结果：时段 + 已填写的峰时价格（未填项由调用方用基础价兜底）。 */
+export type PeakPricingRatesPartial = Partial<Record<ModelCostKey, number>>;
+
+/** 完整解析峰谷配置；未启用、无有效峰时段、或一项峰时价都没填时返回 undefined。 */
+export function parseCompletePeakPricing(
+  draft: PeakPricingDraft,
+): ({ hours: { start: number; end: number }[] } & PeakPricingRatesPartial) | undefined {
   if (!draft.enabled) return undefined;
   const hours = parsePeakHours(draft);
   if (hours.length === 0) return undefined;
@@ -119,12 +126,44 @@ export function parseCompletePeakPricing(draft: PeakPricingDraft): PeakPricingCo
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
   };
-  const input = parse(draft.input);
-  const output = parse(draft.output);
-  const cacheRead = parse(draft.cacheRead);
-  const cacheWrite = parse(draft.cacheWrite);
-  if (input === undefined || output === undefined || cacheRead === undefined || cacheWrite === undefined) {
-    return undefined;
+  const rates: PeakPricingRatesPartial = {};
+  for (const key of MODEL_COST_KEYS) {
+    const value = parse(draft[key]);
+    if (value !== undefined) rates[key] = value;
   }
-  return { hours, input, output, cacheRead, cacheWrite };
+  if (Object.keys(rates).length === 0) return undefined;
+  return { hours, ...rates };
+}
+
+/**
+ * 谷时段 = 峰时段的补集（按小时 bitset 求反）。返回不重叠的 [start, end) 区间，
+ * end=24 表示到次日 00:00；跨午夜窗口（start>end）先展开归一化。
+ * 供弹窗展示「其余时间自动为谷时」。
+ */
+export function offPeakWindows(hours: PeakHourDraft[]): { start: number; end: number }[] {
+  const peak = new Array<boolean>(24).fill(false);
+  for (const h of hours) {
+    const start = Number(h.start);
+    const end = Number(h.end);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start > 23 || end < 0 || end > 24) continue;
+    if (start <= end) {
+      for (let x = start; x < end; x++) peak[x] = true;
+    } else {
+      for (let x = start; x < 24; x++) peak[x] = true;
+      for (let x = 0; x < end; x++) peak[x] = true;
+    }
+  }
+  const out: { start: number; end: number }[] = [];
+  let i = 0;
+  while (i < 24) {
+    if (!peak[i]) {
+      let j = i;
+      while (j < 24 && !peak[j]) j++;
+      out.push({ start: i, end: j });
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  return out;
 }

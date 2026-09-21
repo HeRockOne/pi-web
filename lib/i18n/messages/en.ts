@@ -590,8 +590,9 @@ export const enLocale: LocalePlugin = {
     "models.peakHourSuffix": "h (local time)",
     "models.peakAdd": "Add window",
     "models.peakRates": "Peak-hour rates (per million tokens)",
-    "models.peakHint": "Off-peak uses the base rates above. Usage is repriced by the hour of each request in your local timezone.",
-    "models.peakInvalid": "Enter at least one valid peak window (0-23 h) and all four peak rates.",
+    "models.peakOffHours": "Off-peak hours (everything else):",
+    "models.peakHint": "Peak rates left blank inherit the base (off-peak) rates above. Usage is repriced by the hour of each request in your local timezone.",
+    "models.peakInvalid": "Enter at least one valid peak window (0-23 h) and at least one peak rate.",
     "models.peakSave": "Save",
     "models.peakCancel": "Cancel",
 

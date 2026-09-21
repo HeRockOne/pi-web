@@ -21,6 +21,7 @@ import {
   type ModelCostKey,
   parseCompletePeakPricing,
   peakPricingToDraft,
+  offPeakWindows,
   type PeakHourDraft,
   type PeakPricingDraft,
 } from "./models-config-helpers";
@@ -41,7 +42,7 @@ import {
   ConfigSplitView,
 } from "./SettingsUi";
 import { ProviderIcon } from "./ProviderIcon";
-import type { PeakPricingConfig } from "@/lib/usage-peak-pricing";
+import type { PeakPricingConfig, PeakPricingRates } from "@/lib/usage-peak-pricing";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -356,6 +357,18 @@ function PeakPricingModal({
                 style={{ alignSelf: "flex-start", padding: "3px 10px", borderRadius: 6, border: "1px dashed var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: 11 }}>
                 + {t("models.peakAdd")}
               </button>
+              {(() => {
+                const off = offPeakWindows(draft.hours);
+                if (off.length === 0) return null;
+                return (
+                  <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+                    {t("models.peakOffHours")}
+                    <span style={{ color: "var(--text-muted)" }}>
+                      {off.map((w) => `${String(w.start).padStart(2, "0")}:00–${String(w.end).padStart(2, "0")}:00`).join(" · ")}
+                    </span>
+                  </div>
+                );
+              })()}
               <div style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase" }}>
                 {t("models.peakRates")}
               </div>
@@ -1006,7 +1019,23 @@ function ModelDetail({
     const nextModel = { ...model };
     const base = model.cost ?? {};
     if (parsed) {
-      nextModel.cost = { ...base, peak: parsed };
+      // 峰时价未填写的项自动沿用基础价（谷时价）；基础价缺失时该项按 0 计
+      const baseRates: PeakPricingRates = {
+        input: typeof base.input === "number" ? base.input : 0,
+        output: typeof base.output === "number" ? base.output : 0,
+        cacheRead: typeof base.cacheRead === "number" ? base.cacheRead : 0,
+        cacheWrite: typeof base.cacheWrite === "number" ? base.cacheWrite : 0,
+      };
+      nextModel.cost = {
+        ...base,
+        peak: {
+          hours: parsed.hours,
+          input: parsed.input ?? baseRates.input,
+          output: parsed.output ?? baseRates.output,
+          cacheRead: parsed.cacheRead ?? baseRates.cacheRead,
+          cacheWrite: parsed.cacheWrite ?? baseRates.cacheWrite,
+        },
+      };
     } else if ("peak" in base) {
       const rest = { ...base };
       delete rest.peak;
