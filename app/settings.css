@@ -1985,3 +1985,108 @@
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
+
+/* ── 按小时分布 + 峰谷命中 ───────────────────────────────── */
+.usage-stats-hour-section {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  padding: 10px 12px;
+}
+.usage-stats-hour-section h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.usage-stats-hour-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 72px;
+  width: 100%;
+}
+.usage-stats-hour-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  cursor: default;
+}
+.usage-stats-hour-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--bg-subtle);
+  transition: background 120ms ease;
+}
+.usage-stats-hour-cell:hover .usage-stats-hour-bar {
+  filter: brightness(1.15);
+}
+.usage-stats-hour-cell.is-peak .usage-stats-hour-bar {
+  background: #e5484d;
+}
+.usage-stats-hour-cell.is-off .usage-stats-hour-bar {
+  background: #46a758;
+}
+.usage-stats-hour-cell.is-plain .usage-stats-hour-bar {
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+.usage-stats-hour-label {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.usage-stats-hour-legend {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 18px;
+  row-gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.usage-stats-hour-legend .usage-stats-legend-dot.is-peak {
+  background: #e5484d;
+}
+.usage-stats-hour-legend .usage-stats-legend-dot.is-off {
+  background: #46a758;
+}
+.usage-stats-hour-legend .usage-stats-legend-dot.is-plain {
+  background: var(--text-muted);
+}
+.usage-stats-hour-hits {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.usage-stats-hour-hits .usage-stats-table {
+  min-width: 0;
+}
+.usage-stats-hour-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.usage-stats-hour-badge.is-peak {
+  color: #ffd7d7;
+  background: #e5484d;
+}
+.usage-stats-hour-badge.is-off {
+  color: #d8f5dd;
+  background: #46a758;
+}
+.usage-stats-hour-hits-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}

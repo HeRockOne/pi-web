@@ -17,7 +17,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { statSync } from "node:fs";
-import { buildModelCostMap, repricedCost, type ModelCostWithPeak } from "./usage-peak-pricing";
+import { buildModelCostMap, isPeakHour, repricedCost, type ModelCostWithPeak } from "./usage-peak-pricing";
 
 // ============================================================================
 // 类型（对应 PiDeck shared/types/usageStats.ts）
@@ -41,6 +41,8 @@ export type UsageRecord = {
   cost: number;
   /** true=provider 实际返回了定价；false=成本未知（显示 n/a 而非 0） */
   costKnown: boolean;
+  /** 峰谷定价模型的记录：本次调用命中峰价（"peak"）还是谷价（"off"） */
+  peakHit?: "peak" | "off";
 };
 
 /** 单日（或区间）合计。 */
@@ -80,6 +82,22 @@ export type UsageDayModelSlice = {
 };
 export type UsageDayProjectSlice = { project: string; tokens: number; cost: number; turns: number };
 
+/** 某小时某峰谷定价模型命中的段位（"peak"=峰价，"off"=谷价）与花费。 */
+export type UsageHourPeakHit = {
+  model: string;
+  state: "peak" | "off";
+  cost: number;
+  tokens: number;
+};
+
+/** 当日某小时的用量切片（hour 0-23；peakHits 仅含峰谷定价模型）。 */
+export type UsageHourRow = {
+  hour: number;
+  totals: DayTotals;
+  peakHits: UsageHourPeakHit[];
+};
+
+
 /** 某天用量行（含 provider 分解与模型/项目明细）。 */
 export type UsageDayRow = {
   /** "YYYY-MM-DD" 本地时区 */
@@ -88,6 +106,8 @@ export type UsageDayRow = {
   byProvider: ProviderSlice[];
   byModel: UsageDayModelSlice[];
   byProject: UsageDayProjectSlice[];
+  /** 按小时切片（0-23，仅含有记录的小时） */
+  byHour: UsageHourRow[];
 };
 
 /** 热力图格子（53 周 × 7 天，周一起始）。 */
@@ -215,6 +235,7 @@ export type UsageStatsIntermediate = {
     byProvider: ProviderSlice[];
     byModel: UsageDayModelSlice[];
     byProject: UsageDayProjectSlice[];
+    byHour: UsageHourRow[];
   }>;
   modelBuckets: Array<{ model: string; provider: string; tokens: number; cost: number; turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; sessions: string[] }>;
   projectBuckets: Array<{ project: string; tokens: number; cost: number; turns: number; sessions: string[] }>;
@@ -256,12 +277,18 @@ function providerOf(model: string): string {
   return idx === -1 ? model : model.slice(0, idx);
 }
 
+type HourBucket = {
+  totals: DayTotals;
+  peakHits: Map<string, UsageHourPeakHit>;
+};
+
 type DayBucket = {
   totals: DayTotals;
   sessions: Set<string>;
   byProvider: Map<string, ProviderSlice>;
   byModel: Map<string, UsageDayModelSlice>;
   byProject: Map<string, UsageDayProjectSlice>;
+  byHour: Map<number, HourBucket>;
 };
 
 function addToProvider(map: Map<string, ProviderSlice>, provider: string, r: UsageRecord): void {
@@ -278,6 +305,38 @@ function addToProvider(map: Map<string, ProviderSlice>, provider: string, r: Usa
   slice.cacheRead += r.cacheRead;
   slice.cacheWrite += r.cacheWrite;
 }
+
+/** 聚合一条记录到小时桶（同时记录峰谷定价模型的命中段位）。 */
+function addToHourBucket(bucket: HourBucket, r: UsageRecord): void {
+  bucket.totals.tokens += r.totalTokens;
+  bucket.totals.input += r.input;
+  bucket.totals.output += r.output;
+  bucket.totals.cacheRead += r.cacheRead;
+  bucket.totals.cacheWrite += r.cacheWrite;
+  bucket.totals.cost += r.cost;
+  bucket.totals.turns += 1;
+  bucket.totals.sessions.push(r.sid);
+  if (!r.peakHit) return;
+  let hit = bucket.peakHits.get(r.model);
+  if (!hit) {
+    hit = { model: r.model, state: r.peakHit, cost: 0, tokens: 0 };
+    bucket.peakHits.set(r.model, hit);
+  } else if (hit.state !== r.peakHit) {
+    // 同小时同模型峰/谷并存（理论不可达：窗口按整点切）：保留花费更高的段位
+    if (r.cost > hit.cost) hit.state = r.peakHit;
+  }
+  hit.cost += r.cost;
+  hit.tokens += r.totalTokens;
+}
+
+function hourBucketToRow(hour: number, bucket: HourBucket): UsageHourRow {
+  return {
+    hour,
+    totals: { ...bucket.totals, sessions: [...new Set(bucket.totals.sessions)] },
+    peakHits: [...bucket.peakHits.values()].sort((a, b) => b.cost - a.cost),
+  };
+}
+
 
 /** 扫描记录 → 中间态。 */
 export function intermediateFromRecords(records: UsageRecord[]): UsageStatsIntermediate {
@@ -300,6 +359,7 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
         byProvider: new Map(),
         byModel: new Map(),
         byProject: new Map(),
+        byHour: new Map(),
       };
       dayBuckets.set(dayKey, bucket);
     }
@@ -312,6 +372,13 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
     bucket.totals.turns += 1;
     bucket.sessions.add(r.sid);
     addToProvider(bucket.byProvider, providerOf(r.model), r);
+    const hour = new Date(r.ts).getHours();
+    let hourBucket = bucket.byHour.get(hour);
+    if (!hourBucket) {
+      hourBucket = { totals: emptyTotals(), peakHits: new Map() };
+      bucket.byHour.set(hour, hourBucket);
+    }
+    addToHourBucket(hourBucket, r);
 
     let dayModel = bucket.byModel.get(r.model);
     if (!dayModel) {
@@ -383,6 +450,7 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
         byProvider: [...bucket.byProvider.values()].sort((a, b) => b.tokens - a.tokens),
         byModel: [...bucket.byModel.values()].sort((a, b) => b.tokens - a.tokens),
         byProject: [...bucket.byProject.values()].sort((a, b) => b.tokens - a.tokens),
+        byHour: [...bucket.byHour.entries()].map(([hour, hb]) => hourBucketToRow(hour, hb)),
       })),
     modelBuckets: [...byModel.entries()]
       .sort(([, a], [, b]) => b.tokens - a.tokens)
@@ -449,6 +517,36 @@ function mergeDaySlices<T extends { tokens: number; cost: number; turns: number 
   return [...merged.values()].sort((a, b) => b.tokens - a.tokens);
 }
 
+/** 合并两个小时切片数组（按 hour 对齐，peakHits 按 model 叠加）。 */
+function mergeHourRows(base: UsageHourRow[], delta: UsageHourRow[]): UsageHourRow[] {
+  const byHour = new Map(base.map((row) => [row.hour, row]));
+  for (const d of delta) {
+    const existing = byHour.get(d.hour);
+    if (!existing) {
+      byHour.set(d.hour, d);
+      continue;
+    }
+    const hits = new Map(existing.peakHits.map((hit) => [hit.model, hit]));
+    for (const hit of d.peakHits) {
+      const eh = hits.get(hit.model);
+      if (eh) {
+        if (eh.state !== hit.state && hit.cost > eh.cost) eh.state = hit.state;
+        eh.cost += hit.cost;
+        eh.tokens += hit.tokens;
+      } else {
+        hits.set(hit.model, hit);
+      }
+    }
+    byHour.set(d.hour, {
+      hour: d.hour,
+      totals: mergeTotals(existing.totals, d.totals),
+      peakHits: [...hits.values()].sort((a, b) => b.cost - a.cost),
+    });
+  }
+  return [...byHour.values()].sort((a, b) => a.hour - b.hour);
+}
+
+
 /** 合并两个中间态（增量刷新：新段 + 旧缓存）。纯合并，不重新扫描记录。 */
 export function mergeIntermediates(
   base: UsageStatsIntermediate,
@@ -484,6 +582,7 @@ export function mergeIntermediates(
       byProvider: [...byProvider.values()].sort((a, b) => b.tokens - a.tokens),
       byModel: mergeDaySlices((m) => m.model, existing.byModel, d.byModel),
       byProject: mergeDaySlices((p) => p.project, existing.byProject, d.byProject),
+      byHour: mergeHourRows(existing.byHour ?? [], d.byHour ?? []),
     });
   }
 
@@ -534,6 +633,7 @@ export function buildAggregatedView(
     byProvider: b.byProvider,
     byModel: b.byModel,
     byProject: b.byProject,
+    byHour: b.byHour ?? [],
   }));
 
   // 热力图：以 now 所在周为最后一周，往前 52 周（共 53 列）。
@@ -825,7 +925,9 @@ function applyPeakPricing(
     const c = cost ? repricedCost(r, cost) : null;
     if (c === null) return r;
     changed = true;
-    return { ...r, cost: c, costKnown: true };
+    const peak = cost?.peak;
+    const peakHit: "peak" | "off" | undefined = peak ? (isPeakHour(r.ts, peak.hours) ? "peak" : "off") : undefined;
+    return { ...r, cost: c, costKnown: true, peakHit };
   });
   return changed ? out : records;
 }

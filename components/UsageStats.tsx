@@ -23,7 +23,7 @@ import {
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
 import { UsageBalanceTrendChart, UsageCostTrendChart, UsageModelRankChart, UsageProjectRankChart } from "./UsageStatsCharts";
-import type { UsageAggregated, UsageDayRow } from "@/lib/usage-stats";
+import type { UsageAggregated, UsageDayRow, UsageHourRow } from "@/lib/usage-stats";
 import type { BalanceSnapshotRow } from "@/lib/usage-balances";
 import {
   buildBuckets,
@@ -266,6 +266,98 @@ function UsageDailyChart({ data }: { data: UsageAggregated }) {
   );
 }
 
+
+/** 按小时分布：24 格柱状（红=命中峰价，绿=命中谷价，灰=普通），下方列出峰谷命中明细。 */
+function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
+  const { t } = useI18n();
+  const map = new Map(byHour.map((h) => [h.hour, h]));
+  const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: map.get(hour) }));
+  const hitRows = byHour
+    .flatMap((h) => h.peakHits.map((hit) => ({ hour: h.hour, ...hit })))
+    .sort((a, b) => a.hour - b.hour);
+
+  return (
+    <div className="usage-stats-hour-section">
+      <h4>{t("usageStats.dayDetail.hoursTitle")}</h4>
+      <div className="usage-stats-hour-bars">
+        {hours.map(({ hour, row }) => {
+          const tokens = row ? row.totals.tokens : 0;
+          const hits = row ? row.peakHits : [];
+          const hasPeak = hits.some((hit) => hit.state === "peak");
+          const hasOff = hits.some((hit) => hit.state === "off");
+          const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
+          const label = `${String(hour).padStart(2, "0")}:00`;
+          const detail = tokens > 0 && row ? `${formatTokens(tokens)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
+          const tip = [
+            label,
+            detail,
+            ...hits.map((hit) =>
+              `${hit.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")} · ${hit.model} · ${formatCost(hit.cost)}`
+            ),
+          ].join("\n");
+          return (
+            <div key={hour} className={`usage-stats-hour-cell is-${tone}`} title={tip}>
+              <div
+                className="usage-stats-hour-bar"
+                style={{ height: tokens > 0 ? `${Math.max(3, (tokens / maxTokens) * 100)}%` : "2px" }}
+              />
+              <span className="usage-stats-hour-label">{hour}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="usage-stats-hour-legend">
+        <span>
+          <span className="usage-stats-legend-dot is-peak" />
+          {t("usageStats.hour.legendPeak")}
+        </span>
+        <span>
+          <span className="usage-stats-legend-dot is-off" />
+          {t("usageStats.hour.legendOff")}
+        </span>
+        <span>
+          <span className="usage-stats-legend-dot is-plain" />
+          {t("usageStats.hour.legendPlain")}
+        </span>
+      </div>
+      {hitRows.length > 0 && (
+        <div className="usage-stats-hour-hits">
+          <div className="usage-stats-hour-hits-title">{t("usageStats.hour.hitsTitle")}</div>
+          <div className="usage-stats-table-wrap">
+            <table className="usage-stats-table">
+              <thead>
+                <tr>
+                  <th>{t("usageStats.hour.col.hour")}</th>
+                  <th>{t("usageStats.hour.col.hit")}</th>
+                  <th>{t("usageStats.hour.col.model")}</th>
+                  <th>{t("usageStats.hour.col.tokens")}</th>
+                  <th>{t("usageStats.hour.col.cost")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hitRows.map((row, ri) => (
+                  <tr key={ri}>
+                    <td>{`${String(row.hour).padStart(2, "0")}:00–${String(row.hour).padStart(2, "0")}:59`}</td>
+                    <td>
+                      <span className={`usage-stats-hour-badge is-${row.state}`}>
+                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")}
+                      </span>
+                    </td>
+                    <td title={row.model}>{row.model}</td>
+                    <td>{formatTokens(row.tokens)}</td>
+                    <td>{formatCost(row.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 按天用量明细：日期选择 + 当日卡片 + provider 堆叠条 + 当日模型/项目表。 */
 function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: boolean }) {
   const { t } = useI18n();
@@ -347,6 +439,9 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
               </ul>
             </>
           )}
+
+
+          <UsageHourSection byHour={row.byHour} />
 
           <div className="usage-stats-day-tables">
             <div>
