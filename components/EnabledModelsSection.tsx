@@ -22,6 +22,14 @@ import { ConfigButton, ConfigSwitch } from "./SettingsUi";
  * panel could otherwise lose one of them.
  */
 
+/** Shape of `POST /api/models/refresh`, mirroring `CatalogRefreshResult`. */
+interface CatalogRefreshResponse {
+  completed?: boolean;
+  changed?: boolean;
+  reason?: "offline" | "runtime";
+  error?: string;
+}
+
 interface Failure {
   /** Translation key for a known refusal. */
   messageKey?: string;
@@ -275,6 +283,50 @@ export function EnabledModelsProviderSwitch({
 }
 
 /** Per-model switches for a provider that owns its own model list. */
+/**
+ * State for the "refresh catalog" button.
+ *
+ * pi's built-in model lists are frozen at the SDK version pi-web pins, so a
+ * model a provider shipped after that release only appears once the pi.dev
+ * catalog overlay has been fetched — see `lib/model-catalog-refresh.ts` (#914).
+ * The button is the whole feature: nothing refreshes catalogs on its own.
+ */
+function useCatalogRefresh(providerId: string, onChanged: () => void) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  // A note describes the provider it was produced for, never the next one.
+  useEffect(() => setNote(null), [providerId]);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    setNote(null);
+    void (async () => {
+      try {
+        const res = await fetch("/api/models/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: providerId }),
+        });
+        const data = await res.json() as CatalogRefreshResponse;
+        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
+        if (data.reason === "offline") setNote("models.catalogOffline");
+        else if (!data.completed) setNote("models.catalogUnreachable");
+        else setNote(data.changed ? "models.catalogUpdated" : "models.catalogUnchanged");
+        // Reload even when nothing moved for this provider: the pass may have
+        // updated another one, and a stale panel is worse than a second read.
+        if (data.changed) onChanged();
+      } catch {
+        setNote("models.catalogUnreachable");
+      } finally {
+        setRefreshing(false);
+      }
+    })();
+  }, [providerId, onChanged]);
+
+  return { refreshing, note, refresh };
+}
+
 export function EnabledModelsSection({
   providerId,
   controller,
@@ -286,6 +338,7 @@ export function EnabledModelsSection({
   const [query, setQuery] = useState("");
   const { view, loading, pending, failure } = controller;
   const provider = findProviderView(view, providerId);
+  const catalog = useCatalogRefresh(providerId, controller.refresh);
 
   useEffect(() => setQuery(""), [providerId]);
 
@@ -332,7 +385,17 @@ export function EnabledModelsSection({
         >
           {filtered ? t("models.disableShown") : t("models.disableAll")}
         </ConfigButton>
+        <ConfigButton
+          size="small"
+          disabled={busy || catalog.refreshing}
+          title={t("models.refreshCatalogHint")}
+          onClick={catalog.refresh}
+        >
+          {catalog.refreshing ? t("models.refreshingCatalog") : t("models.refreshCatalog")}
+        </ConfigButton>
       </div>
+
+      {catalog.note && <div className="enabled-models-note">{t(catalog.note)}</div>}
 
       {!view?.editable && <div className="enabled-models-note">{t("models.enabledProjectScope")}</div>}
       {failure && (
