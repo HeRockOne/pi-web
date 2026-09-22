@@ -54,6 +54,7 @@ export interface SubagentResourceSnapshot {
   tools: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
+  exactSystemPrompt?: string;
 }
 
 export interface SubagentSessionResources {
@@ -61,6 +62,7 @@ export interface SubagentSessionResources {
   tools: string[];
   loadSkills: boolean;
   loadExtensions: boolean;
+  exactSystemPrompt?: string;
 }
 
 export interface SubagentResultMetadata {
@@ -376,6 +378,9 @@ export function readSubagentSessionResources(
       tools: [...new Set(snapshot.tools)],
       loadSkills,
       loadExtensions,
+      ...(isRecord(snapshot) && typeof snapshot.exactSystemPrompt === "string"
+        ? { exactSystemPrompt: snapshot.exactSystemPrompt }
+        : {}),
     };
   }
   return null;
