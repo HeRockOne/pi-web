@@ -551,6 +551,7 @@ export const zhCNLocale: LocalePlugin = {
     "models.discoveryFilter": "筛选上游模型",
     "models.discoverySelectShown": "选择当前结果",
     "models.discoveryNoMatches": "没有匹配的模型。",
+    "models.configUnreadable": "无法读取 models.json，为避免覆盖已禁用保存。请修复该文件后重新打开此面板。{error}",
     "models.discoveryAdded": "已添加",
     "models.discoveryShowing": "显示前 {shown} 个，共 {total} 个",
     "models.discoveryFetched": "已获取 {count} 个模型",

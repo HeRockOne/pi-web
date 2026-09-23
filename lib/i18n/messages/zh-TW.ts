@@ -548,6 +548,7 @@ export const zhTWLocale: LocalePlugin = {
     "models.discoveryFilter": "篩選上游模型",
     "models.discoverySelectShown": "選取目前顯示的項目",
     "models.discoveryNoMatches": "找不到相符的模型。",
+    "models.configUnreadable": "無法讀取 models.json，為避免覆寫已停用儲存。請修正該檔案後重新開啟此面板。{error}",
     "models.discoveryAdded": "已新增",
     "models.discoveryShowing": "顯示前 {shown} 個，共 {total} 個",
     "models.discoveryFetched": "已取得 {count} 個模型",
