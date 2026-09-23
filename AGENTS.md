@@ -8,8 +8,9 @@
 ## Quick Start
 
 ```bash
-npm run dev   # port 30141
+npm run dev   # dev server, port 5566
 ```
+pi-web       # production server (global install), port 30141
 
 Typecheck: `node_modules/.bin/tsc --noEmit`
 Lint: `npm run lint`
@@ -26,9 +27,9 @@ npm run pack   # = powershell -ExecutionPolicy Bypass -File scripts/release-pack
 脚本流程：停 5566 dev → tsc → lint → 全量测试 → `next build` → `npm pack`，产物 `agegr-pi-web-<ver>.tgz` 在仓库根目录。
 
 **端口规矩（重要）：**
-- **30141 = next dev server（agent 会话端口），打包绝不涉及、绝不停、绝不传 `-DevPort 30141`**
+- **30141 = 生产端口（全局命令 `pi-web` 启动，跑全局安装包），打包绝不涉及、绝不停、绝不传 `-DevPort 30141`**
 - 脚本只停 5566（`-DevPort` 参数默认 5566，仅当另有 dev 实例时才需覆盖）
-- 安装全局包 `npm install -g ./agegr-pi-web-<ver>.tgz` 后，30141 若还起着旧代码，需重启 dev server 才生效（重启前先确认无未保存会话）
+- 安装全局包 `npm install -g ./agegr-pi-web-<ver>.tgz` 后，30141 若还起着旧版全局包，需重启 `pi-web` 才生效（重启前先确认无未保存会话）
 
 **版本 bump：**
 - `npm version patch --no-git-tag-version`（不建 tag）
