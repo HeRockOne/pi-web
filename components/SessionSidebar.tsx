@@ -12,6 +12,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { SessionSearch } from "./SessionSearch";
 import { ChevronDownIcon, MorphChevron } from "./Icons";
 import { DirectoryPicker } from "./DirectoryPicker";
+import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
 
 // Fixed row height for the session list. SessionItem renders at exactly this
 // height, so the list can be windowed (only the visible slice is mounted).
@@ -379,6 +380,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Virtualized session list: only the visible window of rows is mounted.
   const listScrollRef = useRef<HTMLDivElement>(null);
+  useScrollbarVisibility(listScrollRef);
   const [listViewportH, setListViewportH] = useState(0);
   const [listScrollTop, setListScrollTop] = useState(0);
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
@@ -1457,6 +1459,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <SessionSearch open={sessionSearchOpen} query={sessionSearchQuery} refreshKey={sessionListVersion} selectedSessionId={selectedSessionId} onSelectSession={handleSelectSessionFromList}>
       <div
         ref={listScrollRef}
+        className="scrollbar-subtle"
         onScroll={handleListScroll}
         style={{ flex: "1 1 0", overflowY: "auto", padding: "0", minHeight: 80 }}
       >

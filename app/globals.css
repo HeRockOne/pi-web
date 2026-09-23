@@ -276,6 +276,14 @@ button,
   background-color: #111318;
 }
 
+/*
+ * Chromium-only scrollbars. Firefox renders its native ones, which the standard
+ * `scrollbar-width` / `scrollbar-color` properties would only make thinner and
+ * flatter, so this block stays webkit-prefixed on purpose.
+ * The 10px box remains the grab target, but subtle scrollbars stay transparent
+ * until their scroll container is active. This keeps long panels usable without
+ * leaving a permanent rule down the side of every panel.
+ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -296,6 +304,31 @@ button,
    conditionally rendered this session. */
 .topbar-capsule > span {
   padding: 2px 7px;
+}
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+.scrollbar-subtle.scrollbar-visible::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text-dim) 45%, transparent);
+}
+.scrollbar-subtle.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text-dim) 72%, transparent);
+}
+.scrollbar-subtle.scrollbar-visible::-webkit-scrollbar-thumb:active {
+  background-color: var(--text-dim);
+}
+
+/* A touch screen scrolls by dragging the content, so the extra width buys
+   nothing there and a phone has none to spare. */
+@media (pointer: coarse) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-width: 1px;
+    border-radius: 3px;
+  }
 }
 .topbar-capsule > span + span {
   border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
