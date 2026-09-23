@@ -385,12 +385,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [listScrollTop, setListScrollTop] = useState(0);
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
   const listScrollRafRef = useRef<number | null>(null);
+  const listScrollTopRef = useRef(0);
+  const renderedListScrollTopRef = useRef(0);
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const top = e.currentTarget.scrollTop;
+    listScrollTopRef.current = e.currentTarget.scrollTop;
     if (listScrollRafRef.current != null) return;
     listScrollRafRef.current = requestAnimationFrame(() => {
       listScrollRafRef.current = null;
-      setListScrollTop(top);
+      const nextTop = Math.floor(listScrollTopRef.current / SESSION_LIST_ITEM_HEIGHT) * SESSION_LIST_ITEM_HEIGHT;
+      if (renderedListScrollTopRef.current === nextTop) return;
+      renderedListScrollTopRef.current = nextTop;
+      setListScrollTop(nextTop);
     });
   }, []);
   useLayoutEffect(() => {
@@ -401,7 +406,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     });
     ro.observe(el);
     setListViewportH(el.clientHeight);
-    setListScrollTop(el.scrollTop);
+    listScrollTopRef.current = el.scrollTop;
+    renderedListScrollTopRef.current = Math.floor(el.scrollTop / SESSION_LIST_ITEM_HEIGHT) * SESSION_LIST_ITEM_HEIGHT;
+    setListScrollTop(renderedListScrollTopRef.current);
     return () => ro.disconnect();
   }, [sessionSearchActive]);
 
@@ -869,10 +876,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, [newProjectValidating]);
 
-  const recentProjects = getRecentProjects(allSessions);
+  const recentProjects = useMemo(() => getRecentProjects(allSessions), [allSessions]);
 
   // Sessions of every worktree in the selected project are shown together
-  const selectedProject = projectFor(selectedCwd);
+  const selectedProject = useMemo(() => projectFor(selectedCwd), [projectFor, selectedCwd]);
 
   // Per-project activity counts (running / unread) for the workspace selector.
   // Uses the same stable server key as the project list and filtering.
@@ -880,8 +887,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     () => getProjectActivity(allSessions, runningSessionIds, unreadSessionIds),
     [allSessions, runningSessionIds, unreadSessionIds],
   );
-
-
 
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
