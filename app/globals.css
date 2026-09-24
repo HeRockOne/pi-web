@@ -34,6 +34,17 @@
   --assistant-bg: #ffffff;
   --tool-bg: #f9fafb;
   --bg-subtle: rgba(0,0,0,0.03);
+
+  /* Categorical chart palette (provider lines/bars/dots, prompt sections).
+     Solid 600-level hues: light 400-level colors wash out on white. */
+  --chart-1: #0284c7; /* sky */
+  --chart-2: #16a34a; /* green */
+  --chart-3: #ea580c; /* orange */
+  --chart-4: #9333ea; /* purple */
+  --chart-5: #d97706; /* amber */
+  --chart-6: #0d9488; /* teal */
+  --chart-7: #db2777; /* pink */
+  --chart-8: #dc2626; /* red */
   --chat-content-max-width: 820px;
   --chat-content-font-size: 14px;
 
@@ -67,6 +78,17 @@ html.dark {
   --assistant-bg: #1a1a1a;
   --tool-bg: #1f2937;
   --bg-subtle: rgba(255,255,255,0.04);
+
+  /* Same hues as light mode, lifted to 400-level so lines keep contrast on
+     dark panels instead of sinking into the background. */
+  --chart-1: #38bdf8; /* sky */
+  --chart-2: #4ade80; /* green */
+  --chart-3: #fb923c; /* orange */
+  --chart-4: #c084fc; /* purple */
+  --chart-5: #fbbf24; /* amber */
+  --chart-6: #2dd4bf; /* teal */
+  --chart-7: #f472b6; /* pink */
+  --chart-8: #f87171; /* red */
   --shadow-color: color-mix(in srgb, var(--accent) 14%, rgb(0 0 0 / 78%));
   --shadow-sm: 0 1px 2px var(--shadow-color);
   --shadow-md: 0 4px 16px -2px var(--shadow-color);

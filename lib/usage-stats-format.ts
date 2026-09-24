@@ -52,15 +52,17 @@ export function formatDayKeyPlusOffset(dayKey: string, offsetDays: number): stri
 
 // ── Provider 取色（名称哈希保证跨图表稳定；不足时循环取色） ────────────────
 
+// 色值定义在 globals.css 的 --chart-1..8，按深浅色模式分别调档
+// （浅色底用 600 系深色，深色底用 400 系亮色）；这里只返回变量引用。
 const PROVIDER_COLORS = [
-  "rgba(74,158,255,0.85)",
-  "rgba(74,222,128,0.85)",
-  "rgba(251,146,60,0.85)",
-  "rgba(232,121,249,0.85)",
-  "rgba(250,204,21,0.85)",
-  "rgba(52,211,153,0.85)",
-  "rgba(167,139,250,0.85)",
-  "rgba(248,113,113,0.85)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ];
 
 export function colorForProvider(provider: string): string {

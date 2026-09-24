@@ -11,16 +11,17 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
 const SYNTHETIC_SOURCE_LABELS = new Set(["inline", "builtin"]);
 
 
-// 固定 section key → 颜色，保证互不重复；未知 key 回退哈希取色
+// 固定 section key → 颜色，保证互不重复；未知 key 回退哈希取色。
+// 色值走 globals.css 的 --chart-* 变量，与供应商取色同一套深浅色档位。
 const SECTION_COLORS: Record<string, string> = {
   base: "var(--text-muted)",
-  tools: "rgba(74,158,255,0.85)",
-  guidelines: "rgba(251,146,60,0.85)",
-  context: "rgba(167,139,250,0.85)",
-  skills: "rgba(232,121,249,0.85)",
-  cwd: "rgba(74,222,128,0.85)",
-  other: "rgba(250,204,21,0.85)",
-  custom: "rgba(248,113,113,0.85)",
+  tools: "var(--chart-1)",
+  guidelines: "var(--chart-3)",
+  context: "var(--chart-4)",
+  skills: "var(--chart-7)",
+  cwd: "var(--chart-2)",
+  other: "var(--chart-5)",
+  custom: "var(--chart-8)",
 };
 
 function sectionColor(key: string): string {
