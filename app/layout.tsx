@@ -13,7 +13,7 @@ const geistSans = Geist({
 
 // CJK workhorse for the (mostly Chinese) UI — system YaHei/PingFang fallbacks
 // are what made the interface feel dated. preload must stay off for CJK in
-// next/font. Font fetch requires the proxy env (see package.json dev script).
+// next/font. Font fetch requires the proxy env (see .env.development).
 const notoSansSC = Noto_Sans_SC({
   weight: ["400", "500", "600", "700"],
   variable: "--font-noto-sans",
