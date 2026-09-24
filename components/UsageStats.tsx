@@ -257,7 +257,21 @@ function UsageDailyChart({ data }: { data: UsageAggregated }) {
             <YAxis tickLine={false} axisLine={false} width={58} tick={{ fontSize: 11, fill: "var(--text-dim)" }} tickFormatter={(value: number) => formatTokens(Number(value))} />
             <Tooltip cursor={{ fill: "var(--bg-subtle)" }} content={<UsageChartTooltip />} />
             {providerKeys.map(({ provider, key }) => (
-              <Bar key={provider} dataKey={key} name={provider} stackId="usage" fill={colorForProvider(provider)} radius={2} minPointSize={3} />
+              <Bar
+                key={provider}
+                dataKey={key}
+                name={provider}
+                stackId="usage"
+                fill={colorForProvider(provider)}
+                radius={2}
+                /* 堆叠层把缺失供应商 coerce 成 0，数字型 minPointSize 会把 0 值段
+                   垫成 3px 幽灵条（柱顶细边）；按行原始值区分，仅真实用量才垫 3px。
+                   chartData 与 buckets 逐行同序。 */
+                minPointSize={(_value, index) => {
+                  const tokens = buckets[index]?.byProvider.find((bp) => bp.provider === provider)?.tokens ?? 0;
+                  return tokens > 0 ? 3 : 0;
+                }}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>
