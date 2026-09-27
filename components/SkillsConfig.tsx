@@ -566,6 +566,7 @@ export function SkillsConfig({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(() => getLastSettingsSelection("skills", cwd));
   const [toggling, setToggling] = useState<Set<string>>(new Set());
+  const [bulkToggling, setBulkToggling] = useState<null | "enable" | "disable">(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [addMode, setAddMode] = useState(false);
   const [updateStatuses, setUpdateStatuses] = useState<Record<string, SkillUpdateResult>>({});
@@ -732,6 +733,39 @@ export function SkillsConfig({
       });
     }
   }, []);
+
+  const toggleAll = useCallback(async (enable: boolean) => {
+    const targets = skills.filter((skill) => skill.disableModelInvocation === !enable);
+    if (targets.length === 0) return;
+    setBulkToggling(enable ? "enable" : "disable");
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filePaths: targets.map((skill) => skill.filePath),
+          disableModelInvocation: !enable,
+        }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || d.error) {
+        setSaveError(d.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setSkills((prev) =>
+        prev.map((s) =>
+          targets.some((skill) => skill.filePath === s.filePath)
+            ? { ...s, disableModelInvocation: !enable }
+            : s,
+        ),
+      );
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setBulkToggling(null);
+    }
+  }, [skills]);
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 
@@ -931,8 +965,26 @@ export function SkillsConfig({
             )}
         >
           {!embedded && <ConfigButton onClick={onClose}>{t("i18n.close")}</ConfigButton>}
+          {skills.length > 0 && (
+            <>
+              <ConfigButton
+                variant="secondary"
+                onClick={() => void toggleAll(true)}
+                disabled={bulkToggling !== null || !skills.some((skill) => skill.disableModelInvocation)}
+              >
+                {bulkToggling === "enable" ? t("i18n.enablingAll") : t("i18n.enableAll")}
+              </ConfigButton>
+              <ConfigButton
+                variant="secondary"
+                onClick={() => void toggleAll(false)}
+                disabled={bulkToggling !== null || !skills.some((skill) => !skill.disableModelInvocation)}
+              >
+                {bulkToggling === "disable" ? t("i18n.disablingAll") : t("i18n.disableAll")}
+              </ConfigButton>
+            </>
+          )}
           {skills.some((skill) => Boolean(skill.install)) && (
-            <ConfigButton variant="secondary" onClick={() => void checkForUpdates()} disabled={checkingAll || updatingSkill !== null}>
+            <ConfigButton variant="secondary" onClick={() => void checkForUpdates()} disabled={checkingAll || updatingSkill !== null || bulkToggling !== null}>
               {checkingAll ? t("i18n.checking") : t("i18n.checkUpdates")}
             </ConfigButton>
           )}

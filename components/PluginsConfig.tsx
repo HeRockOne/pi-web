@@ -33,7 +33,15 @@ import {
 } from "./SettingsUi";
 
 type PluginScope = PluginPackageInfo["scope"];
-type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
+type PluginAction =
+  | "install"
+  | "remove"
+  | "update"
+  | "disable"
+  | "enable"
+  | "enable-all"
+  | "disable-all";
+type SinglePluginAction = Exclude<PluginAction, "enable-all" | "disable-all">;
 
 function shortenPath(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
@@ -434,7 +442,7 @@ function PackageDetail({
   updateStatus?: PluginUpdateResult;
   checkingUpdate: boolean;
   updateError: string | null;
-  onAction: (action: PluginAction, pkg: PluginPackageInfo) => void;
+  onAction: (action: SinglePluginAction, pkg: PluginPackageInfo) => void;
   onCheckUpdate: () => void;
   onReloadSession: () => void;
 }) {
@@ -797,7 +805,7 @@ export function PluginsConfig({
     }
   }, [cwd, sessionId, t]);
 
-  const runAction = useCallback(async (action: PluginAction, pkg: PluginPackageInfo) => {
+  const runAction = useCallback(async (action: SinglePluginAction, pkg: PluginPackageInfo) => {
     const key = packageKey(pkg);
     setBusyKey(`${action}:${key}`);
     setActionError(null);
@@ -825,7 +833,7 @@ export function PluginsConfig({
           return nextStatuses;
         });
       } else {
-        const messages: Record<Exclude<PluginAction, "remove">, string> = {
+        const messages: Record<Exclude<SinglePluginAction, "remove">, string> = {
           install: "Package installed.",
           update: "Package updated.",
           disable: "Package disabled.",
@@ -846,6 +854,28 @@ export function PluginsConfig({
       setBusyKey(null);
     }
   }, [cwd]);
+
+  const bulkToggleAction = useCallback(async (enable: boolean) => {
+    const action: PluginAction = enable ? "enable-all" : "disable-all";
+    setBusyKey(action);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/plugins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, cwd }),
+      });
+      const next = (await res.json()) as PluginsResponse & { error?: string };
+      if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
+      setData(next);
+      setActionMessage(enable ? t("i18n.packagesEnabled") : t("i18n.packagesDisabled"));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
+    }
+  }, [cwd, t]);
 
   const installPlugin = useCallback(async () => {
     const source = normalizePluginSourceInput(installSource).trim();
@@ -1074,6 +1104,24 @@ export function PluginsConfig({
                     ? `${t("i18n.updateAllPlugins")} (${availableUpdateCount})`
                     : t("i18n.checkUpdates")}
             </ConfigButton>
+          )}
+          {packages.length > 0 && (
+            <>
+              <ConfigButton
+                variant="secondary"
+                onClick={() => void bulkToggleAction(true)}
+                disabled={footerBusy || packages.every((pkg) => !pkg.disabled)}
+              >
+                {busyKey === "enable-all" ? t("i18n.enablingAll") : t("i18n.enableAll")}
+              </ConfigButton>
+              <ConfigButton
+                variant="secondary"
+                onClick={() => void bulkToggleAction(false)}
+                disabled={footerBusy || packages.every((pkg) => pkg.disabled)}
+              >
+                {busyKey === "disable-all" ? t("i18n.disablingAll") : t("i18n.disableAll")}
+              </ConfigButton>
+            </>
           )}
           <ConfigButton variant="secondary" onClick={() => void loadPlugins()} disabled={footerBusy}>
              {t("i18n.refresh")}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { after } from "node:test";
@@ -16,7 +16,7 @@ await writeFile(join(agentDir, "extensions", "rtk.ts"), "export default () => {}
 
 const jiti = createJiti(import.meta.url, { alias: { "@": process.cwd() } });
 const { allowFileRoot } = await jiti.import("../../../lib/file-access.ts");
-const { GET } = await jiti.import("./route.ts");
+const { GET, POST } = await jiti.import("./route.ts");
 allowFileRoot(cwd);
 
 after(async () => {
@@ -40,4 +40,43 @@ test("lists auto-discovered top-level extensions", async () => {
     enabled: true,
   }]);
   assert.equal(body.totals.extensions, 1);
+});
+
+test("disable-all and enable-all toggle every configured global package", async () => {
+  const settingsPath = join(agentDir, "settings.json");
+  await writeFile(settingsPath, JSON.stringify({
+    packages: [
+      "npm:active-plugin",
+      { source: "npm:off-plugin", extensions: [], skills: [], prompts: [], themes: [] },
+    ],
+  }), "utf8");
+
+  const post = (action) => POST(new Request("http://localhost/api/plugins", {
+    method: "POST",
+    headers: { host: "localhost", "content-type": "application/json" },
+    body: JSON.stringify({ action, cwd }),
+  }));
+
+  const disabled = await post("disable-all");
+  assert.equal(disabled.status, 200);
+  const disabledBody = await disabled.json();
+  assert.deepEqual(
+    disabledBody.packages.map((pkg) => [pkg.source, pkg.disabled]),
+    [["npm:active-plugin", true], ["npm:off-plugin", true]],
+  );
+  let stored = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.deepEqual(stored.packages, [
+    { source: "npm:active-plugin", extensions: [], skills: [], prompts: [], themes: [] },
+    { source: "npm:off-plugin", extensions: [], skills: [], prompts: [], themes: [] },
+  ]);
+
+  const enabled = await post("enable-all");
+  assert.equal(enabled.status, 200);
+  const enabledBody = await enabled.json();
+  assert.deepEqual(
+    enabledBody.packages.map((pkg) => [pkg.source, pkg.disabled]),
+    [["npm:active-plugin", false], ["npm:off-plugin", false]],
+  );
+  stored = JSON.parse(await readFile(settingsPath, "utf8"));
+  assert.deepEqual(stored.packages, ["npm:active-plugin", "npm:off-plugin"]);
 });

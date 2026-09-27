@@ -26,7 +26,14 @@ import type {
 
 export const dynamic = "force-dynamic";
 
-type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
+type PluginAction =
+  | "install"
+  | "remove"
+  | "update"
+  | "disable"
+  | "enable"
+  | "enable-all"
+  | "disable-all";
 
 function emptyCounts(): PluginResourceCounts {
   return { extensions: 0, skills: 0, prompts: 0, themes: 0 };
@@ -377,6 +384,30 @@ export async function POST(req: Request) {
     } else if (body.action === "enable") {
       if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
       setPackageDisabled(settingsManager, source, scope, false);
+      await settingsManager.flush();
+    } else if (body.action === "enable-all" || body.action === "disable-all") {
+      const disabled = body.action === "disable-all";
+      const applyAll = (applyScope: PluginScope): void => {
+        const current = applyScope === "project"
+          ? settingsManager.getProjectSettings().packages ?? []
+          : settingsManager.getGlobalSettings().packages ?? [];
+        const next = current.map((entry): PackageSource => {
+          if (!disabled) return getPackageSource(entry);
+          return {
+            ...(typeof entry === "string" ? { source: entry } : entry),
+            extensions: [],
+            skills: [],
+            prompts: [],
+            themes: [],
+          };
+        });
+        if (applyScope === "project") settingsManager.setProjectPackages(next);
+        else settingsManager.setPackages(next);
+      };
+      applyAll("global");
+      // Mirror the single-package check: project packages are only touched
+      // when the project is trusted, otherwise they are left untouched.
+      if (projectTrust.trusted) applyAll("project");
       await settingsManager.flush();
     } else {
       return NextResponse.json({ error: `Unsupported action: ${body.action}` }, { status: 400 });
