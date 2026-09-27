@@ -3,9 +3,14 @@
 // pi's model stack uses). Client-safe: js-tiktoken/lite is pure JS and
 // the rank table ships as plain data; no Node/SDK imports.
 //
-// When tool hints (from get_tools) are supplied, guideline bullets are
-// attributed to the plugin that registered them via exact string match
-// against each tool's promptGuidelines.
+// Since pi 0.87 the composed prompt is a sequence of named sections joined
+// by blank lines: the preamble is bare text and every other section is
+// wrapped in a `<name>...</name>` tag pair on its own lines (see
+// buildSystemPromptSections in the SDK). Known names map to fixed labels;
+// extension-registered sections surface under their own name. When tool
+// hints (from get_tools) are supplied, rule bullets are attributed to the
+// plugin that registered them via exact string match against each tool's
+// promptGuidelines.
 
 import { Tiktoken } from "js-tiktoken/lite";
 import o200kBase from "js-tiktoken/ranks/o200k_base";
@@ -40,18 +45,15 @@ export interface SystemPromptAnalysis {
 }
 
 const DEFAULT_BASE_PREFIX = "You are an expert coding assistant operating inside pi";
-const TOOLS_HEADER = "\nAvailable tools:\n";
-const TOOLS_TAIL = "\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
-const GUIDELINES_HEADER = "\n\nGuidelines:\n";
-const CONTEXT_OPEN = "<project_context>";
-const CONTEXT_CLOSE = "</project_context>";
 const CONTEXT_FILE_PATTERN = /<project_instructions path="([^"]*)">\n([\s\S]*?)\n<\/project_instructions>/g;
-const SKILLS_HEADER = "\n\nThe following skills provide specialized instructions";
-const SKILLS_CLOSE = "</available_skills>";
 const SKILL_BLOCK_PATTERN = /<skill>[\s\S]*?<\/skill>/g;
 const SKILL_NAME_PATTERN = /<name>([^<]*)<\/name>/;
-const CWD_HEADER = "\nCurrent working directory: ";
-const DOCS_INTRO = "Pi documentation (read only when";
+const TOOL_LINE_PATTERN = /^- ([^:]+): /;
+// Section tags always sit alone on their line; inner markers either carry
+// attributes (<project_instructions path=...>), are indented (  <skill>), or
+// are inline (<name>x</name>), so this shape only matches section wrappers.
+const SECTION_OPEN_LINE = /^<([a-z][a-z0-9_-]*)>$/;
+const SECTION_CLOSE_LINE = /^<\/([a-z][a-z0-9_-]*)>$/;
 
 let _tiktoken: Tiktoken | undefined;
 function tiktoken(): Tiktoken {
@@ -89,12 +91,185 @@ function childrenFromSpans(spans: Array<Pick<PromptSection, "key" | "labelKey" |
   return children;
 }
 
+interface TaggedSection {
+  name: string;
+  start: number;
+  end: number;
+}
+
 /**
- * Splits a composed system prompt into sections: base/persona, the tools
- * block, the guidelines zone (attributed per plugin when tool hints are
- * given), per-file project context, skills, and the working-directory tail.
- * Marker scaffolding the labels cannot account for lands in "other", so
- * sum(top-level sections) always equals the whole prompt.
+ * Finds the top-level `<name>...</name>` section wrappers of a composed
+ * 0.87+ prompt. A stack keeps inner bare tags (e.g. <available_skills>)
+ * nested inside their parent instead of terminating it; closers that match
+ * nothing open (e.g. </project_instructions>, whose opener carries
+ * attributes) are ignored. Unterminated tags contribute nothing.
+ */
+function scanTopLevelSections(prompt: string): TaggedSection[] {
+  const sections: TaggedSection[] = [];
+  const stack: Array<{ name: string; start: number }> = [];
+  let lineStart = 0;
+  for (const rawLine of prompt.split("\n")) {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    const open = SECTION_OPEN_LINE.exec(line);
+    const close = SECTION_CLOSE_LINE.exec(line);
+    if (open) {
+      stack.push({ name: open[1], start: lineStart });
+    } else if (close) {
+      const top = stack[stack.length - 1];
+      if (top && top.name === close[1]) {
+        const opened = stack.pop()!;
+        if (stack.length === 0) {
+          sections.push({ name: opened.name, start: opened.start, end: lineStart + line.length });
+        }
+      }
+    }
+    lineStart += rawLine.length + 1;
+  }
+  return sections;
+}
+
+/** Content between a section's opening `<name>\n` and its closing `\n</name>`. */
+function taggedSectionContent(prompt: string, section: TaggedSection): string {
+  const openLen = section.name.length + 3;
+  const closeLen = section.name.length + 4;
+  if (section.end - section.start < openLen + closeLen) return "";
+  return prompt.slice(section.start + openLen, section.end - closeLen);
+}
+
+/** Sections are joined by "\n\n"; fold the join into the following section. */
+function spanStartWithJoin(prompt: string, section: TaggedSection): number {
+  return section.start >= 2 && prompt.slice(section.start - 2, section.start) === "\n\n"
+    ? section.start - 2
+    : section.start;
+}
+
+interface SectionContext {
+  guidelineToTool: Map<string, ToolHint>;
+  toolSourceByName: Map<string, string | undefined>;
+}
+
+interface Group {
+  key: string;
+  labelKey?: string;
+  label?: string;
+  detail?: string;
+  chars: number;
+  text: string;
+}
+
+const newGroup = (part: Omit<Group, "chars" | "text">): Group => ({ ...part, chars: 0, text: "" });
+
+function toolChildren(content: string, ctx: SectionContext): PromptSection[] | undefined {
+  const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const toolMatch = TOOL_LINE_PATTERN.exec(lines[i]);
+    if (!toolMatch) continue;
+    const name = toolMatch[1].trim();
+    groups.push({
+      key: `tool:${name}`,
+      label: name,
+      detail: ctx.toolSourceByName.get(name),
+      chars: lines[i].length + (i < lines.length - 1 ? 1 : 0),
+      text: lines[i] + (i < lines.length - 1 ? "\n" : ""),
+    });
+  }
+  return childrenFromSpans(groups);
+}
+
+function ruleChildren(content: string, ctx: SectionContext): PromptSection[] | undefined {
+  const groups = new Map<string, Group>();
+  let cursor = 0;
+  while (cursor < content.length) {
+    const nextNewline = content.indexOf("\n", cursor);
+    const lineEnd = nextNewline >= 0 ? nextNewline : content.length;
+    const line = content.slice(cursor, lineEnd);
+    let group: Group;
+    if (line.startsWith("- ")) {
+      const tool = ctx.guidelineToTool.get(line.slice(2));
+      if (tool) {
+        const key = `ext:${tool.source ?? tool.name}`;
+        group = groups.get(key)
+          ?? newGroup({ key, label: tool.source ?? tool.name, detail: "" });
+        group.detail = group.detail
+          ? (group.detail.split(", ").includes(tool.name) ? group.detail : `${group.detail}, ${tool.name}`)
+          : tool.name;
+      } else {
+        group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
+      }
+    } else {
+      group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
+    }
+    group.chars += lineEnd - cursor + (nextNewline >= 0 ? 1 : 0);
+    group.text += line + (nextNewline >= 0 ? "\n" : "");
+    groups.set(group.key, group);
+    cursor = lineEnd + 1;
+  }
+  return childrenFromSpans(Array.from(groups.values()));
+}
+
+function contextChildren(content: string): PromptSection[] | undefined {
+  const groups: Array<Pick<PromptSection, "key" | "label"> & { chars: number }> = [];
+  CONTEXT_FILE_PATTERN.lastIndex = 0;
+  for (let match = CONTEXT_FILE_PATTERN.exec(content); match; match = CONTEXT_FILE_PATTERN.exec(content)) {
+    groups.push({ key: `context:${match[1]}`, label: match[1], chars: match[0].length });
+  }
+  return childrenFromSpans(groups);
+}
+
+function skillChildren(content: string): PromptSection[] | undefined {
+  const groups: Array<Pick<PromptSection, "key" | "label"> & { chars: number }> = [];
+  SKILL_BLOCK_PATTERN.lastIndex = 0;
+  for (let match = SKILL_BLOCK_PATTERN.exec(content); match; match = SKILL_BLOCK_PATTERN.exec(content)) {
+    const name = SKILL_NAME_PATTERN.exec(match[0])?.[1] ?? "skill";
+    groups.push({ key: `skill:${name}`, label: name, chars: match[0].length });
+  }
+  return childrenFromSpans(groups);
+}
+
+type SectionSpan = Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] };
+
+function sectionSpan(prompt: string, section: TaggedSection, ctx: SectionContext): SectionSpan {
+  const start = spanStartWithJoin(prompt, section);
+  const name = section.name;
+  const base = { start, end: section.end };
+  if (name === "tools") {
+    const content = taggedSectionContent(prompt, section);
+    return { ...base, key: "tools", labelKey: "system.section.tools", children: toolChildren(content, ctx) };
+  }
+  if (name === "rules") {
+    const content = taggedSectionContent(prompt, section);
+    return { ...base, key: "guidelines", labelKey: "system.section.guidelines", children: ruleChildren(content, ctx) };
+  }
+  if (name === "docs") {
+    return { ...base, key: "pi-docs", labelKey: "system.section.docs" };
+  }
+  if (name === "addendum") {
+    return { ...base, key: "addendum", labelKey: "system.section.addendum" };
+  }
+  if (name === "project_context") {
+    const content = taggedSectionContent(prompt, section);
+    return { ...base, key: "context", labelKey: "system.section.context", children: contextChildren(content) };
+  }
+  if (name === "skills") {
+    const content = taggedSectionContent(prompt, section);
+    return { ...base, key: "skills", labelKey: "system.section.skills", children: skillChildren(content) };
+  }
+  if (name === "cwd") {
+    const content = taggedSectionContent(prompt, section);
+    return { ...base, key: "cwd", labelKey: "system.section.cwd", detail: content.trim() };
+  }
+  // Extension-registered section: surface it under its own name.
+  return { ...base, key: `section:${name}`, label: name };
+}
+
+/**
+ * Splits a composed system prompt into sections: the bare preamble, the
+ * tools block, the rules zone (attributed per plugin when tool hints are
+ * given), the docs appendix, any appended prompt, per-file project context,
+ * skills, the working directory, and extension-registered sections.
+ * Text the tags cannot account for lands in "other", so sum(top-level
+ * sections) always equals the whole prompt.
  */
 export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): SystemPromptAnalysis {
   const totalChars = prompt.length;
@@ -110,194 +285,39 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   }
   const toolSourceByName = new Map<string, string | undefined>();
   for (const tool of tools) toolSourceByName.set(tool.name, tool.source);
+  const ctx: SectionContext = { guidelineToTool, toolSourceByName };
 
-  interface Group {
-    key: string;
-    labelKey?: string;
-    label?: string;
-    detail?: string;
-    chars: number;
-    text: string;
-  }
-  const newGroup = (part: Omit<Group, "chars" | "text">): Group => ({ ...part, chars: 0, text: "" });
+  const tagged = scanTopLevelSections(prompt);
   const spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] }> = [];
-
-  // Skills block (appended after project context, before the cwd tail),
-  // with one child per skill entry.
-  const skillsStart = prompt.indexOf(SKILLS_HEADER);
-  let skillsEnd = -1;
-  if (skillsStart >= 0) {
-    const close = prompt.indexOf(SKILLS_CLOSE, skillsStart);
-    if (close >= 0) {
-      skillsEnd = close + SKILLS_CLOSE.length;
-      const block = prompt.slice(skillsStart, skillsEnd);
-      const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
-      SKILL_BLOCK_PATTERN.lastIndex = 0;
-      for (let match = SKILL_BLOCK_PATTERN.exec(block); match; match = SKILL_BLOCK_PATTERN.exec(block)) {
-        const name = SKILL_NAME_PATTERN.exec(match[0])?.[1] ?? "skill";
-        groups.push({ key: `skill:${name}`, label: name, chars: match[0].length, text: match[0] });
-      }
-      spans.push({
-        key: "skills",
-        labelKey: "system.section.skills",
-        start: skillsStart,
-        end: skillsEnd,
-        children: childrenFromSpans(groups),
-      });
-    }
-  }
-
-  // Working-directory tail (last line of the prompt). Extension-injected
-  // sections (deepseek router, ACP context rules, etc.) may be appended
-  // after the cwd line; the cwd span stops at the first such marker so
-  // injected content lands in "other" instead of inflating cwd.
-  const cwdStart = prompt.lastIndexOf(CWD_HEADER);
-  if (cwdStart >= 0 && (skillsStart < 0 || cwdStart > skillsStart)) {
-    const injectionMarkers = [
-      "<!-- pi-deepseek-router:start -->",
-      "<!-- ", "\nACP context management\n", "\n## DeepSeek Router\n"
-    ];
-    let cwdEnd = totalChars;
-    for (const marker of injectionMarkers) {
-      const at = prompt.indexOf(marker, cwdStart);
-      if (at >= 0 && at < cwdEnd) cwdEnd = at;
-    }
-    spans.push({
-      key: "cwd",
-      labelKey: "system.section.cwd",
-      start: cwdStart,
-      end: cwdEnd,
-      detail: prompt.slice(cwdStart + CWD_HEADER.length, cwdEnd),
-    });
-  }
-
-  // Project context block: one group with a child per wrapped file; the
-  // wrapper scaffolding is counted in the group itself.
-  const contextStart = prompt.indexOf(CONTEXT_OPEN);
-  if (contextStart >= 0 && (skillsStart < 0 || contextStart < skillsStart)) {
-    const contextEnd = prompt.indexOf(CONTEXT_CLOSE, contextStart);
-    if (contextEnd >= 0) {
-      const blockEnd = contextEnd + CONTEXT_CLOSE.length;
-      const block = prompt.slice(contextStart, blockEnd);
-      const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number }> = [];
-      CONTEXT_FILE_PATTERN.lastIndex = 0;
-      for (let match = CONTEXT_FILE_PATTERN.exec(block); match; match = CONTEXT_FILE_PATTERN.exec(block)) {
-        groups.push({
-          key: `context:${match[1]}`,
-          label: match[1],
-          chars: match[0].length,
-        });
-      }
-      spans.push({
-        key: "context",
-        labelKey: "system.section.context",
-        start: contextStart,
-        end: blockEnd,
-        children: childrenFromSpans(groups),
-      });
-    }
-  }
-
-  // Head of the prompt: template intro, tools block, then the guidelines
-  // zone where pi core bullets mix with extension-injected ones.
-  const headEnd = [contextStart, skillsStart, cwdStart]
-    .filter((v) => v >= 0)
-    .reduce((a, b) => Math.min(a, b), totalChars);
-  const baseSpan = (start: number, end: number) => ({
-    key: "base",
-    labelKey: baseLabelKey(prompt),
-    start,
-    end,
-  });
-
-  const carves: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] }> = [];
-  const toolsStart = prompt.indexOf(TOOLS_HEADER);
-  const toolsTailIdx = toolsStart >= 0 ? prompt.indexOf(TOOLS_TAIL, toolsStart) : -1;
-  const toolsEnd = toolsTailIdx >= 0 ? toolsTailIdx + TOOLS_TAIL.length : -1;
-  if (toolsStart >= 0 && toolsEnd > toolsStart && toolsStart < headEnd) {
-    const blockStart = toolsStart + 1;
-    const block = prompt.slice(blockStart, toolsEnd);
-    const lines = block.split("\n");
-    const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
-    for (let i = 0; i < lines.length; i += 1) {
-      const toolMatch = /^- ([^:]+): /.exec(lines[i]);
-      if (!toolMatch) continue;
-      const name = toolMatch[1].trim();
-      groups.push({
-        key: `tool:${name}`,
-        label: name,
-        detail: toolSourceByName.get(name),
-        chars: lines[i].length + (i < lines.length - 1 ? 1 : 0),
-        text: lines[i] + (i < lines.length - 1 ? "\n" : ""),
-      });
-    }
-    carves.push({
-      key: "tools",
-      labelKey: "system.section.tools",
-      start: blockStart,
-      end: toolsEnd,
-      children: childrenFromSpans(groups),
-    });
-  }
-
-  const guideSearchFrom = toolsEnd > toolsStart ? toolsEnd : 0;
-  const guideStart = prompt.indexOf(GUIDELINES_HEADER, guideSearchFrom);
-  if (guideStart >= 0 && guideStart < headEnd) {
-    const blockStart = guideStart + "\n\n".length;
-    const block = prompt.slice(blockStart, headEnd);
-    const groups = new Map<string, Group>();
-    const docsStart = block.indexOf(DOCS_INTRO);
-    let cursor = 0;
-    while (cursor < block.length) {
-      const nextNewline = block.indexOf("\n", cursor);
-      const lineEnd = nextNewline >= 0 ? nextNewline : block.length;
-      const line = block.slice(cursor, lineEnd);
-      let group: Group;
-      if (docsStart >= 0 && cursor >= docsStart) {
-        group = groups.get("pi-docs") ?? newGroup({ key: "pi-docs", labelKey: "system.section.docs" });
-      } else if (line.startsWith("- ")) {
-        const tool = guidelineToTool.get(line.slice(2));
-        if (tool) {
-          const key = `ext:${tool.source ?? tool.name}`;
-          group = groups.get(key)
-            ?? newGroup({ key, label: tool.source ?? tool.name, detail: "" });
-          group.detail = group.detail
-            ? (group.detail.split(", ").includes(tool.name) ? group.detail : `${group.detail}, ${tool.name}`)
-            : tool.name;
-        } else {
-          group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
-        }
-      } else {
-        group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
-      }
-      group.chars += lineEnd - cursor + (nextNewline >= 0 ? 1 : 0);
-      group.text += line + (nextNewline >= 0 ? "\n" : "");
-      groups.set(group.key, group);
-      cursor = lineEnd + 1;
-    }
-    carves.push({
-      key: "guidelines",
-      labelKey: "system.section.guidelines",
-      start: blockStart,
-      end: headEnd,
-      children: childrenFromSpans(Array.from(groups.values())),
-    });
-  }
-  carves.sort((a, b) => a.start - b.start);
   let cursor = 0;
-  for (const carve of carves) {
-    if (carve.start > cursor) spans.push(baseSpan(cursor, carve.start));
-    spans.push(carve);
-    cursor = Math.max(cursor, carve.end);
+  let preambleDone = false;
+  for (const section of tagged) {
+    const start = spanStartWithJoin(prompt, section);
+    if (start > cursor) {
+      // Text before the first tag is the preamble (base or a fully custom
+      // prompt); anything later is scaffolding the tags cannot explain.
+      if (!preambleDone) {
+        spans.push({ key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: start });
+        preambleDone = true;
+      } else {
+        spans.push({ key: "other", labelKey: "system.section.other", start: cursor, end: start });
+      }
+    }
+    preambleDone = true;
+    spans.push(sectionSpan(prompt, section, ctx));
+    cursor = section.end;
   }
-  if (headEnd > cursor) spans.push(baseSpan(cursor, headEnd));
+  if (cursor < totalChars) {
+    // No tags at all: the whole prompt is one bare preamble (e.g. a forced
+    // system prompt); a bare tail after real sections is unattributable.
+    spans.push(preambleDone
+      ? { key: "other", labelKey: "system.section.other", start: cursor, end: totalChars }
+      : { key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: totalChars });
+  }
 
-  // Merge spans per key and account for everything the markers missed.
+  // Merge spans per key and account for everything the tags missed.
   const accounted = new Array<boolean>(totalChars).fill(false);
   const merged = new Map<string, PromptSection>();
-  const makeSection = (part: Parameters<typeof toSection>[0]): PromptSection => {
-    return toSection(part);
-  };
   for (const span of spans) {
     if (span.end > span.start) {
       for (let i = span.start; i < span.end; i += 1) accounted[i] = true;
@@ -309,7 +329,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
       existing.text = (existing.text ?? "") + spanText;
       existing.tokens = estimateTokensOf(existing.text);
     } else {
-      const section = makeSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start), text: spanText });
+      const section = toSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start), text: spanText });
       if (span.children && span.children.length > 0) section.children = span.children;
       merged.set(span.key, section);
     }
@@ -327,12 +347,12 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     merged.set("other", toSection({ key: "other", labelKey: "system.section.other", chars: otherChars, text: otherText }));
   }
 
-  const sections = Array.from(merged.values());
+  const sections0 = Array.from(merged.values());
   // Parents with children should read as the sum of their children; the
-  // scaffolding delta (intro text, wrapper tags) rolls into "other" so the
+  // scaffolding delta (wrapper tags, intro text) rolls into "other" so the
   // visible numbers add up while totalTokens stays exact.
   const otherTally = merged.get("other") ?? { key: "other", labelKey: "system.section.other", chars: 0, tokens: 0 } as PromptSection;
-  for (const section of sections) {
+  for (const section of sections0) {
     if (section.children && section.children.length > 0) {
       const childSum = section.children.reduce((sum, child) => sum + child.tokens, 0);
       if (section.tokens > childSum) {
@@ -345,6 +365,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   // totalTokens: BPE merging means child estimates can slightly exceed the
   // parent's exact count, so the delta above can drift by a token or two.
   if (!merged.has("other") && otherTally.tokens > 0) merged.set("other", otherTally);
+  const sections = Array.from(merged.values());
   const totalTokens = estimateTokensOf(prompt);
   const otherIdx = sections.findIndex((section) => section.key === "other");
   if (otherIdx >= 0) {

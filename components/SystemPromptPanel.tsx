@@ -21,6 +21,8 @@ const SECTION_COLORS: Record<string, string> = {
   skills: "var(--chart-7)",
   cwd: "var(--chart-2)",
   other: "var(--chart-5)",
+  addendum: "var(--chart-6)",
+  "pi-docs": "var(--chart-8)",
   custom: "var(--chart-8)",
 };
 

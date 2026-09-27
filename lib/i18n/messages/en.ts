@@ -143,6 +143,7 @@ export const enLocale: LocalePlugin = {
     "system.section.skills": "Skills",
     "system.section.cwd": "Working directory",
     "system.section.other": "Other",
+    "system.section.addendum": "Appended prompt",
     "system.section.core": "pi core guidelines",
     "system.section.docs": "pi docs appendix",
     "system.section.builtin": "pi built-in tools",
