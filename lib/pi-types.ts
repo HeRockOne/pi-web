@@ -137,6 +137,8 @@ export interface AgentSessionLike {
   };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
+  /** Current effective prompt built from the session's prompt options (Pi ≥ 0.86 exposes it as a getter). */
+  readonly systemPrompt?: string;
   readonly agent: {
     state?: {
       /** Replayed from the transcript's system messages since Pi 0.86; never assign it. */

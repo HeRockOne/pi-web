@@ -669,8 +669,15 @@ export class AgentSessionWrapper {
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
             : null,
           // An exact prompt is projected onto each run by the inline extension;
-          // the SDK state only shows Pi's structured sections.
-          systemPrompt: this.exactSystemPrompt?.() ?? this.inner.agent.state?.systemPrompt ?? "",
+          // the SDK state only shows Pi's structured sections. Prefer the session's
+          // effective-prompt getter over the transcript replay: the replay stays empty
+          // for sessions that never recorded a system message (last run pre-0.86,
+          // never run since reopen, or a tool change awaiting its next prompt).
+          systemPrompt:
+            this.exactSystemPrompt?.()
+            ?? this.inner.systemPrompt
+            ?? this.inner.agent.state?.systemPrompt
+            ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           extensionStatuses: this.getExtensionStatuses(),
           extensionWidgets: this.getExtensionWidgets(),
