@@ -67,9 +67,8 @@ function SectionRow({
   const percent = totalTokens > 0 ? Math.round((section.tokens / totalTokens) * 100) : 0;
   const color = sectionColor(section.key);
   const hasChildren = Boolean(section.children && section.children.length > 0);
-  const hasBody = Boolean(section.text && section.text.trim().length > 0);
   const isChild = depth > 0;
-  const expandable = hasChildren || hasBody;
+  const expandable = hasChildren;
   const row = (
     <>
       <span
@@ -117,9 +116,6 @@ function SectionRow({
                 />
               ))}
             </ul>
-          ) : null}
-          {hasBody ? (
-            <pre className="system-prompt-composition-body">{section.text}</pre>
           ) : null}
         </div>
       ) : null}
@@ -441,21 +437,6 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-expanded {
           min-width: 0;
-        }
-        .system-prompt-composition-body {
-          margin: 6px 2px 2px;
-          padding: 8px 10px;
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: var(--bg);
-          color: var(--text-muted);
-          font-family: var(--font-mono);
-          font-size: 11px;
-          line-height: 1.6;
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
-          max-height: 260px;
-          overflow-y: auto;
         }
         .system-prompt-composition-list.is-nested > li {
           padding-right: 6px;
