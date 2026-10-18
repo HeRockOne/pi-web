@@ -37,7 +37,7 @@ test("preserves pasted HTML links as Markdown without changing plain text layout
   assert.equal(replaceLinksWithMarkdown("plain text", [link("missing", "https://example.com")]), null);
 });
 
-test("follow-up shortcuts preserve newline, IME, mobile and completion behavior", () => {
+test("Shift+Enter sends, bare Enter keeps a newline, IME and completions still work", () => {
   const source = ts.createSourceFile("ChatInput.tsx", readFileSync(new URL("./ChatInput.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   function findHandler(node) {
     if (ts.isVariableDeclaration(node) && node.name.getText(source) === "handleKeyDown") {
@@ -50,21 +50,21 @@ test("follow-up shortcuts preserve newline, IME, mobile and completion behavior"
     compilerOptions: { target: ts.ScriptTarget.ES2020 },
   }).outputText);
   const cases = [
-    ["Enter steers", {}, {}, "steer"],
+    ["Shift+Enter steers", { shiftKey: true }, {}, "steer"],
     ["Alt+Enter follows up", { altKey: true }, {}, "followup"],
     ["idle Alt+Enter sends", { altKey: true }, { isStreaming: false }, "send"],
-    ["Shift+Enter inserts a newline", { shiftKey: true }, {}, "native"],
-    ["Alt+Shift+Enter keeps native behavior", { altKey: true, shiftKey: true }, {}, "native"],
+    ["bare Enter inserts a newline", {}, {}, "native"],
+    ["Alt+Shift+Enter follows up", { altKey: true, shiftKey: true }, {}, "followup"],
     ["composition ref blocks sending", { altKey: true }, { isComposingRef: { current: true } }, "native"],
     ["native composition blocks sending", { altKey: true, nativeEvent: { isComposing: true } }, {}, "native"],
     ["IME keyCode blocks sending", { altKey: true, nativeEvent: { keyCode: 229 } }, {}, "native"],
     ["composition grace blocks sending", { altKey: true }, { lastCompositionEndAtRef: { current: 950 } }, "prevented"],
-    ["mobile Alt+Enter keeps native behavior", { altKey: true }, { isMobile: true }, "native"],
-    ["mobile composition grace cannot send", { altKey: true }, { isMobile: true, lastCompositionEndAtRef: { current: 950 } }, "native"],
-    ["mobile Ctrl+Alt+Enter follows up", { altKey: true, ctrlKey: true }, { isMobile: true }, "followup"],
-    ["mobile Cmd+Alt+Enter follows up", { altKey: true, metaKey: true }, { isMobile: true }, "followup"],
-    ["mobile modified Enter respects composition grace", { altKey: true, ctrlKey: true }, { isMobile: true, lastCompositionEndAtRef: { current: 950 } }, "prevented"],
-    ["Enter falls back to follow-up", {}, { onSteer: undefined }, "followup"],
+    ["mobile bare Enter keeps native behavior", {}, { isMobile: true }, "native"],
+    ["mobile composition grace cannot send", { shiftKey: true, ctrlKey: true }, { isMobile: true, lastCompositionEndAtRef: { current: 950 } }, "prevented"],
+    ["mobile Ctrl+Shift+Enter steers", { shiftKey: true, ctrlKey: true }, { isMobile: true }, "steer"],
+    ["mobile Cmd+Shift+Enter steers", { shiftKey: true, metaKey: true }, { isMobile: true }, "steer"],
+    ["mobile bare Enter respects composition grace", {}, { isMobile: true, lastCompositionEndAtRef: { current: 950 } }, "native"],
+    ["Shift+Enter falls back to follow-up", { shiftKey: true }, { onSteer: undefined }, "followup"],
     ["Alt+Enter falls back to steer", { altKey: true }, { onFollowUp: undefined }, "steer"],
     ["slash completion takes priority", { altKey: true }, { slashMenuOpen: true, slashQuery: "help" }, "slash"],
     ["available built-in commands take priority", { altKey: true }, { slashMenuOpen: true, slashQuery: "copy", value: "/copy", displayedSlashCommands: [{ name: "copy", source: "builtin", availableWhileStreaming: true }] }, "send"],
@@ -234,7 +234,7 @@ test("renders the compact composer with the standard Send button and no session 
   );
 
   assert.match(html, /<textarea/);
-  assert.match(html, /aria-label="Send" title="Send"/);
+  assert.ok(html.includes('aria-label="Send" title="Send (Shift+Enter)"'), html);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1);
   assert.doesNotMatch(html, /type="file"|Attach image|Change tool preset/);
 });

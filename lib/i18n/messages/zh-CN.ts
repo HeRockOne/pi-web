@@ -380,7 +380,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.indexTruncated": " · 索引不完整",
     "chat.steerPlaceholder": "立即引导 / 排队后续消息...",
     "chat.agentPlaceholder": "Agent 运行中…",
-    "chat.messagePlaceholder": "消息…输入 / 使用命令，输入 @ 查找文件",
+    "chat.messagePlaceholder": "消息…Enter 换行，Shift+Enter 发送，输入 @ 查找文件",
     "chat.steer": "引导",
     "chat.steerHint": "打断当前运行，立即插入这条消息",
     "chat.followUpHint": "排队这条消息，等当前运行结束后发送",

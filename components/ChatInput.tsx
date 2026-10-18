@@ -1281,14 +1281,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       const nativeEvent = e.nativeEvent;
-      const sendShortcut = e.key === "Enter" && !e.shiftKey && (!isMobile || e.ctrlKey || e.metaKey);
+      // Shift+Enter sends; a bare Enter inserts a newline so a slip cannot fire a
+      // half-written prompt. Mobile keeps Ctrl/Cmd+Enter (hardware keyboards only
+      // — soft keyboards have no modifier, so the send button is the affordance).
+      const sendShortcut = e.key === "Enter" && (e.shiftKey || (isMobile && (e.ctrlKey || e.metaKey)));
+      const followUpShortcut = e.key === "Enter" && e.altKey;
+      const acceptMenuShortcut = sendShortcut || followUpShortcut;
       const recentlyComposed = Date.now() - lastCompositionEndAtRef.current < COMPOSITION_END_ENTER_GRACE_MS;
       const isComposing =
         isComposingRef.current ||
         nativeEvent.isComposing ||
         nativeEvent.keyCode === 229;
 
-      if (sendShortcut && (isComposing || recentlyComposed)) {
+      if (acceptMenuShortcut && (isComposing || recentlyComposed)) {
         if (recentlyComposed) e.preventDefault();
         return;
       }
@@ -1309,7 +1314,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           setHistoryMenuOpen(false);
           return;
         }
-        if ((e.key === "Tab" || sendShortcut) && inputHistory[historyActiveIndex]) {
+        if ((e.key === "Tab" || acceptMenuShortcut) && inputHistory[historyActiveIndex]) {
           e.preventDefault();
           applyHistoryInput(inputHistory[historyActiveIndex]);
           return;
@@ -1348,7 +1353,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           applySlashCommand(selectedCommand);
           return;
         }
-        if (sendShortcut && selectedCommand) {
+        if (acceptMenuShortcut && selectedCommand) {
           e.preventDefault();
           const canSubmitNow = !isStreaming
             || (selectedCommand.source === "builtin" && selectedCommand.availableWhileStreaming === true);
@@ -1379,7 +1384,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           dismissDropPicker(true);
           return;
         }
-        if ((e.key === "Tab" || sendShortcut) && dropPicker.matches[dropActiveIndex]) {
+        if ((e.key === "Tab" || acceptMenuShortcut) && dropPicker.matches[dropActiveIndex]) {
           e.preventDefault();
           applyDropCandidate(dropPicker.matches[dropActiveIndex]);
           return;
@@ -1404,7 +1409,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           setAtMenuOpen(false);
           return;
         }
-        if ((e.key === "Tab" || sendShortcut) && atMatches[atActiveIndex]) {
+        if ((e.key === "Tab" || acceptMenuShortcut) && atMatches[atActiveIndex]) {
           e.preventDefault();
           applyAtCompletion(atMatches[atActiveIndex]);
           return;
@@ -1427,10 +1432,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         return;
       }
 
-      if (sendShortcut) {
+      if (sendShortcut || followUpShortcut) {
         e.preventDefault();
         if (isStreaming && (onSteer || onFollowUp)) {
-          sendQueued((e.altKey && onFollowUp) || !onSteer ? "followup" : "steer");
+          sendQueued((followUpShortcut && onFollowUp) || !onSteer ? "followup" : "steer");
         } else {
           handleSend();
         }
@@ -2397,7 +2402,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onMouseEnter={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
               onMouseLeave={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
               aria-label={isStreaming ? t("chat.stop") : t("chat.send")}
-              title={isStreaming ? t("chat.stopAgent") : t("chat.send")}
+              title={isStreaming ? t("chat.stopAgent") : `${t("chat.send")} (${isMobile ? "Ctrl/Cmd+" : ""}Shift+Enter)`}
             >
               <MorphIcon
                 icon={isStreaming ? STOP_ICON_NODE : SEND_ICON_NODE}
