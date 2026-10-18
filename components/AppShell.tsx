@@ -291,6 +291,8 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [mobileToolbarMoreOpen, setMobileToolbarMoreOpen] = useState(false);
+  const [sidebarFooterOpen, setSidebarFooterOpen] = useState(false);
+  const sidebarFooterRef = useRef<HTMLDivElement | null>(null);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
@@ -1418,6 +1420,23 @@ export function AppShell() {
     return () => observer.disconnect();
   }, [windowTitle]);
 
+  // Close the collapsed sidebar footer menu on outside click / Escape.
+  useEffect(() => {
+    if (!sidebarFooterOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!sidebarFooterRef.current?.contains(event.target as Node)) setSidebarFooterOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarFooterOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [sidebarFooterOpen]);
+
   const sidebarContent = (
     <>
       <SessionSidebar
@@ -1437,52 +1456,108 @@ export function AppShell() {
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
       />
-      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4, borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)", background: "color-mix(in srgb, var(--bg) 35%, var(--bg-panel))" }}>
-        {([
-          ["models", translate("common.models")],
-          ["skills", translate("common.skills")],
-        ] as const).map(([section, label]) => {
-          const disabled = section !== "models" && !projectTrustCwd;
-          return (
+      {/* Footer: single compact trigger; the three entries live in an upward popover. */}
+      <div
+        ref={sidebarFooterRef}
+        style={{ position: "relative", flexShrink: 0, borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)" }}
+      >
+        {sidebarFooterOpen && (
+          <div
+            style={{
+              position: "absolute",
+              left: 8,
+              right: 8,
+              bottom: "calc(100% + 6px)",
+              padding: 4,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-card, 10px)",
+              boxShadow: "var(--shadow-md)",
+              zIndex: 30,
+            }}
+          >
+            {([
+              ["models", translate("common.models")],
+              ["skills", translate("common.skills")],
+            ] as const).map(([section, label]) => {
+              const disabled = section !== "models" && !projectTrustCwd;
+              return (
+                <button
+                  key={section}
+                  type="button"
+                  onClick={() => { setSettingsSection(section); setSidebarFooterOpen(false); }}
+                  disabled={disabled}
+                  title={disabled ? translate("settings.projectRequired") : label}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "none", border: "none",
+                    borderRadius: "var(--radius-control, 6px)",
+                    color: "var(--text)", cursor: disabled ? "default" : "pointer",
+                    fontSize: 12, textAlign: "left", opacity: disabled ? 0.35 : 1,
+                    transition: "background 0.12s",
+                  }}
+                  onMouseEnter={(event) => { if (!disabled) event.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
+                >
+                  <SettingsSectionIcon section={section} size={14} strokeWidth={2} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
             <button
-              key={section}
               type="button"
-              onClick={() => setSettingsSection(section)}
-              disabled={disabled}
-              title={disabled ? translate("settings.projectRequired") : label}
-              aria-label={label}
+              onClick={() => { setSettingsSection(getLastSettingsSection(projectTrustCwd)); setSidebarFooterOpen(false); }}
+              title={translate("common.settings")}
               style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                height: 32, padding: 0, background: "none", border: "none",
-                borderRadius: 9, color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
-                fontSize: 12, opacity: disabled ? 0.35 : 1,
-                transition: "background 0.12s, color 0.12s",
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", height: 30, padding: "0 8px",
+                background: "none", border: "none",
+                borderRadius: "var(--radius-control, 6px)",
+                color: "var(--text)", cursor: "pointer",
+                fontSize: 12, textAlign: "left", transition: "background 0.12s",
               }}
-              onMouseEnter={(event) => { if (!disabled) { event.currentTarget.style.background = "var(--bg-hover)"; event.currentTarget.style.color = "var(--text)"; } }}
-              onMouseLeave={(event) => { event.currentTarget.style.background = "none"; event.currentTarget.style.color = "var(--text-muted)"; }}
+              onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
             >
-              <SettingsSectionIcon section={section} size={14} strokeWidth={2} />
-              <span>{label}</span>
+              <SettingsSectionIcon section="general" size={14} strokeWidth={2} />
+              <span>{translate("common.settings")}</span>
             </button>
-          );
-        })}
-        <button
-          type="button"
-          onClick={() => setSettingsSection(getLastSettingsSection(projectTrustCwd))}
-          title={translate("common.settings")}
-          aria-label={translate("common.settings")}
-          style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            height: 32, padding: 0, background: "none", border: "none",
-            borderRadius: 9, color: "var(--text-muted)", cursor: "pointer",
-            fontSize: 12, transition: "background 0.12s, color 0.12s",
-          }}
-          onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; event.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(event) => { event.currentTarget.style.background = "none"; event.currentTarget.style.color = "var(--text-muted)"; }}
-        >
-          <SettingsSectionIcon section="general" size={14} strokeWidth={2} />
-          <span>{translate("common.settings")}</span>
-        </button>
+          </div>
+        )}
+        <div style={{ padding: 6 }}>
+          <button
+            type="button"
+            onClick={() => setSidebarFooterOpen((open) => !open)}
+            aria-label={translate("common.settings")}
+            aria-expanded={sidebarFooterOpen}
+            title={translate("common.settings")}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", height: 28, padding: "0 8px",
+              background: sidebarFooterOpen ? "var(--bg-hover)" : "none",
+              border: "none",
+              borderRadius: "var(--radius-control, 6px)",
+              color: "var(--text-muted)", cursor: "pointer",
+              fontSize: 12, transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; event.currentTarget.style.color = "var(--text)"; }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = sidebarFooterOpen ? "var(--bg-hover)" : "none";
+              event.currentTarget.style.color = "var(--text-muted)";
+            }}
+          >
+            <SettingsSectionIcon section="general" size={14} strokeWidth={2} />
+            <span>{translate("common.settings")}</span>
+            <svg
+              width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ marginLeft: "auto", opacity: 0.7, transform: sidebarFooterOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+            >
+              <polyline points="6 15 12 9 18 15" />
+            </svg>
+          </button>
+        </div>
       </div>
     </>
   );

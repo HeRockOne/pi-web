@@ -16,7 +16,7 @@ import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
 
 // Fixed row height for the session list. SessionItem renders at exactly this
 // height, so the list can be windowed (only the visible slice is mounted).
-const SESSION_LIST_ITEM_HEIGHT = 54;
+const SESSION_LIST_ITEM_HEIGHT = 46;
 
 // Tree collapse state persists across page reloads (project folders + session branches).
 const TREE_COLLAPSE_STORAGE_KEY = "pi-web:sidebar-tree-collapsed";

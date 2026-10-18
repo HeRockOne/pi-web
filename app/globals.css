@@ -1502,11 +1502,12 @@ span.token.table {
   .sidebar-container {
     position: relative;
     overflow: hidden;
-    /* Floating rounded card to match the composer/top-bar capsule language. */
-    margin: 8px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    transition: width 0.2s ease, min-width 0.2s ease, margin 0.2s ease;
+    /* Flush edge: one hairline separator instead of a floating card. */
+    margin: 0;
+    border: none;
+    border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: 0;
+    transition: width 0.2s ease, min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
     width: var(--sidebar-width, 260px);
