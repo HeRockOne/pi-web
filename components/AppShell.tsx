@@ -2213,7 +2213,7 @@ export function AppShell() {
           border: mobile
             ? "none"
             : `1px solid ${activeTopPanel === "session" ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)"}`,
-          fontSize: 11, color: "var(--text-muted)",
+          fontSize: 11.5, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
           transition: "color 0.1s, background 0.1s",

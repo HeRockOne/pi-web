@@ -21,19 +21,19 @@
 
 :root {
   --bg: #ffffff;
-  --bg-panel: #f5f5f5;
-  --bg-hover: #eeeeee;
-  --bg-selected: #e8e8e8;
-  --border: #e0e0e0;
-  --text: #1a1a1a;
-  --text-muted: #6b7280;
-  --text-dim: #9ca3af;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --user-bg: #eff6ff;
+  --bg-panel: #f7f6f4;
+  --bg-hover: #f0efec;
+  --bg-selected: #e9e7e3;
+  --border: #e4e2de;
+  --text: #1f1e1c;
+  --text-muted: #6b6762;
+  --text-dim: #a39e97;
+  --accent: #3f6a8f;
+  --accent-hover: #325777;
+  --user-bg: #f3f5f7;
   --assistant-bg: #ffffff;
-  --tool-bg: #f9fafb;
-  --bg-subtle: rgba(0,0,0,0.03);
+  --tool-bg: #faf9f7;
+  --bg-subtle: rgba(0, 0, 0, 0.028);
 
   /* Categorical chart palette (provider lines/bars/dots, prompt sections).
      Solid 600-level hues: light 400-level colors wash out on white. */
@@ -54,13 +54,25 @@
   --surface-0: var(--bg);
   --surface-1: var(--bg-panel);
   --surface-2: var(--bg-panel);
-  --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-overlay: 16px;
-  --shadow-color: color-mix(in srgb, var(--accent) 10%, rgb(15 18 30 / 55%));
+
+  /* Type scale: 11 辅助 / 13 次要 / 14.5 正文 / 20 标题. */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14.5px;
+  --text-lg: 20px;
+  --leading-tight: 1.35;
+  --leading-normal: 1.6;
+
+  /* Radius scale: 6 control / 10 card / 14 overlay. */
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-overlay: 14px;
+  --radius-pill: 999px;
+
+  --shadow-color: color-mix(in srgb, var(--accent) 8%, rgb(15 18 30 / 42%));
   --shadow-sm: 0 1px 2px var(--shadow-color);
-  --shadow-md: 0 4px 16px -2px var(--shadow-color);
-  --shadow-lg: 0 16px 48px -8px color-mix(in srgb, var(--accent) 12%, rgb(15 18 30 / 62%));
+  --shadow-md: 0 2px 10px -2px var(--shadow-color);
+  --shadow-lg: 0 12px 36px -10px color-mix(in srgb, var(--accent) 10%, rgb(15 18 30 / 48%));
 }
 
 html.dark {
@@ -89,10 +101,10 @@ html.dark {
   --chart-6: #2dd4bf; /* teal */
   --chart-7: #f472b6; /* pink */
   --chart-8: #f87171; /* red */
-  --shadow-color: color-mix(in srgb, var(--accent) 14%, rgb(0 0 0 / 78%));
+  --shadow-color: color-mix(in srgb, var(--accent) 12%, rgb(0 0 0 / 70%));
   --shadow-sm: 0 1px 2px var(--shadow-color);
-  --shadow-md: 0 4px 16px -2px var(--shadow-color);
-  --shadow-lg: 0 16px 48px -8px var(--shadow-color);
+  --shadow-md: 0 2px 10px -2px var(--shadow-color);
+  --shadow-lg: 0 12px 36px -10px var(--shadow-color);
 }
 
 /* WebKit reports dvh/innerHeight without the status-bar strip for installed
@@ -160,7 +172,8 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-geist-sans), var(--font-noto-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
-  font-size: 14px;
+  font-size: var(--text-base, 14.5px);
+  line-height: var(--leading-normal, 1.6);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -636,11 +649,11 @@ pre, code {
   max-width: 100%;
   height: auto;
   margin: 8px 0;
-  border-radius: 6px;
+  border-radius: var(--radius-card-block, 8px);
 }
 .markdown-body .markdown-inline-code {
   background: var(--bg-subtle);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
   padding: 1px 5px;
   color: var(--text);
   font-family: var(--font-mono);
@@ -700,7 +713,7 @@ pre, code {
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-card-block, 8px);
 }
 .markdown-body table {
   border-collapse: separate;
@@ -819,7 +832,7 @@ pre, code {
   padding: 7px 8px;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-card-block, 8px);
   background: var(--bg-panel);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -840,7 +853,7 @@ pre, code {
   max-width: 100%;
   margin: 6px 0;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-card-block, 8px);
   overflow: hidden;
   background: var(--bg);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 42%, transparent);
@@ -868,7 +881,7 @@ pre, code {
 }
 .markdown-code-action {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
   padding: 2px 7px;
   background: var(--bg);
   color: var(--text-muted);
@@ -1051,7 +1064,7 @@ pre, code {
   height: 24px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
   background: var(--bg);
 }
 .mermaid-zoom-stepper button,
@@ -1078,7 +1091,7 @@ pre, code {
 .mermaid-zoom-icon-button {
   flex: 0 0 24px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
 }
 .mermaid-zoom-stepper button:hover:not(:disabled),
 .mermaid-zoom-icon-button:hover {
@@ -1115,7 +1128,7 @@ pre, code {
 .mermaid-zoom-canvas {
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-card-block, 8px);
   background: var(--bg-panel);
   margin: 0 auto;
   transition: width 0.15s ease;
@@ -1191,7 +1204,7 @@ pre, code {
   height: 24px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
 }
 
 .file-viewer-mode-button {
@@ -1225,7 +1238,7 @@ pre, code {
   box-sizing: border-box;
   flex: 0 0 24px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1284,7 +1297,7 @@ pre, code {
 .markdown-file-preview pre {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-card-block, 8px);
   padding: 12px 16px;
   overflow-x: auto;
   font-family: var(--font-mono);
@@ -1308,7 +1321,7 @@ pre, code {
   margin-bottom: 20px;
   padding: 14px 16px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card-block, 8px);
   background: var(--bg-panel);
 }
 .markdown-frontmatter-title {

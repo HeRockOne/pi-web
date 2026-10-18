@@ -133,6 +133,7 @@ test("renders the session list as a project folder tree", () => {
   assert.match(source, /const rowPadding = depth === 0 \? 26 : 14 \+ depth \* 18;/);
   assert.match(source, /const lineX = \(layer: number\) => 14 \+ layer \* 18 \+ 8;/);
   assert.match(source, /\[\.\.\.guides, \.\.\.\(hasChildren && !collapsed \? tails : \[\]\)\]/);
-  assert.match(source, /color-mix\(in srgb, var\(--accent\) 15%, transparent\)/);
+  assert.match(source, /color-mix\(in srgb, var\(--accent\) 9%, var\(--bg-panel\)\)/);
+  assert.match(source, /isSelected \? "2px solid var\(--accent\)"/);
   assert.doesNotMatch(source, /rgba\(127,127,127,0\.07\)/);
 });

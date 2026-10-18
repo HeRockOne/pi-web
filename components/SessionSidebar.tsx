@@ -298,7 +298,7 @@ function PiWebTitle() {
       onClick={handleClick}
       style={{
         background: "none", border: "none", padding: 0, cursor: "default",
-        fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em",
+        fontWeight: 600, fontSize: 14, letterSpacing: "-0.01em",
         color: showVersion ? "var(--accent)" : "var(--text)",
         fontFamily: "var(--font-mono)",
         minWidth: "6ch",
@@ -1035,7 +1035,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {/* Header */}
       <div
         style={{
-          padding: "12px 10px 10px",
+          padding: "11px 10px 9px",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
@@ -1052,7 +1052,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               }}
               title={t("sidebar.newProject")}
               aria-label={t("sidebar.newProject")}
-              className="flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted hover:bg-bg-hover hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+              className="flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-text-muted hover:bg-bg-hover hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l1.5 2h9.5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
@@ -1069,9 +1069,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               aria-label={t("sidebar.toggleSessionSearch")}
               aria-expanded={sessionSearchOpen}
               aria-controls="session-search-input"
-              className={`flex h-[32px] w-[32px] shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-accent ${sessionSearchOpen ? "bg-bg-selected text-accent" : "text-text-muted"}`}
+              className={`flex h-[28px] w-[28px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-accent ${sessionSearchOpen ? "bg-bg-selected text-text" : "text-text-muted"}`}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
               </svg>
             </button>
@@ -1104,7 +1104,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 setSessionSearchQuery("");
               }
             }}
-            className="mt-[6px] block h-[29px] w-full min-w-0 rounded-[7px] border border-border bg-bg px-[10px] text-xs text-text focus:outline-2 focus:outline-accent"
+            className="mt-[8px] block h-[30px] w-full min-w-0 rounded-[6px] border border-border bg-bg px-[10px] text-[12.5px] text-text placeholder:text-text-dim focus:outline-2 focus:outline-accent"
           />
         )}
 
@@ -1129,7 +1129,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                  title={currentWorktree ? t("sidebar.switchWorktreeTitle", { path: currentWorktree.path }) : t("sidebar.switchWorktree")}
                 style={{
                   width: "100%",
-                  height: 29,
+                  height: 30,
                   boxSizing: "border-box",
                   display: "flex",
                   alignItems: "center",
@@ -1137,9 +1137,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   padding: "0 10px",
                   background: "var(--bg-hover)",
                   border: "1px solid var(--border)",
-                  borderRadius: 7,
+                  borderRadius: 6,
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 11.5,
                   lineHeight: 1.35,
                   color: "var(--text-muted)",
                   textAlign: "left",
@@ -1429,7 +1429,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             title={inactiveWorktreeSelector.title}
             style={{
               width: "100%",
-              height: 29,
+              height: 30,
               boxSizing: "border-box",
               marginTop: 6,
               display: "flex",
@@ -1437,10 +1437,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               gap: 6,
               padding: "0 10px",
               border: "1px solid var(--border)",
-              borderRadius: 7,
+              borderRadius: 6,
               background: "var(--bg-hover)",
               color: "var(--text-dim)",
-              fontSize: 11,
+              fontSize: 11.5,
               lineHeight: 1.35,
               whiteSpace: "nowrap",
               textAlign: "left",
@@ -1768,16 +1768,18 @@ function SessionItem({
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         margin: "0 6px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-control, 6px)",
         background: confirmDelete
-          ? "rgba(239,68,68,0.06)"
+          ? "color-mix(in srgb, #ef4444 7%, transparent)"
           : isSelected
-            ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+            ? "color-mix(in srgb, var(--accent) 9%, var(--bg-panel))"
             : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete ? "2px solid #ef4444" : "2px solid transparent",
-        transition: "background 0.1s",
+        borderLeft: confirmDelete
+          ? "2px solid #ef4444"
+          : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+        transition: "background 0.12s ease, border-color 0.12s ease",
         opacity: deleting ? 0.5 : 1,
-        gap: 6,
+        gap: 8,
         overflow: "hidden",
       }}
     >
@@ -1900,8 +1902,8 @@ function SessionItem({
                 alignItems: "center",
                 gap: 5,
                 minWidth: 0,
-                fontSize: 12,
-                fontWeight: isSelected ? 500 : 400,
+                fontSize: 13,
+                fontWeight: isSelected ? 550 : 400,
                 lineHeight: 1.4,
                 color: "var(--text)",
               }}
@@ -1911,7 +1913,7 @@ function SessionItem({
                 {title}
               </span>
             </div>
-            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
+            <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11.5, fontVariantNumeric: "tabular-nums", minWidth: 0 }}>
               {isRunning ? (
                 <RunningSessionIndicator />
               ) : isUnread ? (
@@ -1961,16 +1963,16 @@ function SessionItem({
                 title={t("sidebar.rename")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
+                  width: 26, height: 26, padding: 0,
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
+                  borderRadius: 6, color: "var(--text-dim)",
                   cursor: "pointer", flexShrink: 0,
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-selected)";
                   e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
+                  e.currentTarget.style.borderColor = "color-mix(in srgb, var(--accent) 35%, transparent)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "var(--bg-hover)";
@@ -1978,7 +1980,7 @@ function SessionItem({
                   e.currentTarget.style.borderColor = "var(--border)";
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                 </svg>
               </button>
@@ -1987,9 +1989,9 @@ function SessionItem({
                 title={t("sidebar.deleteWithShiftClick")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
+                  width: 26, height: 26, padding: 0,
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
+                  borderRadius: 6, color: "var(--text-dim)",
                   cursor: "pointer", flexShrink: 0,
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
@@ -2004,7 +2006,7 @@ function SessionItem({
                   e.currentTarget.style.borderColor = "var(--border)";
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                   <path d="M10 11v6M14 11v6" />
@@ -2089,9 +2091,9 @@ function ProjectFolderRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <PathLabel
           text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: selected ? "var(--accent)" : "var(--text)" }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}
         />
-        <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, minWidth: 0 }}>
+        <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
           {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
           <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
         </div>
@@ -2105,18 +2107,18 @@ function ProjectFolderRow({
           aria-label={t("i18n.newSession")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-            height: 24, padding: "0 10px",
+            height: 24, padding: "0 8px",
             flexShrink: 0,
-            background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "none",
-            borderRadius: 999,
-            color: "var(--accent)",
+            background: "transparent", border: "1px solid var(--border)",
+            borderRadius: 6,
+            color: "var(--text-muted)",
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: 11.5,
             fontWeight: 500,
             whiteSpace: "nowrap",
           }}
         >
-          <span style={{ fontSize: 12, lineHeight: 1 }} aria-hidden="true">💬</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           {t("i18n.newSession")}
         </button>
       )}

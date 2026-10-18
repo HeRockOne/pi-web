@@ -843,9 +843,9 @@ function AssistantMessageView({
       {/* Model label */}
       <div
         style={{
-          fontSize: 11,
+          fontSize: 11.5,
           color: "var(--text-dim)",
-          marginBottom: 4,
+          marginBottom: 6,
           display: "flex",
           alignItems: "center",
           gap: 6,
@@ -853,17 +853,20 @@ function AssistantMessageView({
       >
         {message.provider && (
           <>
-            <span aria-hidden>🤖</span>
-            <span>{message.provider}</span>
-            <span aria-hidden>·</span>
-            <span aria-hidden>⚙️</span>
-            <span>{getModelDisplayName(message.provider, message.model, modelNames)}</span>
+            <span style={{ minWidth: 0 }}>{getModelDisplayName(message.provider, message.model, modelNames)}</span>
             {thinkingLevel && (
-              <>
-                <span aria-hidden>·</span>
-                <span aria-hidden>🧠</span>
-                <span>{thinkingLevel}</span>
-              </>
+              <span
+                style={{
+                  display: "inline-flex", alignItems: "center",
+                  height: 17, padding: "0 6px",
+                  borderRadius: "var(--radius-control, 6px)",
+                  background: "var(--bg-subtle)",
+                  color: "var(--text-muted)",
+                  fontSize: 10.5,
+                }}
+              >
+                {thinkingLevel}
+              </span>
             )}
           </>
         )}
