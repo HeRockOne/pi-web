@@ -72,8 +72,6 @@ interface Props {
   refreshKey?: number;
   // Browser-style tab strip: the sidebar reports every session row click so the
   // top bar can pin a tab with a fresh title/project snapshot.
-  getSnapshotsForSessions?: (sessionIds: string[]) => { id: string; title: string; project: string }[];
-  openSessionTabs?: (snapshots: { id: string; title: string; project: string }[]) => void;
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (
@@ -309,7 +307,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, getSnapshotsForSessions, openSessionTabs }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [sessionListVersion, setSessionListVersion] = useState<number | null>(null);
@@ -822,16 +820,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const handleSelectSessionFromList = useCallback((s: SessionInfo, entryId?: string, blockIndex?: number) => {
     setAllSessions((current) => current.some((session) => session.id === s.id) ? current : [s, ...current]);
     if (s.cwd) setSelectedCwd(s.cwd);
-    // Browser-style tab strip: report the click so the top bar can pin a tab
-    // with a fresh title/project snapshot (new sessions get titles later).
-    if (openSessionTabs) {
-      const [snap] = getSnapshotsForSessions
-        ? getSnapshotsForSessions([s.id])
-        : [{ id: s.id, title: s.name || s.firstMessage || s.id, project: "" }];
-      if (snap) openSessionTabs([snap]);
-    }
     onSelectSession(s, false, entryId, blockIndex);
-  }, [onSelectSession, openSessionTabs, getSnapshotsForSessions]);
+  }, [onSelectSession]);
 
   const handleNewSession = useCallback((cwd?: string) => {
     const target = cwd ?? selectedCwd;

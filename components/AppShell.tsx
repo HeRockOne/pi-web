@@ -75,21 +75,9 @@ const AGENT_PANEL_WIDTH = 420;
 const MORE_MENU_WIDTH = 224;
 const SESSIONS_PANEL_WIDTH = 460;
 
-// Browser-style session tabs: only sessions the user explicitly opened stay
-// in the top-bar strip until they close the tab themselves. Snapshots persist
-// in localStorage so the strip survives a page refresh.
-const SESSION_TABS_STORAGE_KEY = "pi-web:session-tabs";
-
 // Right file panel: the file browser is a pinned, non-closable first tab
 // that shares the panel with opened files and terminals.
 const EXPLORER_TAB_ID = "browser";
-const SESSION_TABS_MAX = 30;
-
-interface SessionTabSnapshot {
-  id: string;
-  title: string;
-  project: string;
-}
 
 function parkedNewSessionDraftKey(cwd: string): string {
   return `parked-new:${cwd}`;
@@ -163,106 +151,12 @@ export function AppShell() {
       return ids;
     });
   }, []);
-  // Browser-style session tabs in the top bar: current session first, then every
-  // Browser-style session tabs: only sessions the user explicitly opened stay in
-  // the strip (position fixed, no auto-reorder) until closed. Restored from
-  // localStorage on mount so a page refresh keeps the tab strip.
-  const [sessionTabs, setSessionTabs] = useState<SessionTabSnapshot[]>([]);
-  // The last JSON written to (or read from) storage — the save effect skips
-  // writing until the strip actually differs from what storage holds, so the
-  // mount-time empty state cannot wipe the persisted tabs.
-  const sessionTabsLastSavedRef = useRef<string | null>(null);
-  // Load after mount: the lazy initializer would run during SSR where
-  // localStorage is unavailable and desync server/client hydration.
-  useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = window.localStorage.getItem(SESSION_TABS_STORAGE_KEY);
-    } catch {
-      return; // privacy mode / storage disabled
-    }
-    if (!raw) {
-      sessionTabsLastSavedRef.current = "[]";
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw) as SessionTabSnapshot[] | null;
-      if (Array.isArray(parsed)) {
-        const valid = parsed.filter(
-          (tab) => tab && typeof tab.id === "string" && tab.id.length > 0 && typeof tab.title === "string" && typeof tab.project === "string",
-        );
-        sessionTabsLastSavedRef.current = JSON.stringify(valid);
-        setSessionTabs(valid);
-      }
-    } catch {
-      sessionTabsLastSavedRef.current = "[]";
-    }
-  }, []);
-  useEffect(() => {
-    const json = JSON.stringify(sessionTabs);
-    if (json === sessionTabsLastSavedRef.current) return;
-    sessionTabsLastSavedRef.current = json;
-    try {
-      window.localStorage.setItem(SESSION_TABS_STORAGE_KEY, json);
-    } catch {
-      // localStorage failures (quota, privacy mode) must not break the strip.
-    }
-  }, [sessionTabs]);
-  const openSessionTab = useCallback((snapshot: SessionTabSnapshot) => {
-    setSessionTabs((prev) => {
-      if (prev.some((tab) => tab.id === snapshot.id)) return prev;
-      const next = [...prev, snapshot];
-      return next.length > SESSION_TABS_MAX ? next.slice(next.length - SESSION_TABS_MAX) : next;
-    });
-  }, []);
-  const closeSessionTab = useCallback((sessionId: string) => {
-    setSessionTabs((prev) => prev.filter((tab) => tab.id !== sessionId));
-  }, []);
-  const openSessionTabs = useCallback((snaps: SessionTabSnapshot[]) => {
-    if (snaps.length === 0) return;
-    setSessionTabs((prev) => {
-      const known = new Set(prev.map((tab) => tab.id));
-      const additions = snaps.filter((snap) => snap && !known.has(snap.id));
-      if (additions.length === 0) return prev;
-      const next = [...prev, ...additions];
-      return next.length > SESSION_TABS_MAX ? next.slice(next.length - SESSION_TABS_MAX) : next;
-    });
-  }, []);
-  const getSnapshotsForSessions = useCallback((ids: string[]): SessionTabSnapshot[] => {
-    const byId = new Map(sessionsWithSelection.map((session) => [session.id, session] as const));
-    return ids.map((id) => {
-      const session = byId.get(id);
-      if (!session) return { id, title: id, project: "" };
-      const root = session.projectRoot || session.cwd;
-      return {
-        id,
-        title: session.name || session.firstMessage || session.id,
-        project: root.split(/[\\/]+/).filter(Boolean).pop() ?? root,
-      };
-    });
-  }, [sessionsWithSelection]);
-  // Top-bar sessions button badge: running sessions the user has not pinned as
-  // tabs, so new activity elsewhere stays discoverable without hijacking the strip.
-  const unpinnedRunning = useMemo(
-    () => sessionsWithSelection.filter((session) => runningSessionIds.has(session.id) && !sessionTabs.some((tab) => tab.id === session.id) && session.relation?.kind !== "subagent"),
-    [sessionsWithSelection, runningSessionIds, sessionTabs],
+  // Top-bar sessions list: what is actually running right now (subagents excluded,
+  // they live in the agents panel). Replaces the old browser-style tab strip.
+  const runningSessions = useMemo(
+    () => sessionsWithSelection.filter((session) => runningSessionIds.has(session.id) && session.relation?.kind !== "subagent"),
+    [sessionsWithSelection, runningSessionIds],
   );
-  const sessionsById = useMemo(
-    () => new Map(sessionsWithSelection.map((session) => [session.id, session] as const)),
-    [sessionsWithSelection],
-  );
-  const topOpenSessions = useMemo(() => {
-    const byId = new Map(sessionsWithSelection.map((session) => [session.id, session] as const));
-    const tabs: { session: SessionInfo | null; snapshot: SessionTabSnapshot }[] = [];
-    for (const snapshot of sessionTabs) {
-      tabs.push({ session: byId.get(snapshot.id) ?? null, snapshot });
-    }
-    return tabs;
-  }, [sessionsWithSelection, sessionTabs]);
-  const sessionTabTitle = useCallback((session: SessionInfo | null, snapshot: SessionTabSnapshot): string => {
-    if (session) return session.name || session.firstMessage || session.id;
-    return snapshot.title || snapshot.id;
-  }, []);
   // The temporary id distinguishes consecutive fresh composers in one cwd.
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
   const [newSessionDraftId, setNewSessionDraftId] = useState("initial");
@@ -441,9 +335,6 @@ export function AppShell() {
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"agents" | "branches" | "sessions" | "more" | "system" | "tools" | "session" | "language" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  // Sessions dropdown shows the pinned-tabs section only when at least one tab
-  // is open, so a fresh install sees a plain list of what is actually running.
-  const sessionsPanelShowPinned = sessionTabs.length > 0;
 
   useEffect(() => {
     if (!sessionHasBranches) {
@@ -943,12 +834,6 @@ export function AppShell() {
       setActiveTopPanel(null);
     }
     activeProjectKeyRef.current = projectKey;
-    // Every opened session gets a fixed-position tab in the top-bar strip.
-    openSessionTab({
-      id: session.id,
-      title: session.name || session.firstMessage || session.id,
-      project: (session.projectRoot || session.cwd).split(/[\\/]+/).filter(Boolean).pop() ?? (session.projectRoot || session.cwd),
-    });
     // Re-clicking the already-open session must not remount the chat and
     // re-run the full load/positioning cycle. Only skip when the effective
     // cwd context already matches — otherwise a pending cwd move still needs
@@ -983,7 +868,7 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [activeCwd, activeFileTabId, invalidateWorkspaceRestore, openSessionTab, router, isMobile, newSessionCwd, selectedSession]);
+  }, [activeCwd, activeFileTabId, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
 
   const handleNewSession = useCallback((sessionId: string, cwd: string) => {
     invalidateWorkspaceRestore();
@@ -1032,44 +917,6 @@ export function AppShell() {
   // Close a tab with browser semantics: closing the active tab activates its
   // nearest remaining neighbor; closing the last tab opens a fresh composer.
   // Tabs whose session vanished elsewhere are verified and cleaned on demand.
-  const handleCloseSessionTab = useCallback((sessionId: string) => {
-    const index = sessionTabs.findIndex((tab) => tab.id === sessionId);
-    if (index === -1) return;
-    const rest = sessionTabs.filter((tab) => tab.id !== sessionId);
-    const wasActive = selectedSession?.id === sessionId;
-    closeSessionTab(sessionId);
-    if (!wasActive) return;
-    const neighborId = rest[Math.min(index, rest.length - 1)]?.id;
-    const neighbor = neighborId ? sessionsById.get(neighborId) : undefined;
-    if (neighbor) {
-      handleSelectSession(neighbor);
-      return;
-    }
-    if (activeCwd) handleNewSession(`closed-${Date.now().toString(36)}`, activeCwd);
-  }, [sessionTabs, selectedSession?.id, sessionsById, closeSessionTab, handleSelectSession, handleNewSession, activeCwd]);
-
-  // Clicking a tab whose session is missing from the loaded list: the list may
-  // be stale (fresh fork) or the session was deleted elsewhere — verify once.
-  const handleSessionTabClick = useCallback((snapshot: SessionTabSnapshot) => {
-    const live = sessionsById.get(snapshot.id);
-    if (live) {
-      handleSelectSession(live);
-      return;
-    }
-    void (async () => {
-      try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(snapshot.id)}`, { cache: "no-store" });
-        if (!response.ok) {
-          closeSessionTab(snapshot.id);
-          return;
-        }
-        const data = await response.json() as { info?: SessionInfo };
-        if (data.info) handleSelectSession(data.info);
-      } catch {
-        // Network failure — keep the tab; it can be closed manually.
-      }
-    })();
-  }, [sessionsById, handleSelectSession, closeSessionTab]);
 
 
   const handleOpenSession = useCallback(async (sessionId: string) => {
@@ -1091,15 +938,9 @@ export function AppShell() {
     activeNewSessionDraftKeyRef.current = null;
     setNewSessionCwd(null);
     setSelectedSession(session);
-    // The draft tab becomes a real session tab once pi assigns the id.
-    openSessionTab({
-      id: session.id,
-      title: session.name || session.firstMessage || session.id,
-      project: (session.projectRoot || session.cwd).split(/[\/]+/).filter(Boolean).pop() ?? (session.projectRoot || session.cwd),
-    });
     hydrateSelectedSession(session.id);
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession, openSessionTab]);
+  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
 
   const deliverSessionNotification = useCallback(({
     targetSession,
@@ -1220,16 +1061,9 @@ export function AppShell() {
       id: newSessionId,
       transient: false,
     }));
-    // Forks open immediately — give them a tab right away; the title snapshot
-    // derives from the source session until the list refresh provides the real one.
-    openSessionTab({
-      id: newSessionId,
-      title: selectedSession?.name || selectedSession?.firstMessage || newSessionId,
-      project: (selectedSession?.projectRoot || selectedSession?.cwd || "").split(/[\/]+/).filter(Boolean).pop() ?? "",
-    });
     hydrateSelectedSession(newSessionId);
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
-  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession, openSessionTab, selectedSession]);
+  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
 
   const handleAskInNewChat = useCallback(async (
     prompt: string,
@@ -1252,7 +1086,6 @@ export function AppShell() {
   const handleSessionDeleted = useCallback((sessionId: string) => {
     invalidateWorkspaceRestore();
     setRefreshKey((k) => k + 1);
-    closeSessionTab(sessionId);
     if (selectedSession?.id === sessionId) {
       const cwd = selectedSession.cwd;
       const draftId = typeof crypto.randomUUID === "function"
@@ -1271,7 +1104,7 @@ export function AppShell() {
       setActiveTopPanel(null);
       router.replace(typeof window !== "undefined" ? window.location.pathname : "/", { scroll: false });
     }
-  }, [invalidateWorkspaceRestore, selectedSession, router, closeSessionTab]);
+  }, [invalidateWorkspaceRestore, selectedSession, router]);
 
   const handleOpenFile = useCallback((
     filePath: string,
@@ -1443,8 +1276,6 @@ export function AppShell() {
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
-        getSnapshotsForSessions={getSnapshotsForSessions}
-        openSessionTabs={openSessionTabs}
         initialSessionId={initialSessionId}
         skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
         onInitialRestoreDone={handleInitialRestoreDone}
@@ -1649,183 +1480,47 @@ export function AppShell() {
     </button>
   );
 
-  // Browser-style open-session tabs (top bar). Click = switch instantly;
-  // running sessions show an accent dot.
-  const renderSessionTabsButton = (mobile: boolean) => {
-    const count = topOpenSessions.length;
-    return (
-      <button
-        ref={sessionsPanelBtnRef}
-        type="button"
-        onClick={() => toggleTopPanel("sessions", mobile)}
-        title={translate("topbar.sessions")}
-        aria-label={translate("topbar.sessions")}
-        aria-pressed={activeTopPanel === "sessions"}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
-          height: "100%", padding: mobile ? 0 : "0 12px",
-          background: "none", border: "none", borderRadius: 999,
-          
-          color: activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer", flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-          transition: "color 0.1s, background 0.1s", position: mobile ? "relative" : undefined,
-        }}
-        onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
-        onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)"; }}
-        data-mobile-toolbar-action={mobile ? "sessions" : undefined}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
-          <rect x="3" y="7" width="18" height="13" rx="2" />
-          <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
-        </svg>
-        {!mobile && <span>{translate("topbar.sessions")}</span>}
-        {(mobile ? count > 1 : unpinnedRunning.length > 0) && (
-          <span
-            aria-hidden="true"
-            style={{
-              minWidth: 15, height: 15, padding: "0 4px", display: "grid", placeItems: "center",
-              borderRadius: 7, background: "var(--accent)", color: "var(--bg-panel)",
-              fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums",
-              ...(mobile ? { position: "absolute", top: 2, right: 2, minWidth: 13, height: 13, padding: "0 3px", fontSize: 9 } as React.CSSProperties : {}),
-            }}
-          >
-            {mobile ? count : unpinnedRunning.length}
-          </span>
-        )}
-      </button>
-    );
-  };
-
-
-  // Desktop inline tab strip: every opened session is a fixed-position tab like
-  // browser tabs — click to switch, × to close, running dot for activity. New
-  // tabs append on the right and keep their order; a + button starts a new chat.
-  const renderSessionStrip = () => {
-    if (topOpenSessions.length === 0 && unpinnedRunning.length === 0) return null;
-    return (
-      <div
-        role="tablist"
-        aria-label={translate("topbar.sessions")}
-        style={{
-          display: "flex", alignItems: "center", flex: "1 1 auto", minWidth: 0,
-          height: "100%", overflow: "hidden",
-        }}
-      >
-        <div
+  // Compact top-bar entry for the running-sessions list (mobile toolbar).
+  const renderRunningSessionsButton = () => (
+    <button
+      ref={sessionsPanelBtnRef}
+      type="button"
+      onClick={() => toggleTopPanel("sessions", true)}
+      title={translate("topbar.sessions")}
+      aria-label={translate("topbar.sessions")}
+      aria-haspopup="menu"
+      aria-expanded={activeTopPanel === "sessions"}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: TOP_BAR_ICON_BUTTON_SIZE, height: "100%", padding: 0,
+        background: "none", border: "none",
+        color: activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)",
+        cursor: "pointer", flexShrink: 0, position: "relative",
+        transition: "color 0.1s",
+      }}
+      onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)"; }}
+      data-mobile-toolbar-action="sessions"
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="7" width="18" height="13" rx="2" />
+        <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
+      </svg>
+      {runningSessions.length > 0 && (
+        <span
+          aria-hidden="true"
           style={{
-            display: "flex", alignItems: "center", height: "100%", flex: "1 1 auto", minWidth: 0,
-            overflowX: "auto", overflowY: "hidden", scrollbarWidth: "thin",
+            position: "absolute", top: 2, right: 2,
+            minWidth: 13, height: 13, padding: "0 3px", display: "grid", placeItems: "center",
+            borderRadius: 7, background: "var(--accent)", color: "var(--bg-panel)",
+            fontSize: 9, lineHeight: 1, fontVariantNumeric: "tabular-nums",
           }}
         >
-          {topOpenSessions.map(({ session, snapshot }) => {
-            const active = snapshot.id === selectedSession?.id;
-            const running = runningSessionIds.has(snapshot.id);
-            const title = sessionTabTitle(session, snapshot);
-            return (
-              <div
-                key={snapshot.id}
-                role="tab"
-                aria-selected={active}
-                title={title}
-                onClick={() => {
-                  if (session) handleSelectSession(session);
-                  else handleSessionTabClick(snapshot);
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: 28, maxWidth: 180, padding: "0 6px 0 10px", margin: "0 2px",
-                  borderRadius: 6, cursor: session ? "pointer" : "default", flexShrink: 0,
-                  background: active ? "var(--bg-selected)" : "transparent",
-                  color: active ? "var(--text)" : "var(--text-muted)", fontSize: 11,
-                  transition: "background 0.1s, color 0.1s", userSelect: "none",
-                }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                    background: running ? "var(--accent)" : "var(--text-dim)",
-                    opacity: running ? 1 : 0.35,
-                    boxShadow: running ? "0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent)" : "none",
-                  }}
-                />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: active ? 600 : 400 }}>
-                  {title}
-                </span>
-                <button
-                  type="button"
-                  title={translate("topbar.closeTab")}
-                  aria-label={`${translate("topbar.closeTab")}: ${title}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleCloseSessionTab(snapshot.id);
-                  }}
-                  style={{
-                    display: "grid", placeItems: "center", width: 16, height: 16, flexShrink: 0,
-                    background: "none", border: "none", borderRadius: 3, color: "var(--text-dim)", cursor: "pointer", padding: 0,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
-                >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <line x1="5" y1="5" x2="19" y2="19" /><line x1="19" y1="5" x2="5" y2="19" />
-                  </svg>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        {unpinnedRunning.length > 0 && (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTopPanel === "sessions"}
-            onClick={() => toggleTopPanel("sessions")}
-            title={translate("topbar.runningUnpinned")}
-            style={{
-              display: "flex", alignItems: "center", gap: 4, height: 28,
-              padding: "0 8px", margin: "0 2px", flexShrink: 0,
-              borderRadius: 6, background: "transparent", border: "none",
-              color: "var(--accent)", fontSize: 11, cursor: "pointer",
-              transition: "background 0.1s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                background: "var(--accent)",
-                boxShadow: "0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent)",
-              }}
-            />
-            +{unpinnedRunning.length}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => { if (activeCwd) handleNewSession(`tab-${Date.now().toString(36)}`, activeCwd); }}
-          title={translate("topbar.newTab")}
-          aria-label={translate("topbar.newTab")}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 28,
-            margin: "0 4px", flexShrink: 0, background: "none", border: "none", borderRadius: 4,
-            color: "var(--text-dim)", cursor: activeCwd ? "pointer" : "default",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-      </div>
-    );
-  };
+          {runningSessions.length}
+        </span>
+      )}
+    </button>
+  );
   // Desktop ⋯ overflow menu: collects the low-frequency top-bar actions so
   // the bar itself stays short. Theme stays outside on purpose.
   const renderMoreMenuButton = () => (
@@ -2661,7 +2356,7 @@ export function AppShell() {
                   )}
                 </button>
               )}
-              {!isNarrowMobile && renderSessionTabsButton(true)}
+              {!isNarrowMobile && renderRunningSessionsButton()}
               {!isNarrowMobile && renderChatToolbarActions(true)}
               {renderSessionStatsButton(true)}
               {renderMainFileToggle(true)}
@@ -2745,7 +2440,7 @@ export function AppShell() {
                           <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" /></>
                         ), {
                           onClick: () => { closeMenu(); toggleTopPanel("sessions"); },
-                          trailing: topOpenSessions.length > 1 ? rowBadge(topOpenSessions.length) : null,
+                          trailing: runningSessions.length > 0 ? rowBadge(runningSessions.length) : null,
                         })}
                         {row("history", translate("history.label"), rowIcon(
                           <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></>
@@ -2795,11 +2490,8 @@ export function AppShell() {
                 {renderProjectTrustWarning(false)}
                 {renderMoreMenuButton()}
               </div>
-              {/* Middle flexible segment: session tabs only — overflow scrolls
-                  here instead of squeezing the fixed left/right segments. */}
-              <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "center", height: "100%", overflow: "hidden" }}>
-                {renderSessionStrip()}
-              </div>
+              {/* Middle flexible segment: running-session access, no tab strip. */}
+              <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", alignItems: "center", height: "100%", overflow: "hidden" }} />
               {/* Right fixed segment: token/session stats. */}
               <div style={{ display: "flex", alignItems: "center", height: "100%", flexShrink: 0 }}>
                 {renderSessionStatsButton(false)}
@@ -2973,35 +2665,27 @@ export function AppShell() {
                     overflow: "hidden auto", maxHeight: "min(60vh, 480px)", padding: 5,
                   }}
                 >
-                  {sessionsPanelShowPinned && (
-                    <div style={{ padding: "6px 10px 2px", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)" }}>
-                      {translate("topbar.pinnedTabs")}
-                    </div>
-                  )}
-                  {topOpenSessions.length === 0 && !sessionsPanelShowPinned ? (
+                  {runningSessions.length === 0 ? (
                     <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-dim)" }}>
                       {translate("topbar.noSessions")}
                     </div>
-                  ) : topOpenSessions.map(({ session, snapshot }) => {
-                    const active = snapshot.id === selectedSession?.id;
-                    const running = runningSessionIds.has(snapshot.id);
-                    const root = session?.projectRoot || session?.cwd || snapshot.project;
+                  ) : runningSessions.map((session) => {
+                    const active = session.id === selectedSession?.id;
+                    const root = session.projectRoot || session.cwd;
                     const project = root.split(/[\\/]+/).filter(Boolean).pop() ?? root;
                     return (
                       <div
-                        key={snapshot.id}
+                        key={session.id}
                         role="menuitemradio"
                         aria-checked={active}
-                        title={`${project}${session?.cwd ? `\n${session.cwd}` : ""}`}
-                        onClick={() => {
-                          if (session) { handleSelectSession(session); setActiveTopPanel(null); }
-                        }}
+                        title={`${project}${session.cwd ? `\n${session.cwd}` : ""}`}
+                        onClick={() => { handleSelectSession(session); setActiveTopPanel(null); }}
                         style={{
                           display: "flex", alignItems: "center", gap: 8,
-                          width: "100%", height: 34, padding: "0 10px",
-                          borderRadius: 4,
+                          width: "100%", height: 32, padding: "0 10px",
+                          borderRadius: "var(--radius-control, 6px)",
                           background: active ? "var(--bg-selected)" : "transparent",
-                          color: "var(--text)", cursor: session ? "pointer" : "default", textAlign: "left", fontSize: 12,
+                          color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5,
                           transition: "background 0.1s",
                         }}
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -3010,94 +2694,26 @@ export function AppShell() {
                         <span
                           aria-hidden="true"
                           style={{
-                            width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                            background: running ? "var(--accent)" : "var(--text-dim)",
-                            opacity: running ? 1 : 0.4,
-                            boxShadow: running ? "0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)" : "none",
+                            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                            background: "var(--accent)",
+                            boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)",
                           }}
                         />
                         <span
                           style={{
                             flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            fontWeight: active ? 600 : 400,
+                            fontWeight: active ? 550 : 400,
                             color: active ? "var(--text)" : "var(--text-muted)",
                           }}
                         >
-                          {sessionTabTitle(session, snapshot)}
+                          {session.name || session.firstMessage || session.id}
                         </span>
-                        <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
+                        <span style={{ fontSize: 10.5, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
                           {project}
                         </span>
-                        <button
-                          type="button"
-                          title={translate("topbar.closeTab")}
-                          aria-label={`${translate("topbar.closeTab")}: ${sessionTabTitle(session, snapshot)}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleCloseSessionTab(snapshot.id);
-                          }}
-                          style={{
-                            display: "grid", placeItems: "center", width: 20, height: 20, flexShrink: 0,
-                            background: "none", border: "none", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                            <line x1="5" y1="5" x2="19" y2="19" /><line x1="19" y1="5" x2="5" y2="19" />
-                          </svg>
-                        </button>
                       </div>
                     );
                   })}
-                  {unpinnedRunning.length > 0 && (
-                    <>
-                      <div style={{ padding: "8px 10px 2px", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-dim)" }}>
-                        {translate("topbar.runningUnpinned")}
-                      </div>
-                      {unpinnedRunning.map((session) => {
-                        const root = session.projectRoot || session.cwd;
-                        const project = root.split(/[\\/]+/).filter(Boolean).pop() ?? root;
-                        return (
-                          <div
-                            key={session.id}
-                            role="menuitemradio"
-                            aria-checked={false}
-                            title={`${project}\n${session.cwd}`}
-                            onClick={() => { handleSelectSession(session); setActiveTopPanel(null); }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 8,
-                              width: "100%", height: 34, padding: "0 10px",
-                              borderRadius: 4,
-                              color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
-                              transition: "background 0.1s",
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                          >
-                            <span
-                              aria-hidden="true"
-                              style={{
-                                width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-                                background: "var(--accent)", opacity: 1,
-                                boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)",
-                              }}
-                            />
-                            <span
-                              style={{
-                                flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)",
-                              }}
-                            >
-                              {session.name || session.firstMessage || session.id}
-                            </span>
-                            <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
-                              {project}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
                 </div>
               )}
               {activeTopPanel === "agents" && activeSessionFamily && selectedSession && (
