@@ -2037,6 +2037,47 @@
   font-size: 24px;
 }
 /* 成本周期：今日 / 本周 / 本月 / 今年 / 累计，一行五格。 */
+/* 零余额账户折叠后的展开/收起按钮（低调，像一行链接）。 */
+.usage-stats-show-zero {
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius-control, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.usage-stats-show-zero:hover { background: var(--bg-hover); color: var(--text); }
+/* 模型明细表：供应商圆点 + provider/model，数字列右对齐。 */
+.usage-stats-model-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.usage-stats-model-provider { color: var(--text-muted); font-size: 12px; }
+.usage-stats-model-sep { color: var(--text-dim); }
+.usage-stats-model-id {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-stats-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.usage-stats-share { color: var(--text-muted); }
+/* 折叠区顶部的一行累计事实。 */
+.usage-stats-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .usage-stats-periods {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
