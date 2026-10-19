@@ -51,6 +51,10 @@ export interface SessionStatsInfo {
     total: number;
   };
   cost: number;
+  /** Model behind the latest turn (provider + id), so the top-bar session panel
+      can show it once instead of every assistant message repeating it. */
+  provider?: string;
+  model?: string;
   contextUsage?: ContextUsage;
   /** Estimated active time across all entries in the session file. */
   totalActiveMs?: number;

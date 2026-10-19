@@ -303,6 +303,9 @@ export function AppShell() {
 
   // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
   const [sessionStats, setSessionStats] = useState<SessionStatsInfo | null>(null);
+  // Provider balance for the session panel. The message footer used to show a
+  // per-message figure; that row is gone, so the session-level number lives here.
+  const [providerBalance, setProviderBalance] = useState<number | null>(null);
   const [autoNameStatus, setAutoNameStatus] = useState<AutoNameStatus>({ kind: "idle" });
   const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSessionIdRef = useRef<string | null>(selectedSession?.id ?? null);
@@ -310,6 +313,24 @@ export function AppShell() {
   const handleSessionStatsChange = useCallback((stats: SessionStatsInfo | null) => {
     setSessionStats(stats);
   }, []);
+  useEffect(() => {
+    const provider = sessionStats?.provider;
+    if (!provider) {
+      setProviderBalance(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/usage-balances")
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((data: { providers?: Record<string, { remaining: number }> } | null) => {
+        if (cancelled) return;
+        const remaining = data?.providers?.[provider]?.remaining;
+        setProviderBalance(typeof remaining === "number" ? remaining : null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // Re-read whenever the session's cost moves (a finished turn spent money).
+  }, [sessionStats?.provider, sessionStats?.cost]);
   const [copiedSessionField, setCopiedSessionField] = useState<SessionCopyField | null>(null);
   const sessionCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleCopySessionField = useCallback((field: SessionCopyField, value: string) => {
@@ -2794,6 +2815,7 @@ export function AppShell() {
                     const ws = selectedSession;
                     const sessionRows = [
                        ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
+                       ...(sessionStats.model ? [{ label: translate("session.activeModel"), value: sessionStats.provider ? `${sessionStats.provider}/${sessionStats.model}` : sessionStats.model, copyField: null }] : []),
                        { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
                        { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
                        ...(totalActiveMs > 0 ? [{ label: translate("session.totalActive"), value: formatDuration(totalActiveMs), copyField: null }] : []),
@@ -2820,6 +2842,7 @@ export function AppShell() {
                     const ctx = contextUsage ?? sessionStats.contextUsage;
                     const extraTokenRows = [
                        ...(sessionStats.cost > 0 ? [[translate("session.cost"), formatCost(sessionStats.cost)]] : []),
+                       ...(providerBalance !== null ? [[translate("session.balance"), formatCostCompact(providerBalance) ?? formatCost(providerBalance)]] : []),
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatTokens(ctx.tokens) : "?"} / ${formatTokens(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
                        // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
                        ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0

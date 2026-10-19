@@ -244,30 +244,6 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
 
 export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, quoteSelectionEnabled = false, initialPrompt, onInitialPromptConsumed, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
-  const [providerBalances, setProviderBalances] = useState<Record<string, number> | null>(null);
-  const loadBalances = useCallback(() => {
-    void fetch("/api/usage-balances")
-      .then(async (response) => (response.ok ? response.json() : null))
-      .then((data: { providers?: Record<string, { balance: number; spent: number; remaining: number }> } | null) => {
-        if (!data?.providers) return;
-        const map: Record<string, number> = {};
-        for (const [provider, info] of Object.entries(data.providers)) map[provider] = info.remaining;
-        setProviderBalances(map);
-      })
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    loadBalances();
-  }, [loadBalances]);
-  // Refetch balances whenever a running conversation finishes, so the 💰 figure
-  // reflects the latest spend without a page reload.
-  const prevSessionRunningRef = useRef(sessionRunning);
-  useEffect(() => {
-    const wasRunning = prevSessionRunningRef.current;
-    prevSessionRunningRef.current = sessionRunning;
-    if (wasRunning && !sessionRunning) loadBalances();
-  }, [sessionRunning, loadBalances]);
-
   const isMobile = useIsMobile();
   const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
 
@@ -300,8 +276,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   const [restoreAnchorReady, setRestoreAnchorReady] = useState(false);
 
   const {
-    loading, error, messages, entryIds, thinkingLevels, historyCursor, hasEarlierMessages, streamState,
-    agentRunning, bashRunning, pendingBash, toolStartTimes, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
+    loading, error, messages, entryIds, historyCursor, hasEarlierMessages, streamState,
+    agentRunning, bashRunning, pendingBash, toolStartTimes, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -323,52 +299,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     deferInitialScroll: Boolean(pendingScrollRestore),
   });
 
-  // --- Per-message balance snapshots ---
-  // Each assistant message shows the balance as of the moment it completed,
-  // not the global latest figure. Map message timestamp → { provider: remaining }.
-  const [balancesByTs, setBalancesByTs] = useState<Record<number, Record<string, number>>>({});
-  useEffect(() => {
-    const timestamps: number[] = [];
-    for (const m of messages) {
-      if (m.role === "assistant" && typeof m.timestamp === "number" && Number.isFinite(m.timestamp)) {
-        timestamps.push(m.timestamp);
-      }
-    }
-    if (timestamps.length === 0) return;
-    let cancelled = false;
-    void fetch("/api/usage-balances/timeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timestamps }),
-    })
-      .then(async (response) => (response.ok ? response.json() : null))
-      .then((data: { providers?: Record<string, { balance: number | null; remainingSeries: (number | null)[] }> } | null) => {
-        if (cancelled || !data?.providers) return;
-        const map: Record<number, Record<string, number>> = {};
-        for (const provider of Object.keys(data.providers)) {
-          const info = data.providers[provider];
-          for (let i = 0; i < timestamps.length; i += 1) {
-            const remaining = info.remainingSeries[i];
-            if (remaining === null) continue;
-            (map[timestamps[i]] ??= {})[provider] = remaining;
-          }
-        }
-        setBalancesByTs(map);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [messages]);
-  const balancesForMessage = useCallback(
-    (m: AgentMessage): Record<string, number> | null => {
-      if (m.role === "assistant" && typeof m.timestamp === "number" && balancesByTs[m.timestamp]) {
-        return balancesByTs[m.timestamp];
-      }
-      return providerBalances;
-    },
-    [balancesByTs, providerBalances],
-  );
   const sessionBusy = agentRunning || bashRunning;
   const [quotedSelection, setQuotedSelection] = useState<{
     text: string;
@@ -764,6 +694,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       sessionStats.tokens.total,
       sessionStats.cost ?? 0,
       sessionStats.totalActiveMs ?? 0,
+      sessionStats.provider ?? "",
+      sessionStats.model ?? "",
     ].join("|")
     : null;
   const sessionStatsRef = useRef(sessionStats);
@@ -973,7 +905,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       isStreaming={sessionBusy}
       model={displayModelValue}
       isAutoModelSelection={isAutoModelSelection}
-      modelNames={modelNames}
       modelList={modelList}
       modelError={modelError}
       modelScopeWarnings={modelScopeWarnings}
@@ -1154,18 +1085,15 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
                 const view = (
                   <MessageView
-                    balances={balancesForMessage(msg)}
                     key={`${keyPrefix}-view-${messageKey}`}
                     message={msg}
                     toolResults={toolResultsMap}
                     runActive={sessionBusy}
                     toolStartTimes={toolStartTimes}
-                    modelNames={modelNames}
                     cwd={messageCwd}
                     onOpenFile={onOpenFile}
                     onOpenSession={onOpenSession}
                     entryId={entryIds[idx]}
-                    thinkingLevel={thinkingLevels[idx] ?? undefined}
                     searchBlock={entryIds[idx] === pendingSearchScroll?.entryId ? searchBlock : undefined}
                     onFork={sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
                     forking={forkingEntryId === entryIds[idx]}
@@ -1309,7 +1237,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
               );
             })()}
             {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming balances={providerBalances} modelNames={modelNames} thinkingLevel={thinkingLevel === "auto" ? undefined : thinkingLevel} cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
             )}
 
             {agentRunning && !hasStreamingContent && agentPhase && (

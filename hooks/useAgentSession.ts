@@ -469,10 +469,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [newSessionDraftKey, opts.chatInputRef, resolveComposerDraftKey]);
 
   const sessionStats = useMemo(() => {
+    const modelFields = displayModel
+      ? { provider: displayModel.provider, model: displayModel.modelId }
+      : {};
     if (sessionStatsOverride) {
       return {
         ...sessionStatsOverride,
         totalActiveMs: data?.totalActiveMs,
+        ...modelFields,
         ...(contextUsage ? { contextUsage } : {}),
       };
     }
@@ -485,9 +489,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionName: session?.name,
       ...stats,
       totalActiveMs: data?.totalActiveMs,
+      ...modelFields,
       ...(contextUsage ? { contextUsage } : {}),
     } satisfies SessionStatsInfo;
-  }, [messages, sessionStatsOverride, contextUsage, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, session?.id, session?.name]);
+  }, [messages, sessionStatsOverride, contextUsage, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, session?.id, session?.name, displayModel]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     let messagesLoaded = false;

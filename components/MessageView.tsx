@@ -6,7 +6,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
-import { formatCost, formatPercent } from "@/lib/usage-stats-format";
+import { formatPercent } from "@/lib/usage-stats-format";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -185,9 +185,6 @@ interface Props {
   message: AgentMessage;
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
-  modelNames?: Record<string, string>;
-  /** Thinking level in effect when this assistant message was generated (rendered in the header). */
-  thinkingLevel?: string;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenSession?: (sessionId: string) => void;
@@ -212,8 +209,6 @@ interface Props {
   runActive?: boolean;
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
-  /** provider → 剩余余额（仅已配置余额的供应商），来自 /api/usage-balances。 */
-  balances?: Record<string, number> | null;
 }
 
 
@@ -287,12 +282,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, balances, modelNames, thinkingLevel, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} balances={balances} modelNames={modelNames} thinkingLevel={thinkingLevel} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -312,8 +307,6 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
   return prev.message === next.message
     && prev.isStreaming === next.isStreaming
     && haveSameRelevantToolResults(prev.message, prev.toolResults, next.toolResults)
-    && prev.modelNames === next.modelNames
-    && prev.thinkingLevel === next.thinkingLevel
     && prev.cwd === next.cwd
     && prev.onOpenFile === next.onOpenFile
     && prev.onOpenSession === next.onOpenSession
@@ -616,8 +609,6 @@ function AssistantMessageView({
   message,
   isStreaming,
   toolResults,
-  modelNames,
-  thinkingLevel,
   cwd,
   onOpenFile,
   onOpenSession,
@@ -629,7 +620,6 @@ function AssistantMessageView({
   writtenFiles,
   runActive,
   toolStartTimes,
-  balances,
 }: {
   message: AssistantMessage;
   /** Streamed model output still growing — the streaming-phase live tick. */
@@ -639,9 +629,6 @@ function AssistantMessageView({
   runActive?: boolean;
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
-  balances?: Record<string, number> | null;
-  modelNames?: Record<string, string>;
-  thinkingLevel?: string;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenSession?: (sessionId: string) => void;
@@ -840,7 +827,11 @@ function AssistantMessageView({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Model label */}
+      {/* Model label: intentionally removed — provider/model/thinking are
+          session-level facts and repeat on every message. They live in the
+          top-bar session panel instead. Only the live streaming estimate
+          stays here, because it is genuinely per-message. */}
+      {isStreaming && (
       <div
         style={{
           fontSize: 11.5,
@@ -851,42 +842,8 @@ function AssistantMessageView({
           gap: 6,
         }}
       >
-        {message.provider && (
-          <>
-            {/* Provider stays visible (it is the routing context), but as a calm
-                dim prefix instead of the old emoji row. */}
-            {(() => {
-              const modelLabel = getModelDisplayName(message.provider, message.model, modelNames);
-              const duplicated = modelLabel.toLowerCase().startsWith(`${message.provider.toLowerCase()}/`);
-              return (
-                <>
-                  {!duplicated && (
-                    <>
-                      <span style={{ minWidth: 0, color: "var(--text-dim)" }}>{message.provider}</span>
-                      <span aria-hidden="true" style={{ color: "var(--text-dim)", opacity: 0.55 }}>·</span>
-                    </>
-                  )}
-                  <span style={{ minWidth: 0, color: "var(--text-muted)" }}>{modelLabel}</span>
-                </>
-              );
-            })()}
-            {thinkingLevel && (
-              <span
-                style={{
-                  display: "inline-flex", alignItems: "center",
-                  height: 17, padding: "0 6px",
-                  borderRadius: "var(--radius-control, 6px)",
-                  background: "var(--bg-subtle)",
-                  color: "var(--text-muted)",
-                  fontSize: 10.5,
-                }}
-              >
-                {thinkingLevel}
-              </span>
-            )}
-          </>
-        )}
-        {isStreaming && (() => {
+
+        {(() => {
           const est = Math.round(estimatedTokens);
           return (
             <>
@@ -913,6 +870,7 @@ function AssistantMessageView({
           );
         })()}
       </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
@@ -948,16 +906,23 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {message.usage && !isStreaming && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage, t)}
-            {balances && message.provider && balances[message.provider] !== undefined && (
-              <span style={{ marginLeft: 8 }}>
-                <span aria-hidden>💰</span> {t("i18n.balance")} {formatCost(balances[message.provider])}
-              </span>
-            )}
-          </div>
-        )}
+        {message.usage && !isStreaming && (() => {
+          const hitTotal = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+          if (!(message.usage.cacheRead > 0) || hitTotal <= 0) return null;
+          const rate = message.usage.cacheRead / hitTotal;
+          // 缓存命中率是唯一保留在消息底部的内容：它是每条消息都会变的
+          // 质量指标，掉档时值得一眼看见。颜色分档由数值决定，不靠 emoji。
+          const tone = rate >= 0.9 ? "#46a758" : rate >= 0.7 ? "#d9a441" : "#e5484d";
+          return (
+            <span
+              title={`${t("i18n.cacheHitRate")} ${formatPercent(rate)}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}
+            >
+              <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: tone, flex: "0 0 auto" }} />
+              {formatPercent(rate, 1)}
+            </span>
+          );
+        })()}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
@@ -1904,26 +1869,6 @@ function getToolPreview(block: ToolCallContent): string {
 
   const first = input[keys[0]];
   return String(first).slice(0, 120);
-}
-
-function formatUsage(usage: {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: { total: number };
-}, t: (key: string) => string): string {
-  const parts = [];
-  if (usage.input) parts.push(`▼ ${t("session.input")} ${usage.input.toLocaleString()}`);
-  if (usage.output) parts.push(`▲ ${t("session.output")} ${usage.output.toLocaleString()}`);
-  if (usage.cacheRead) parts.push(`📖 ${t("i18n.cacheRead")} ${usage.cacheRead.toLocaleString()}`);
-  if (usage.cacheWrite) parts.push(`💾 ${t("i18n.cacheWrite")} ${usage.cacheWrite.toLocaleString()}`);
-  const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
-  if (usage.cacheRead > 0 && hitTotal > 0) {
-    parts.push(`🎯 ${t("i18n.hitRate")} ${formatPercent(usage.cacheRead / hitTotal)}`);
-  }
-  if (usage.cost?.total) parts.push(`🔥 ${t("i18n.cost")} ${formatCost(usage.cost.total)}`);
-  return parts.join(" · ");
 }
 
 function BashExecutionView({ message, sessionId }: { message: BashExecutionMessage; sessionId?: string }) {
