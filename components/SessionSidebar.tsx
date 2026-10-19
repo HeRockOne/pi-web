@@ -1873,14 +1873,14 @@ function SessionItem({
         <>
           {/* Child indicator: branch icon for forks, robot for subagents */}
           {depth > 0 && (session.relation?.kind === "fork" ? (
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <line x1="6" y1="3" x2="6" y2="15" />
               <circle cx="18" cy="6" r="3" />
               <circle cx="6" cy="18" r="3" />
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
           ) : (
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <rect x="5" y="7" width="14" height="11" rx="2" />
               <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
             </svg>
@@ -1893,7 +1893,7 @@ function SessionItem({
                 gap: 5,
                 minWidth: 0,
                 fontSize: 13,
-                fontWeight: isSelected ? 550 : 400,
+                fontWeight: isSelected ? 500 : 400,
                 lineHeight: 1.4,
                 color: "var(--text)",
               }}
@@ -1903,7 +1903,7 @@ function SessionItem({
                 {title}
               </span>
             </div>
-            <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11.5, fontVariantNumeric: "tabular-nums", minWidth: 0 }}>
+            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums", minWidth: 0 }}>
               {isRunning ? (
                 <RunningSessionIndicator />
               ) : isUnread ? (
@@ -2052,9 +2052,11 @@ function ProjectFolderRow({
         // path carry the hierarchy. Hover is an inset pill like session rows.
         margin: "0 6px",
         borderRadius: "var(--radius-control, 6px)",
-        background: hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: "2px solid transparent",
-        transition: "background 0.1s",
+        background: selected
+          ? "color-mix(in srgb, var(--accent) 9%, var(--bg-panel))"
+          : hovered ? "var(--bg-hover)" : "transparent",
+        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
+        transition: "background 0.12s ease, border-color 0.12s ease",
         gap: 6,
         overflow: "hidden",
       }}
@@ -2065,7 +2067,7 @@ function ProjectFolderRow({
           title={collapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 20, height: 20, padding: 0, flexShrink: 0,
+            width: 18, height: 18, padding: 0, flexShrink: 0,
             background: "none", border: "none",
             color: "var(--text-dim)", cursor: "pointer",
           }}
@@ -2073,17 +2075,17 @@ function ProjectFolderRow({
           <MorphChevron open={!collapsed} />
         </button>
       ) : (
-        <span style={{ width: 20, flexShrink: 0 }} />
+        <span style={{ width: 18, flexShrink: 0 }} />
       )}
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-muted)"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
       <div style={{ flex: 1, minWidth: 0 }}>
         <PathLabel
           text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500, color: "var(--text)" }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 450, color: "var(--text)" }}
         />
-        <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0 }}>
+        <div style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0 }}>
           {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
           <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
         </div>
