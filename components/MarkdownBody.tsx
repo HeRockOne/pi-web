@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
@@ -15,8 +15,45 @@ interface MarkdownBodyProps {
   onOpenFile?: (filePath: string) => void;
 }
 
+/**
+ * Coalesce a burst of streamed chunks into at most one markdown re-parse per
+ * animation frame. react-markdown re-parses the whole partial text on every
+ * update, so rendering once per SSE chunk turns a long answer into O(n²) parse
+ * work — the source of the multi-hundred-ms long tasks seen while streaming.
+ * Once the stream ends the full text renders immediately; nothing is deferred.
+ */
+function useFrameThrottledText(text: string, streaming: boolean): string {
+  const [shown, setShown] = useState(text);
+  const latest = useRef(text);
+  const frame = useRef<number | null>(null);
+  latest.current = text;
+
+  useEffect(() => {
+    if (!streaming) {
+      if (frame.current !== null) {
+        cancelAnimationFrame(frame.current);
+        frame.current = null;
+      }
+      setShown(latest.current);
+      return;
+    }
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      setShown(latest.current);
+    });
+  }, [text, streaming]);
+
+  useEffect(() => () => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+  }, []);
+
+  return streaming ? shown : text;
+}
+
 export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
-  const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
+  const throttledChildren = useFrameThrottledText(children, Boolean(isStreaming));
+  const normalizedMarkdown = useMemo(() => normalizeDisplayMath(throttledChildren), [throttledChildren]);
   // Stable renderer identities keep stateful blocks mounted across message hover updates.
   const components = useMemo<Components>(() => ({
     code({ className, children, ...props }) {

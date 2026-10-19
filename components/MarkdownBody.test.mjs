@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -143,4 +144,17 @@ test("keeps Mermaid source visible while the response is streaming", () => {
   assert.doesNotMatch(html, /mermaid-block-loading/);
   assert.match(html, />Preview</);
   assert.match(html, /A --&gt; B/);
+});
+
+test("coalesces streamed markdown re-parses to one per animation frame", () => {
+  const source = readFileSync(new URL("./MarkdownBody.tsx", import.meta.url), "utf8");
+
+  // react-markdown re-parses the whole partial text per update, so chunks must
+  // not render one-for-one while streaming.
+  assert.match(source, /function useFrameThrottledText\(text: string, streaming: boolean\)/);
+  assert.match(source, /frame\.current = requestAnimationFrame\(\(\) => \{/);
+  assert.match(source, /cancelAnimationFrame\(frame\.current\)/);
+  assert.match(source, /return streaming \? shown : text;/);
+  // The settled message renders the full text immediately.
+  assert.match(source, /setShown\(latest\.current\);/);
 });
