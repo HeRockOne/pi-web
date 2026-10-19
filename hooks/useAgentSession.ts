@@ -169,6 +169,9 @@ const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
 const EVENT_STREAM_IDLE_GRACE_MS = 30_000;
 const AGENT_STATE_RECONCILE_MS = 15_000;
+// Idle sessions never push context usage; poll slowly while visible so the
+// gauge reflects the latest turn without a page reload.
+const IDLE_CONTEXT_USAGE_POLL_MS = 20_000;
 const BASH_STATE_RECONCILE_MS = 1_000;
 const EVENT_STREAM_READY_TIMEOUT_MS = 60_000;
 const EVENT_STREAM_RECONNECT_DELAY_MS = 1_000;
@@ -1028,6 +1031,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // (wrapper destroyed) means nothing is compacting.
       setIsCompacting(state?.isCompacting ?? false);
       setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
+      // Context usage grows while the agent streams — sync it on every
+      // reconcile, not only after the run settles, or the top-bar gauge
+      // freezes for the whole turn.
+      if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
       if (busy) {
@@ -1037,7 +1044,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (!agentRunningRef.current) return;
       if (state) {
-        if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
         if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
@@ -1071,6 +1077,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       window.removeEventListener("online", reconcile);
     };
   }, [agentRunning, reconcileAgentState]);
+
+  // Idle context-usage refresh: while the agent is NOT running nothing pushes
+  // usage to the client, so the top-bar gauge only changed on a full page
+  // reload. Poll the cheap get_state endpoint while the tab is visible and on
+  // refocus; a wrapperless (cold) session answers { running: false } with no
+  // state, so we keep the last known value instead of clearing the gauge.
+  useEffect(() => {
+    if (agentRunning || isNew) return;
+    const refresh = async () => {
+      const sid = sessionIdRef.current;
+      if (!sid || document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/state`);
+        if (!res.ok) return;
+        const d = await res.json() as { running: boolean; state?: AgentStateResponse };
+        if (sessionIdRef.current !== sid) return;
+        if (d.running && d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
+      } catch { /* offline — the next tick retries */ }
+    };
+    const interval = setInterval(refresh, IDLE_CONTEXT_USAGE_POLL_MS);
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [agentRunning, isNew]);
 
   useEffect(() => {
     agentRunningRef.current = agentRunning;
