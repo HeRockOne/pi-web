@@ -314,6 +314,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
+  const contextUsageRef = useRef<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
+  const applyContextUsage = useCallback((next: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
+    const prev = contextUsageRef.current;
+    if (prev === next) return;
+    if (
+      prev && next
+      && prev.percent === next.percent
+      && prev.contextWindow === next.contextWindow
+      && prev.tokens === next.tokens
+    ) {
+      return;
+    }
+    contextUsageRef.current = next;
+    setContextUsage(next);
+  }, []);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
@@ -524,7 +539,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const liveState = agentState.state;
         syncLiveModel(liveState);
         if (liveState) {
-          if (liveState.contextUsage !== undefined) setContextUsage(liveState.contextUsage ?? null);
+          if (liveState.contextUsage !== undefined) applyContextUsage(liveState.contextUsage ?? null);
           if (liveState.systemPrompt !== undefined) setSystemPrompt(liveState.systemPrompt ?? null);
           if (liveState.thinkingLevel !== undefined) setThinkingLevel((liveState.thinkingLevel as ThinkingLevelOption) ?? "auto");
           if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
@@ -544,7 +559,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (showLoading && !messagesLoaded) setLoading(false);
     }
-  }, [setToolPresetState, syncLiveModel]);
+  }, [applyContextUsage, setToolPresetState, syncLiveModel]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null, before?: string | null, options?: { tail?: number; signal?: AbortSignal }) => {
     try {
@@ -1034,7 +1049,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // Context usage grows while the agent streams — sync it on every
       // reconcile, not only after the run settles, or the top-bar gauge
       // freezes for the whole turn.
-      if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+      if (state?.contextUsage !== undefined) applyContextUsage(state.contextUsage ?? null);
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
       if (busy) {
@@ -1052,7 +1067,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch {
       // Network still down — the next poll / visibility / online tick retries.
     }
-  }, [finishPromptWithoutStream, syncLiveModel]);
+  }, [applyContextUsage, finishPromptWithoutStream, syncLiveModel]);
 
   // Recovery net for missed SSE events: while the agent is running, verify
   // against the server periodically and whenever the tab returns to the
@@ -1093,7 +1108,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (!res.ok) return;
         const d = await res.json() as { running: boolean; state?: AgentStateResponse };
         if (sessionIdRef.current !== sid) return;
-        if (d.running && d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
+        if (d.running && d.state?.contextUsage !== undefined) applyContextUsage(d.state.contextUsage ?? null);
       } catch { /* offline — the next tick retries */ }
     };
     const interval = setInterval(refresh, IDLE_CONTEXT_USAGE_POLL_MS);
@@ -1105,7 +1120,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [agentRunning, isNew]);
+  }, [agentRunning, applyContextUsage, isNew]);
 
   useEffect(() => {
     agentRunningRef.current = agentRunning;
@@ -1146,7 +1161,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             .then((r) => r.json())
             .then((d: { state?: AgentStateResponse }) => {
               syncLiveModel(d.state);
-              if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
+              if (d.state?.contextUsage !== undefined) applyContextUsage(d.state.contextUsage ?? null);
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
@@ -1348,7 +1363,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setExtensionDialog((current) => current?.id === event.id ? null : current);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
+  }, [addNotice, applyContextUsage, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -1989,7 +2004,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         if (agentState?.state) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
+          if (agentState.state.contextUsage !== undefined) applyContextUsage(agentState.state.contextUsage ?? null);
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
           if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
           if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
