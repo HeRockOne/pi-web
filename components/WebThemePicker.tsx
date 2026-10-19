@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { previewTheme, useWebTheme } from "@/hooks/useWebTheme";
 import {
@@ -293,10 +293,12 @@ export function WebThemePicker() {
             aria-label={`${label} ${modeLabel(mode)}`}
           />
           <span className="web-theme-editor-basic-body">
-            <span className="web-theme-editor-basic-label">
+            <span className="web-theme-editor-basic-label" style={{ color: palette["--text"] }}>
               {label}
             </span>
-            <span className="web-theme-editor-basic-hint">{t(`themeField.${VARIABLE_I18N[key]}Hint`)}</span>
+            <span className="web-theme-editor-basic-hint" style={{ color: palette["--text-dim"] }}>
+              {t(`themeField.${VARIABLE_I18N[key]}Hint`)}
+            </span>
           </span>
           <input
             type="text"
@@ -304,6 +306,11 @@ export function WebThemePicker() {
             onChange={(event) => setPaletteValue(mode, key, event.target.value.trim())}
             spellCheck={false}
             aria-label={`${key} ${modeLabel(mode)}`}
+            style={{
+              background: palette["--bg-panel"],
+              color: palette["--text"],
+              borderColor: `color-mix(in srgb, ${palette["--text"]} 22%, transparent)`,
+            }}
           />
         </label>
       );
@@ -472,14 +479,53 @@ export function WebThemePicker() {
           </button>
         </div>
         {paletteSections.map((section) => (
-          <fieldset key={section.mode} className="web-theme-editor-group">
-            <legend>{section.label}</legend>
-            <div className="web-theme-editor-basics">
-              {BASIC_KEYS.map((key) => renderBasic(section.mode, section.palette, key))}
+          <fieldset
+            key={section.mode}
+            className={`web-theme-editor-group is-${section.mode}`}
+            style={{ color: section.palette["--text"] }}
+          >
+            {/* A chip in the mode's own palette: the region no longer borrows the
+                app theme's colors, so light and dark readouts cannot be confused. */}
+            <legend>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 3,
+                    background: section.mode === "light" ? section.palette["--bg"] : "#0b0b0c",
+                    border: `1px solid ${section.palette["--border"]}`,
+                  }}
+                />
+                {section.label}
+              </span>
+            </legend>
+            {/* Card-within-the-region: the fieldset keeps the app's neutral
+                frame, and only this inner card wears the mode's own surface.
+                A full-bleed dark block inside a light page looked like a
+                broken panel, not like "this is the dark palette". */}
+            <div
+              className="web-theme-editor-surface"
+              style={{
+                // Bind the section's own palette to the very CSS variables its
+                // children consume, so a dark section never borrows the app
+                // theme's border/text colours (that was the "which region am I
+                // in?" confusion), and vice versa. Scoped to this card only —
+                // the surrounding fieldset must stay in the app theme.
+                ...(section.palette as CSSProperties),
+                background: section.palette["--bg"],
+                borderColor: section.palette["--border"],
+                color: section.palette["--text"],
+              }}
+            >
+              <div className="web-theme-editor-basics">
+                {BASIC_KEYS.map((key) => renderBasic(section.mode, section.palette, key))}
+              </div>
+              <p className="web-theme-editor-hint" style={{ color: section.palette["--text-dim"] }}>{t("settings.colorThemeBasicsHint")}</p>
+              {renderPreview(section.mode, section.palette)}
+              {renderContrast(section.palette)}
             </div>
-            <p className="web-theme-editor-hint">{t("settings.colorThemeBasicsHint")}</p>
-            {renderPreview(section.mode, section.palette)}
-            {renderContrast(section.palette)}
             <details className="web-theme-editor-advanced">
               <summary>
                 {t("settings.colorThemeAdvanced")}

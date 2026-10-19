@@ -1590,17 +1590,40 @@
   font-size: 12.5px;
 }
 
+/* Each mode is its own surface: a light group is painted with the light
+   palette and a dark group with the dark one, so a border swatch can never be
+   mistaken for the app's own border. */
 .web-theme-editor-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 10px);
 }
 
 .web-theme-editor-group legend {
-  padding: 0 2px 4px;
-  color: var(--text-muted);
+  padding: 0 6px;
+  /* The legend sits on the fieldset's own border, outside the palette card:
+     inherit from the fieldset so it follows that mode's text colour instead
+     of the app theme's muted grey (invisible on a dark mode). */
+  color: inherit;
   font-size: 12px;
   font-weight: 600;
+}
+
+.web-theme-editor-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: var(--radius-control, 6px);
+}
+
+.web-theme-editor-group .web-theme-editor-color {
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
 }
 
 .web-theme-editor-grid {
@@ -1798,7 +1821,7 @@
 .web-theme-editor-preview {
   display: flex;
   margin-top: 2px;
-  border: 1px solid var(--border);
+  border: 1px solid currentColor;
   border-radius: var(--radius-card, 10px);
   overflow: hidden;
 }
