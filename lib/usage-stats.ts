@@ -23,6 +23,16 @@ import { buildModelCostMap, isPeakHour, repricedCost, type ModelCostWithPeak } f
 // 类型（对应 PiDeck shared/types/usageStats.ts）
 // ============================================================================
 
+/** 四类计费 token（成本按类别拆分时使用）。 */
+export type TokenKind = "input" | "output" | "cacheRead" | "cacheWrite";
+
+/** 按 token 类别拆分的成本（四类之和恒等于记录 cost… 见 addCostByKind 的实现注释）。 */
+export type CostByKind = Record<TokenKind, number>;
+
+export function emptyCostByKind(): CostByKind {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+}
+
 /** 单条用量记录（对应 usage.jsonl 一行，位置数组 10/11 字段）。 */
 export type UsageRecord = {
   /** Unix ms */
@@ -43,6 +53,8 @@ export type UsageRecord = {
   costKnown: boolean;
   /** 峰谷定价模型的记录：本次调用命中峰价（"peak"）还是谷价（"off"） */
   peakHit?: "peak" | "off";
+  /** 按类别拆分的成本（仅聚合时填充；缺失时由 totalTokens 占比兜底，见 applyPeakPricing） */
+  costByKind?: CostByKind;
 };
 
 /** 单日（或区间）合计。 */
@@ -54,6 +66,8 @@ export type DayTotals = {
   cacheWrite: number;
   cost: number;
   turns: number;
+  /** 按 token 类别拆分的成本；四类之和 = cost（定价缺失时按 token 占比兜底） */
+  costByKind: CostByKind;
   /** 有记录的会话 id 列表（去重） */
   sessions: string[];
 };
@@ -146,6 +160,7 @@ export type UsageAggregated = {
   today: DayTotals;
   thisWeek: DayTotals;
   thisMonth: DayTotals;
+  thisYear: DayTotals;
   daily: UsageDayRow[];
   heatmap: HeatmapCell[];
   heatmapStart: string;
@@ -259,7 +274,7 @@ function localWeekStart(d: Date): Date {
 }
 
 function emptyTotals(): DayTotals {
-  return { tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0, sessions: [] };
+  return { tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0, costByKind: emptyCostByKind(), sessions: [] };
 }
 
 /** 固定阈值分档（跨天可比）。 */
@@ -275,6 +290,32 @@ function levelFor(tokens: number): 0 | 1 | 2 | 3 | 4 {
 function providerOf(model: string): string {
   const idx = model.indexOf("/");
   return idx === -1 ? model : model.slice(0, idx);
+}
+
+/**
+ * 把一条记录的成本拆进四类。
+ *
+ * 定价已知（applyPeakPricing 已按峰谷单价写入 cost）时：cost = Σ(count × rate) / 1e6，
+ * 直接用同一套单价再乘一次即可精确拆分，四类之和与 cost 严格相等（误差 < 1e-12）。
+ * 定价未知时：pi-tracker 记录的 cost 是聚合值，没有类别信息，按 token 占比分摊——
+ * 这是唯一不引入新假设的退路，面板会标注「按 token 占比估算」。
+ */
+function addCostByKind(target: CostByKind, r: UsageRecord): void {
+  if (r.costByKind) {
+    target.input += r.costByKind.input;
+    target.output += r.costByKind.output;
+    target.cacheRead += r.costByKind.cacheRead;
+    target.cacheWrite += r.costByKind.cacheWrite;
+    return;
+  }
+  const weights = [r.input, r.output, r.cacheRead, r.cacheWrite];
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return;
+  const per = r.cost / sum;
+  target.input += r.input * per;
+  target.output += r.output * per;
+  target.cacheRead += r.cacheRead * per;
+  target.cacheWrite += r.cacheWrite * per;
 }
 
 type HourBucket = {
@@ -315,6 +356,7 @@ function addToHourBucket(bucket: HourBucket, r: UsageRecord): void {
   bucket.totals.cacheWrite += r.cacheWrite;
   bucket.totals.cost += r.cost;
   bucket.totals.turns += 1;
+  addCostByKind(bucket.totals.costByKind, r);
   bucket.totals.sessions.push(r.sid);
   if (!r.peakHit) return;
   let hit = bucket.peakHits.get(r.model);
@@ -370,6 +412,7 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
     bucket.totals.cacheWrite += r.cacheWrite;
     bucket.totals.cost += r.cost;
     bucket.totals.turns += 1;
+    addCostByKind(bucket.totals.costByKind, r);
     bucket.sessions.add(r.sid);
     addToProvider(bucket.byProvider, providerOf(r.model), r);
     const hour = new Date(r.ts).getHours();
@@ -409,6 +452,7 @@ export function intermediateFromRecords(records: UsageRecord[]): UsageStatsInter
     totals.cacheWrite += r.cacheWrite;
     totals.cost += r.cost;
     totals.turns += 1;
+    addCostByKind(totals.costByKind, r);
     totalSessions.add(r.sid);
 
     let modelRow = byModel.get(r.model);
@@ -494,6 +538,12 @@ function mergeTotals(a: DayTotals, b: DayTotals): DayTotals {
     cacheWrite: a.cacheWrite + b.cacheWrite,
     cost: a.cost + b.cost,
     turns: a.turns + b.turns,
+    costByKind: {
+      input: a.costByKind.input + b.costByKind.input,
+      output: a.costByKind.output + b.costByKind.output,
+      cacheRead: a.costByKind.cacheRead + b.costByKind.cacheRead,
+      cacheWrite: a.costByKind.cacheWrite + b.costByKind.cacheWrite,
+    },
     sessions: [...new Set([...a.sessions, ...b.sessions])],
   };
 }
@@ -664,6 +714,11 @@ export function buildAggregatedView(
   const thisMonth = state.dayBuckets
     .filter((b) => b.day >= monthStartKey)
     .reduce<DayTotals>((acc, b) => mergeTotals(acc, b.totals), emptyTotals());
+  // 年：按本地时区自然年（day 键是 YYYY-MM-DD，直接比前缀即可，无跨时区歧义）。
+  const yearPrefix = String(now.getFullYear());
+  const thisYear = state.dayBuckets
+    .filter((b) => b.day.startsWith(yearPrefix))
+    .reduce<DayTotals>((acc, b) => mergeTotals(acc, b.totals), emptyTotals());
 
   return {
     window: state.window,
@@ -672,6 +727,7 @@ export function buildAggregatedView(
     today: today ? today.totals : emptyTotals(),
     thisWeek,
     thisMonth,
+    thisYear,
     daily,
     heatmap,
     heatmapStart,
@@ -923,11 +979,20 @@ function applyPeakPricing(
   const out = records.map((r) => {
     const cost = map.get(r.model);
     const c = cost ? repricedCost(r, cost) : null;
-    if (c === null) return r;
+    if (!cost || c === null) return r;
     changed = true;
     const peak = cost?.peak;
-    const peakHit: "peak" | "off" | undefined = peak ? (isPeakHour(r.ts, peak.hours) ? "peak" : "off") : undefined;
-    return { ...r, cost: c, costKnown: true, peakHit };
+    const isPeak = peak ? isPeakHour(r.ts, peak.hours) : false;
+    const peakHit: "peak" | "off" | undefined = peak ? (isPeak ? "peak" : "off") : undefined;
+    // 与 repricedCost 完全相同的取价逻辑：命中峰时段就用 peak 那一套价，否则用基础价。
+    const rates = isPeak && peak ? peak : cost;
+    const costByKind: CostByKind = {
+      input: (r.input * rates.input) / 1e6,
+      output: (r.output * rates.output) / 1e6,
+      cacheRead: (r.cacheRead * rates.cacheRead) / 1e6,
+      cacheWrite: (r.cacheWrite * rates.cacheWrite) / 1e6,
+    };
+    return { ...r, cost: c, costKnown: true, peakHit, costByKind };
   });
   return changed ? out : records;
 }

@@ -35,6 +35,7 @@ import {
   formatDayKeyPlusOffset,
   formatPercent,
   formatTokens,
+  formatTokensExact,
   type RangeMode,
 } from "@/lib/usage-stats-format";
 
@@ -82,8 +83,79 @@ function SummaryCard({ label, value, sub, hero = false }: { label: string; value
  * Token 构成：一行堆叠条 + 图例（输入 / 输出 / 缓存读 / 缓存写）。
  * 计费 API 的成本几乎全由输入与缓存命中决定，所以这里给出占比而非再画一张图。
  */
-function TokenComposition({ totals }: { totals: DayTotals }) {
+/** 「今天 / 本周 / 本月 / 今年」四段成本：一眼看出钱花在什么区间。 */
+function CostPeriods({ data }: { data: UsageAggregated }) {
+  const { t, locale } = useI18n();
+  const cells = [
+    { key: "today", label: t("usageStats.periods.today"), bucket: data.today },
+    { key: "week", label: t("usageStats.periods.week"), bucket: data.thisWeek },
+    { key: "month", label: t("usageStats.periods.month"), bucket: data.thisMonth },
+    { key: "year", label: t("usageStats.periods.year"), bucket: data.thisYear },
+    { key: "all", label: t("usageStats.periods.all"), bucket: data.totals },
+  ];
+  return (
+    <div className="usage-stats-periods">
+      {cells.map((cell) => (
+        <div key={cell.key} className="usage-stats-period">
+          <span className="usage-stats-period-label">{cell.label}</span>
+          <span className="usage-stats-period-cost">{costKpi(cell.bucket.cost)}</span>
+          <span className="usage-stats-period-tokens">
+            {formatTokens(cell.bucket.tokens, locale)} · {cell.bucket.turns} {t("usageStats.periods.turns")}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 成本构成：按输入 / 输出 / 缓存读 / 缓存写拆分金额，并给出主导项结论。 */
+function CostComposition({ totals }: { totals: DayTotals }) {
   const { t } = useI18n();
+  const kinds = [
+    { key: "input", label: t("usageStats.composition.input"), value: totals.costByKind.input, color: "var(--chart-1)" },
+    { key: "output", label: t("usageStats.composition.output"), value: totals.costByKind.output, color: "var(--chart-2)" },
+    { key: "cacheRead", label: t("usageStats.composition.cacheRead"), value: totals.costByKind.cacheRead, color: "var(--chart-3)" },
+    { key: "cacheWrite", label: t("usageStats.composition.cacheWrite"), value: totals.costByKind.cacheWrite, color: "var(--chart-4)" },
+  ];
+  const sum = kinds.reduce((acc, k) => acc + k.value, 0);
+  if (!(sum > 0)) return <div className="usage-stats-hint">{t("usageStats.table.empty")}</div>;
+  const ranked = [...kinds].sort((a, b) => b.value - a.value);
+  const top = ranked[0];
+  return (
+    <div className="usage-stats-composition">
+      <div className="usage-stats-composition-bar" role="img" aria-label={t("usageStats.costComposition.title")}>
+        {kinds.filter((k) => k.value > 0).map((k) => (
+          <span
+            key={k.key}
+            className="usage-stats-composition-seg"
+            style={{ width: `${(k.value / sum) * 100}%`, background: k.color }}
+            title={`${k.label} ${formatCost(k.value)}`}
+          />
+        ))}
+      </div>
+      <p className="usage-stats-insight">
+        {t("usageStats.costComposition.insight", {
+          kind: top.label,
+          pct: formatPercent(top.value / sum, 0),
+          cost: costKpi(top.value),
+        })}
+      </p>
+      <ul className="usage-stats-composition-legend">
+        {kinds.map((k) => (
+          <li key={k.key}>
+            <span className="usage-stats-legend-dot" style={{ background: k.color }} />
+            <span className="usage-stats-composition-name">{k.label}</span>
+            <span className="usage-stats-composition-value">{costKpi(k.value)}</span>
+            <span className="usage-stats-composition-pct">{formatPercent(sum > 0 ? k.value / sum : 0, 1)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function TokenComposition({ totals }: { totals: DayTotals }) {
+  const { t, locale } = useI18n();
   const slices = [
     { key: "input", label: t("usageStats.composition.input"), value: totals.input, color: "var(--chart-1)" },
     { key: "output", label: t("usageStats.composition.output"), value: totals.output, color: "var(--chart-2)" },
@@ -100,7 +172,7 @@ function TokenComposition({ totals }: { totals: DayTotals }) {
             key={slice.key}
             className="usage-stats-composition-seg"
             style={{ width: `${(slice.value / sum) * 100}%`, background: slice.color }}
-            title={`${slice.label} ${formatTokens(slice.value)}`}
+            title={`${slice.label} ${formatTokens(slice.value, locale)}`}
           />
         ))}
       </div>
@@ -109,7 +181,7 @@ function TokenComposition({ totals }: { totals: DayTotals }) {
           <li key={slice.key}>
             <span className="usage-stats-legend-dot" style={{ background: slice.color }} />
             <span className="usage-stats-composition-name">{slice.label}</span>
-            <span className="usage-stats-composition-value">{formatTokens(slice.value)}</span>
+            <span className="usage-stats-composition-value">{formatTokens(slice.value, locale)}</span>
             <span className="usage-stats-composition-pct">{formatPercent(slice.value / sum, 1)}</span>
           </li>
         ))}
@@ -161,7 +233,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 
 /** GitHub 风格活跃热力图（自绘 SVG，无图表库依赖）。 */
 function UsageHeatmap({ data }: { data: UsageAggregated }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { heatmap, heatmapStart } = data;
   const todayKey = dayKeyOf(new Date());
 
@@ -207,7 +279,7 @@ function UsageHeatmap({ data }: { data: UsageAggregated }) {
               <title>
                 {t("usageStats.heatmap.tooltip", {
                   date,
-                  tokens: formatTokens(cell.tokens),
+                  tokens: formatTokens(cell.tokens, locale),
                   turns: String(cell.turns),
                 })}
               </title>
@@ -332,7 +404,7 @@ function UsageDailyChart({ data }: { data: UsageAggregated }) {
 
 /** 按小时分布：24 格柱状（红=命中峰价，绿=命中谷价，灰=普通），下方列出峰谷命中明细。 */
 function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const map = new Map(byHour.map((h) => [h.hour, h]));
   const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
   const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: map.get(hour) }));
@@ -351,7 +423,7 @@ function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
           const hasOff = hits.some((hit) => hit.state === "off");
           const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
           const label = `${String(hour).padStart(2, "0")}:00`;
-          const detail = tokens > 0 && row ? `${formatTokens(tokens)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
+          const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
           const tip = [
             label,
             detail,
@@ -408,7 +480,7 @@ function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
                       </span>
                     </td>
                     <td title={row.model}>{row.model}</td>
-                    <td>{formatTokens(row.tokens)}</td>
+                    <td>{formatTokens(row.tokens, locale)}</td>
                     <td>{formatCost(row.cost)}</td>
                   </tr>
                 ))}
@@ -423,7 +495,7 @@ function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
 
 /** 按天用量明细：日期选择 + 当日卡片 + provider 堆叠条 + 当日模型/项目表。 */
 function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const today = dayKeyOf(new Date());
   const [selected, setSelected] = useState<string>(today);
   const isToday = selected === today;
@@ -458,7 +530,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
       ) : (
         <>
           <div className="usage-stats-cards">
-            <SummaryCard label={t("usageStats.dayDetail.cards.tokens")} value={formatTokens(row.totals.tokens)} />
+            <SummaryCard label={t("usageStats.dayDetail.cards.tokens")} value={formatTokens(row.totals.tokens, locale)} />
             <SummaryCard
               label={t("usageStats.dayDetail.cards.cost")}
               value={<CostValue cost={row.totals.cost} costKnown={costKnown} />}
@@ -469,8 +541,8 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
               label={t("usageStats.dayDetail.cards.cacheHit")}
               value={<CacheRateValue totals={row.totals} />}
               sub={t("usageStats.dayDetail.cards.cacheSub", {
-                read: formatTokens(row.totals.cacheRead),
-                write: formatTokens(row.totals.cacheWrite),
+                read: formatTokens(row.totals.cacheRead, locale),
+                write: formatTokens(row.totals.cacheWrite, locale),
               })}
             />
           </div>
@@ -482,7 +554,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                   <div
                     key={p.provider}
                     style={{ width: `${(p.tokens / total) * 100}%`, backgroundColor: colorForProvider(p.provider) }}
-                    title={`${p.provider} · ${formatTokens(p.tokens)} · ${formatCost(p.cost)} · ${(() => { const hit = cacheHitRateOf(p); return hit === null ? "—" : `hit ${formatPercent(hit)}`; })()}`}
+                    title={`${p.provider} · ${formatTokens(p.tokens, locale)} · ${formatCost(p.cost)} · ${(() => { const hit = cacheHitRateOf(p); return hit === null ? "—" : `hit ${formatPercent(hit)}`; })()}`}
                   />
                 ))}
               </div>
@@ -491,7 +563,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                   <li key={p.provider}>
                     <span className="usage-stats-legend-dot" style={{ background: colorForProvider(p.provider) }} />
                     <span className="usage-stats-legend-name">{p.provider}</span>
-                    <span>{formatTokens(p.tokens)}</span>
+                    <span>{formatTokens(p.tokens, locale)}</span>
                     <span>
                       {formatCost(p.cost)}
                       {!costKnown && <span className="usage-stats-unknown"> *</span>}
@@ -519,7 +591,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                 ]}
                 rows={row.byModel.map((m) => {
                   const hit = cacheHitRateOf(m);
-                  return [m.model, formatTokens(m.tokens), hit === null ? "—" : formatPercent(hit), formatCost(m.cost), String(m.turns)];
+                  return [m.model, formatTokens(m.tokens, locale), hit === null ? "—" : formatPercent(hit), formatCost(m.cost), String(m.turns)];
                 })}
               />
             </div>
@@ -532,7 +604,7 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
                   t("usageStats.models.col.cost"),
                   t("usageStats.models.col.turns"),
                 ]}
-                rows={row.byProject.map((p) => [p.project, formatTokens(p.tokens), formatCost(p.cost), String(p.turns)])}
+                rows={row.byProject.map((p) => [p.project, formatTokens(p.tokens, locale), formatCost(p.cost), String(p.turns)])}
               />
             </div>
           </div>
@@ -765,7 +837,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
 
 
 export function UsageStats({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [phase, setPhase] = useState<Phase>("loading");
   const [data, setData] = useState<UsageAggregated | null>(null);
   const [logPath, setLogPath] = useState<string | null>(null);
@@ -835,24 +907,20 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             <BalanceSection rows={balances} onChanged={load} />
 
             <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.periods.title")}</SectionTitle>
+            <CostPeriods data={data} />
+
+            <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.costComposition.title")}</SectionTitle>
+            <CostComposition totals={data.totals} />
+
+            <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.cards.title")}</SectionTitle>
             <div className="usage-stats-cards">
               <SummaryCard
-                hero
-                label={t("usageStats.cards.totalCost")}
-                value={<CostValue cost={data.totals.cost} costKnown={data.costKnown} />}
-                sub={
-                  <>
-                    {t("usageStats.cards.month")} {costKpi(data.thisMonth.cost)}
-                    {" · "}
-                    {t("usageStats.cards.today")} {costKpi(data.today.cost)}
-                  </>
-                }
-              />
-              <SummaryCard
                 label={t("usageStats.cards.totalTokens")}
-                value={formatTokens(data.totals.tokens)}
-                sub={`${t("usageStats.cards.today")} ${formatTokens(data.today.tokens)}`}
+                value={formatTokens(data.totals.tokens, locale)}
+                sub={`${t("usageStats.cards.today")} ${formatTokens(data.today.tokens, locale)}`}
               />
               <SummaryCard
                 label={t("usageStats.cards.cacheHit")}
@@ -865,12 +933,12 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
               />
               <SummaryCard
                 label={t("usageStats.cards.turns")}
-                value={String(data.totals.turns)}
+                value={formatTokensExact(data.totals.turns, locale)}
                 sub={`${t("usageStats.cards.week")} ${data.thisWeek.turns}`}
               />
               <SummaryCard
                 label={t("usageStats.cards.activeDays")}
-                value={String(data.activeDays)}
+                value={formatTokensExact(data.activeDays, locale)}
                 sub={t("usageStats.window", {
                   since: dayKeyOf(new Date(data.window.since)),
                   days: String(Math.max(1, Math.round((data.window.to - data.window.since) / 86400000) + 1)),
@@ -900,7 +968,7 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                 .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
                 .map((m) => [
                   m.model,
-                  formatTokens(m.tokens),
+                  formatTokens(m.tokens, locale),
                   formatCost(m.cost),
                   String(m.turns),
                   String(m.sessions),
@@ -943,7 +1011,7 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                   .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
                   .map((p) => [
                     p.project,
-                    formatTokens(p.tokens),
+                    formatTokens(p.tokens, locale),
                     formatCost(p.cost),
                     String(p.turns),
                   ])}

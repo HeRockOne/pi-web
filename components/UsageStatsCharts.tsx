@@ -134,7 +134,7 @@ function shortProjectName(project: string): string {
 }
 
 function UsageRankTooltip({ active, payload }: ChartTooltipProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0].payload as UsageRankRow;
   return (
@@ -147,7 +147,7 @@ function UsageRankTooltip({ active, payload }: ChartTooltipProps) {
       </div>
       <div className="usage-stats-chart-tooltip-row">
         <span className="usage-stats-chart-tooltip-name">{t("usageStats.models.col.tokens")}</span>
-        <span className="usage-stats-chart-tooltip-value">{formatTokens(row.tokens)}</span>
+        <span className="usage-stats-chart-tooltip-value">{formatTokens(row.tokens, locale)}</span>
       </div>
       <div className="usage-stats-chart-tooltip-row">
         <span className="usage-stats-chart-tooltip-name">{t("usageStats.models.col.turns")}</span>

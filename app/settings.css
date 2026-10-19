@@ -2036,6 +2036,51 @@
 .usage-stats-card.is-hero .usage-stats-card-value {
   font-size: 24px;
 }
+/* 成本周期：今日 / 本周 / 本月 / 今年 / 累计，一行五格。 */
+.usage-stats-periods {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+@media (max-width: 900px) {
+  .usage-stats-periods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.usage-stats-period {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 10px);
+  background: var(--bg-panel);
+  min-width: 0;
+}
+.usage-stats-period-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.usage-stats-period-cost {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usage-stats-period:first-child .usage-stats-period-cost { color: var(--accent); }
+.usage-stats-period-tokens {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* 成本构成的自动结论：一行解读，避免用户自己算占比。 */
+.usage-stats-insight {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 /* Token 构成：一行堆叠占比条 + 图例。 */
 .usage-stats-composition {
   margin: 4px 0 12px;

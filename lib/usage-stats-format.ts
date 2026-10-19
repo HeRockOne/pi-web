@@ -5,8 +5,14 @@
 
 // ── 格式化 ────────────────────────────────────────────────────────────────
 
-/** 数字格式化：K/M/B 后缀（统计场景短格式）。 */
-export function formatTokens(n: number): string {
+/** 数字格式化：短格式。zh 系 locale 用 万/亿，其余用 K/M/B。 */
+export function formatTokens(n: number, locale?: string): string {
+  const zh = Boolean(locale && /^zh/i.test(locale));
+  if (zh) {
+    if (n >= 1e8) return `${(n / 1e8).toFixed(2)}亿`;
+    if (n >= 1e4) return `${(n / 1e4).toFixed(1)}万`;
+    return String(Math.round(n));
+  }
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
