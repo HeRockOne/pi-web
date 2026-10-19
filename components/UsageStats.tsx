@@ -23,7 +23,7 @@ import {
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
 import { UsageBalanceTrendChart, UsageCostTrendChart, UsageModelRankChart, UsageProjectRankChart } from "./UsageStatsCharts";
-import type { UsageAggregated, UsageDayRow, UsageHourRow } from "@/lib/usage-stats";
+import type { DayTotals, UsageAggregated, UsageDayRow, UsageHourRow } from "@/lib/usage-stats";
 import type { BalanceSnapshotRow } from "@/lib/usage-balances";
 import {
   buildBuckets,
@@ -31,6 +31,7 @@ import {
   colorForProvider,
   dayKeyOf,
   formatCost,
+  formatCostCompact,
   formatDayKeyPlusOffset,
   formatPercent,
   formatTokens,
@@ -49,22 +50,70 @@ type UsageStatsResponse = {
 
 // ── 小组件 ────────────────────────────────────────────────────────────────
 
+/**
+ * KPI 行金额：¥/$ 只到分（低于 1 分显示 <$0.01，0 显示 $0）。
+ * 明细表仍用 formatCost 保留有效数字，避免小额成本被抹平。
+ */
+function costKpi(cost: number): string {
+  return formatCostCompact(cost) ?? formatCost(0);
+}
+
 function CostValue({ cost, costKnown }: { cost: number; costKnown: boolean }) {
   const { t } = useI18n();
   return (
     <span title={costKnown ? undefined : t("usageStats.cards.costUnknown")}>
-      {formatCost(cost)}
+      {costKpi(cost)}
       {!costKnown && <span className="usage-stats-unknown"> *</span>}
     </span>
   );
 }
 
-function SummaryCard({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+function SummaryCard({ label, value, sub, hero = false }: { label: string; value: ReactNode; sub?: ReactNode; hero?: boolean }) {
   return (
-    <div className="usage-stats-card">
+    <div className={`usage-stats-card${hero ? " is-hero" : ""}`}>
       <div className="usage-stats-card-label">{label}</div>
       <div className="usage-stats-card-value">{value}</div>
       {sub && <div className="usage-stats-card-sub">{sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * Token 构成：一行堆叠条 + 图例（输入 / 输出 / 缓存读 / 缓存写）。
+ * 计费 API 的成本几乎全由输入与缓存命中决定，所以这里给出占比而非再画一张图。
+ */
+function TokenComposition({ totals }: { totals: DayTotals }) {
+  const { t } = useI18n();
+  const slices = [
+    { key: "input", label: t("usageStats.composition.input"), value: totals.input, color: "var(--chart-1)" },
+    { key: "output", label: t("usageStats.composition.output"), value: totals.output, color: "var(--chart-2)" },
+    { key: "cacheRead", label: t("usageStats.composition.cacheRead"), value: totals.cacheRead, color: "var(--chart-3)" },
+    { key: "cacheWrite", label: t("usageStats.composition.cacheWrite"), value: totals.cacheWrite, color: "var(--chart-4)" },
+  ];
+  const sum = slices.reduce((acc, slice) => acc + slice.value, 0);
+  if (sum <= 0) return <div className="usage-stats-hint">{t("usageStats.table.empty")}</div>;
+  return (
+    <div className="usage-stats-composition">
+      <div className="usage-stats-composition-bar" role="img" aria-label={t("usageStats.composition.title")}>
+        {slices.filter((slice) => slice.value > 0).map((slice) => (
+          <span
+            key={slice.key}
+            className="usage-stats-composition-seg"
+            style={{ width: `${(slice.value / sum) * 100}%`, background: slice.color }}
+            title={`${slice.label} ${formatTokens(slice.value)}`}
+          />
+        ))}
+      </div>
+      <ul className="usage-stats-composition-legend">
+        {slices.map((slice) => (
+          <li key={slice.key}>
+            <span className="usage-stats-legend-dot" style={{ background: slice.color }} />
+            <span className="usage-stats-composition-name">{slice.label}</span>
+            <span className="usage-stats-composition-value">{formatTokens(slice.value)}</span>
+            <span className="usage-stats-composition-pct">{formatPercent(slice.value / sum, 1)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -781,28 +830,38 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
 
         {phase === "ready" && data && data.recordCount > 0 && (
           <>
+            {/* 计费 API 的第一关注点是钱：余额与累计成本排在最前。 */}
             <SectionTitle>{t("usageStats.balance.title")}</SectionTitle>
             <BalanceSection rows={balances} onChanged={load} />
 
             <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.balanceTrend.title")}</SectionTitle>
-            <UsageBalanceTrendChart daily={data.daily} balances={balances} />
-
-            <div className="usage-stats-divider" />
-            <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
-
-            <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.cards.title")}</SectionTitle>
             <div className="usage-stats-cards">
+              <SummaryCard
+                hero
+                label={t("usageStats.cards.totalCost")}
+                value={<CostValue cost={data.totals.cost} costKnown={data.costKnown} />}
+                sub={
+                  <>
+                    {t("usageStats.cards.month")} {costKpi(data.thisMonth.cost)}
+                    {" · "}
+                    {t("usageStats.cards.today")} {costKpi(data.today.cost)}
+                  </>
+                }
+              />
               <SummaryCard
                 label={t("usageStats.cards.totalTokens")}
                 value={formatTokens(data.totals.tokens)}
                 sub={`${t("usageStats.cards.today")} ${formatTokens(data.today.tokens)}`}
               />
               <SummaryCard
-                label={t("usageStats.cards.totalCost")}
-                value={<CostValue cost={data.totals.cost} costKnown={data.costKnown} />}
-                sub={`${t("usageStats.cards.month")} ${formatCost(data.thisMonth.cost)}`}
+                label={t("usageStats.cards.cacheHit")}
+                value={<CacheRateValue totals={data.totals} />}
+                sub={
+                  <>
+                    {t("usageStats.cards.today")} <CacheRateValue totals={data.today} />
+                  </>
+                }
               />
               <SummaryCard
                 label={t("usageStats.cards.turns")}
@@ -817,28 +876,15 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                   days: String(Math.max(1, Math.round((data.window.to - data.window.since) / 86400000) + 1)),
                 })}
               />
-              <SummaryCard
-                label={t("usageStats.cards.cacheHit")}
-                value={<CacheRateValue totals={data.totals} />}
-                sub={
-                  <>
-                    {t("usageStats.cards.today")} <CacheRateValue totals={data.today} />
-                  </>
-                }
-              />
             </div>
 
             <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.heatmap.title")}</SectionTitle>
-            <UsageHeatmap data={data} />
+            <SectionTitle>{t("usageStats.composition.title")}</SectionTitle>
+            <TokenComposition totals={data.totals} />
 
             <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.costTrend.title")}</SectionTitle>
             <UsageCostTrendChart data={data} />
-
-            <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.daily.title")}</SectionTitle>
-            <UsageDailyChart data={data} />
 
             <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.models.title")}</SectionTitle>
@@ -850,42 +896,65 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                 t("usageStats.models.col.turns"),
                 t("usageStats.models.col.sessions"),
               ]}
-              rows={data.byModel.map((m) => [
-                m.model,
-                formatTokens(m.tokens),
-                formatCost(m.cost),
-                String(m.turns),
-                String(m.sessions),
-              ])}
+              rows={[...data.byModel]
+                .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
+                .map((m) => [
+                  m.model,
+                  formatTokens(m.tokens),
+                  formatCost(m.cost),
+                  String(m.turns),
+                  String(m.sessions),
+                ])}
             />
 
             <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.modelRank.title")}</SectionTitle>
-            <UsageModelRankChart data={data} />
+            <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
 
+            {/* 其余图表是次要信息，默认收起，需要时再展开。 */}
             <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.projects.title")}</SectionTitle>
-            <UsageTable
-              headers={[
-                t("usageStats.projects.col.project"),
-                t("usageStats.models.col.tokens"),
-                t("usageStats.models.col.cost"),
-                t("usageStats.models.col.turns"),
-              ]}
-              rows={data.byProject.map((p) => [
-                p.project,
-                formatTokens(p.tokens),
-                formatCost(p.cost),
-                String(p.turns),
-              ])}
-            />
+            <details className="usage-stats-details">
+              <summary className="usage-stats-details-summary">{t("usageStats.more.title")}</summary>
 
-            <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.projectRank.title")}</SectionTitle>
-            <UsageProjectRankChart data={data} />
+              <SectionTitle>{t("usageStats.balanceTrend.title")}</SectionTitle>
+              <UsageBalanceTrendChart daily={data.daily} balances={balances} />
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.daily.title")}</SectionTitle>
+              <UsageDailyChart data={data} />
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.heatmap.title")}</SectionTitle>
+              <UsageHeatmap data={data} />
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.modelRank.title")}</SectionTitle>
+              <UsageModelRankChart data={data} />
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.projects.title")}</SectionTitle>
+              <UsageTable
+                headers={[
+                  t("usageStats.projects.col.project"),
+                  t("usageStats.models.col.tokens"),
+                  t("usageStats.models.col.cost"),
+                  t("usageStats.models.col.turns"),
+                ]}
+                rows={[...data.byProject]
+                  .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
+                  .map((p) => [
+                    p.project,
+                    formatTokens(p.tokens),
+                    formatCost(p.cost),
+                    String(p.turns),
+                  ])}
+              />
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.projectRank.title")}</SectionTitle>
+              <UsageProjectRankChart data={data} />
+            </details>
           </>
         )}
-
         {phase === "ready" && (!data || data.recordCount === 0) && balances.length > 0 && (
           <>
             <SectionTitle>{t("usageStats.balance.title")}</SectionTitle>

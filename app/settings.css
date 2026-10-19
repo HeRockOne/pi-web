@@ -1807,6 +1807,78 @@
   font-size: 11px;
   color: var(--text-dim);
 }
+/* 主指标卡（成本）：左侧色条 + 更大字号，把「花了多少钱」放到视觉第一层。 */
+.usage-stats-card.is-hero {
+  border-left: 2px solid var(--accent);
+}
+.usage-stats-card.is-hero .usage-stats-card-value {
+  font-size: 24px;
+}
+/* Token 构成：一行堆叠占比条 + 图例。 */
+.usage-stats-composition {
+  margin: 4px 0 12px;
+}
+.usage-stats-composition-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-control, 6px);
+  background: var(--bg-panel);
+}
+.usage-stats-composition-seg {
+  display: block;
+  height: 100%;
+}
+.usage-stats-composition-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.usage-stats-composition-legend > li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.usage-stats-composition-name { color: var(--text-muted); }
+.usage-stats-composition-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.usage-stats-composition-pct {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* 次要图表折叠区。 */
+.usage-stats-details {
+  margin: 4px 0 8px;
+}
+.usage-stats-details-summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  list-style: none;
+}
+.usage-stats-details-summary::-webkit-details-marker { display: none; }
+.usage-stats-details-summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 14px;
+  color: var(--text-dim);
+  transition: transform 0.15s ease;
+}
+.usage-stats-details[open] > .usage-stats-details-summary::before {
+  transform: rotate(90deg);
+}
+.usage-stats-details-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .usage-stats-unknown {
   color: #d97706;
 }
