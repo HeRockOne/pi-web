@@ -877,6 +877,7 @@ export const enLocale: LocalePlugin = {
     "usageStats.hour.noPricing": "No model has peak pricing configured.",
     "usageStats.hour.recentWindow": "Hourly, last 7 days",
     "usageStats.hour.offCost": "Off-peak spend",
+    "usageStats.hour.plainCost": "Standard spend",
     "usageStats.hour.peakCost": "Peak spend",
     "usageStats.peak.title": "Peak / off-peak pricing",
     "usageStats.composition.title": "Token composition",

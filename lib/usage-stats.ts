@@ -99,12 +99,13 @@ export type UsageDayProjectSlice = { project: string; tokens: number; cost: numb
 /** 某小时某峰谷定价模型命中的段位（"peak"=峰价，"off"=谷价）与花费。 */
 export type UsageHourPeakHit = {
   model: string;
-  state: "peak" | "off";
+  /** plain = 该模型没有配置峰谷定价，按普通单价计费。 */
+  state: "peak" | "off" | "plain";
   cost: number;
   tokens: number;
 };
 
-/** 当日某小时的用量切片（hour 0-23；peakHits 仅含峰谷定价模型）。 */
+/** 当日某小时的用量切片（hour 0-23；peakHits 每个模型一条，含未配置峰谷的 plain）。 */
 export type UsageHourRow = {
   hour: number;
   totals: DayTotals;
@@ -358,14 +359,15 @@ function addToHourBucket(bucket: HourBucket, r: UsageRecord): void {
   bucket.totals.turns += 1;
   addCostByKind(bucket.totals.costByKind, r);
   bucket.totals.sessions.push(r.sid);
-  if (!r.peakHit) return;
+  // 未配置峰谷定价的模型按 plain 记录：图表里才能看到「普通计费」的那部分用量。
+  const state: UsageHourPeakHit["state"] = r.peakHit ?? "plain";
   let hit = bucket.peakHits.get(r.model);
   if (!hit) {
-    hit = { model: r.model, state: r.peakHit, cost: 0, tokens: 0 };
+    hit = { model: r.model, state, cost: 0, tokens: 0 };
     bucket.peakHits.set(r.model, hit);
-  } else if (hit.state !== r.peakHit) {
+  } else if (hit.state !== state) {
     // 同小时同模型峰/谷并存（理论不可达：窗口按整点切）：保留花费更高的段位
-    if (r.cost > hit.cost) hit.state = r.peakHit;
+    if (r.cost > hit.cost) hit.state = state;
   }
   hit.cost += r.cost;
   hit.tokens += r.totalTokens;

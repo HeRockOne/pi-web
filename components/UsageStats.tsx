@@ -601,32 +601,30 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
   })();
   const peakCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "peak").reduce((acc, hit) => acc + hit.cost, 0);
   const offCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "off").reduce((acc, hit) => acc + hit.cost, 0);
+  const plainCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "plain").reduce((acc, hit) => acc + hit.cost, 0);
   const hasPricing = peakCost + offCost > 0;
   const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
   const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: new Map(byHour.map((h) => [h.hour, h])).get(hour) }));
   const hitRows = byHour
-    .flatMap((h) => h.peakHits.filter((hit) => hit.cost > 0 || hit.tokens > 0).map((hit) => ({ hour: h.hour, ...hit })))
+    .flatMap((h) => h.peakHits.filter((hit) => hit.state !== "plain" && (hit.cost > 0 || hit.tokens > 0)).map((hit) => ({ hour: h.hour, ...hit })))
     .sort((a, b) => a.hour - b.hour);
 
   return (
     <div className="usage-stats-hour-section">
       <p className="usage-stats-hour-summary">
-        {hasPricing ? (
-          <>
-            <span>{t("usageStats.hour.peakCost")} <b>{costKpi(peakCost)}</b></span>
-            <span>{t("usageStats.hour.offCost")} <b>{costKpi(offCost)}</b></span>
-            <span className="usage-stats-hour-window">{t("usageStats.hour.recentWindow")}</span>
-          </>
-        ) : (
-          <span>{t("usageStats.hour.noPricing")}</span>
-        )}
+        <span>{t("usageStats.hour.peakCost")} <b>{costKpi(peakCost)}</b></span>
+        <span>{t("usageStats.hour.offCost")} <b>{costKpi(offCost)}</b></span>
+        <span>{t("usageStats.hour.plainCost")} <b>{costKpi(plainCost)}</b></span>
+        <span className="usage-stats-hour-window">{t("usageStats.hour.recentWindow")}</span>
+        {!hasPricing && <span className="usage-stats-hour-window">{t("usageStats.hour.noPricing")}</span>}
       </p>
       <div className="usage-stats-hour-bars">
         {hours.map(({ hour, row }) => {
           const tokens = row ? row.totals.tokens : 0;
           const hits = row ? row.peakHits : [];
-          const hasPeak = hits.some((hit) => hit.state === "peak");
-          const hasOff = hits.some((hit) => hit.state === "off");
+          // 只在「有花费的峰/谷桶」上染色；否则这格应显示为普通计费。
+          const hasPeak = hits.some((hit) => hit.state === "peak" && (hit.cost > 0 || hit.tokens > 0));
+          const hasOff = hits.some((hit) => hit.state === "off" && (hit.cost > 0 || hit.tokens > 0));
           const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
           const label = `${String(hour).padStart(2, "0")}:00`;
           const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
@@ -634,7 +632,7 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
             label,
             detail,
             ...hits.map((hit) =>
-              `${hit.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")} · ${hit.model} · ${formatCost(hit.cost)}`
+              `${hit.state === "peak" ? t("usageStats.hour.hitPeak") : hit.state === "off" ? t("usageStats.hour.hitOff") : t("usageStats.hour.legendPlain")} · ${hit.model} · ${formatCost(hit.cost)}`
             ),
           ].join("\n");
           return (
@@ -682,7 +680,7 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
                     <td>{`${String(row.hour).padStart(2, "0")}:00–${String(row.hour).padStart(2, "0")}:59`}</td>
                     <td>
                       <span className={`usage-stats-hour-badge is-${row.state}`}>
-                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")}
+                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : row.state === "off" ? t("usageStats.hour.hitOff") : t("usageStats.hour.legendPlain")}
                       </span>
                     </td>
                     <td title={row.model}>{row.model}</td>

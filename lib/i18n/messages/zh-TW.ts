@@ -876,6 +876,7 @@ export const zhTWLocale: LocalePlugin = {
     "usageStats.hour.noPricing": "目前沒有設定峰谷定價的模型。",
     "usageStats.hour.recentWindow": "最近 7 天逐小時",
     "usageStats.hour.offCost": "谷價花費",
+    "usageStats.hour.plainCost": "普通花費",
     "usageStats.hour.peakCost": "峰價花費",
     "usageStats.peak.title": "峰谷定價",
     "usageStats.composition.title": "Token 組成",
