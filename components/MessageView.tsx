@@ -853,7 +853,23 @@ function AssistantMessageView({
       >
         {message.provider && (
           <>
-            <span style={{ minWidth: 0 }}>{getModelDisplayName(message.provider, message.model, modelNames)}</span>
+            {/* Provider stays visible (it is the routing context), but as a calm
+                dim prefix instead of the old emoji row. */}
+            {(() => {
+              const modelLabel = getModelDisplayName(message.provider, message.model, modelNames);
+              const duplicated = modelLabel.toLowerCase().startsWith(`${message.provider.toLowerCase()}/`);
+              return (
+                <>
+                  {!duplicated && (
+                    <>
+                      <span style={{ minWidth: 0, color: "var(--text-dim)" }}>{message.provider}</span>
+                      <span aria-hidden="true" style={{ color: "var(--text-dim)", opacity: 0.55 }}>·</span>
+                    </>
+                  )}
+                  <span style={{ minWidth: 0, color: "var(--text-muted)" }}>{modelLabel}</span>
+                </>
+              );
+            })()}
             {thinkingLevel && (
               <span
                 style={{
