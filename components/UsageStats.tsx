@@ -567,38 +567,11 @@ function ModelCostTable({ rows }: { rows: UsageModelRow[] }) {
 /** 峰谷定价：最近 7 天的逐小时柱子（红=峰价、绿=谷价）+ 命中明细表。 */
 function UsagePeakSection({ data }: { data: UsageAggregated }) {
   const { t, locale } = useI18n();
-  // 峰谷图表看「最近 7 天」的逐小时聚合：既有今天的峰段，也有足够样本量。
-  const byHour: UsageHourRow[] = (() => {
-    const merged = new Map<number, UsageHourRow>();
-    for (const day of data.daily.slice(-7)) {
-      for (const h of day.byHour) {
-        const prev = merged.get(h.hour);
-        if (!prev) { merged.set(h.hour, { ...h, totals: { ...h.totals }, peakHits: h.peakHits.map((hit) => ({ ...hit })) }); continue; }
-        const hits = new Map(prev.peakHits.map((hit) => [hit.model + hit.state, { ...hit }]));
-        for (const hit of h.peakHits) {
-          const key = hit.model + hit.state;
-          const cur = hits.get(key);
-          if (cur) { cur.cost += hit.cost; cur.tokens += hit.tokens; } else { hits.set(key, { ...hit }); }
-        }
-        const a = prev.totals; const b = h.totals;
-        merged.set(h.hour, {
-          hour: h.hour,
-          totals: {
-            ...a,
-            tokens: a.tokens + b.tokens,
-            cost: a.cost + b.cost,
-            turns: a.turns + b.turns,
-            input: a.input + b.input,
-            output: a.output + b.output,
-            cacheRead: a.cacheRead + b.cacheRead,
-            cacheWrite: a.cacheWrite + b.cacheWrite,
-          },
-          peakHits: [...hits.values()].sort((x, y) => y.cost - x.cost),
-        });
-      }
-    }
-    return [...merged.values()];
-  })();
+  // 按「当天」而非最近 7 天聚合：这张图就是今天各小时的峰/谷/普通分布，
+  // 用历史平均会冲淡今天真实在跑的模型。
+  const todayKey = dayKeyOf(new Date());
+  const todayRow = data.daily.find((d) => d.day === todayKey);
+  const byHour: UsageHourRow[] = todayRow ? todayRow.byHour : [];
   const peakCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "peak").reduce((acc, hit) => acc + hit.cost, 0);
   const offCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "off").reduce((acc, hit) => acc + hit.cost, 0);
   const plainCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "plain").reduce((acc, hit) => acc + hit.cost, 0);
@@ -615,17 +588,22 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
         <span>{t("usageStats.hour.peakCost")} <b>{costKpi(peakCost)}</b></span>
         <span>{t("usageStats.hour.offCost")} <b>{costKpi(offCost)}</b></span>
         <span>{t("usageStats.hour.plainCost")} <b>{costKpi(plainCost)}</b></span>
-        <span className="usage-stats-hour-window">{t("usageStats.hour.recentWindow")}</span>
+        <span className="usage-stats-hour-window">{t("usageStats.hour.todayWindow")}</span>
         {!hasPricing && <span className="usage-stats-hour-window">{t("usageStats.hour.noPricing")}</span>}
       </p>
       <div className="usage-stats-hour-bars">
         {hours.map(({ hour, row }) => {
           const tokens = row ? row.totals.tokens : 0;
           const hits = row ? row.peakHits : [];
-          // 只在「有花费的峰/谷桶」上染色；否则这格应显示为普通计费。
-          const hasPeak = hits.some((hit) => hit.state === "peak" && (hit.cost > 0 || hit.tokens > 0));
-          const hasOff = hits.some((hit) => hit.state === "off" && (hit.cost > 0 || hit.tokens > 0));
-          const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
+          // 按「该小时花费最多的段位」染色：同一小时常常既有谷价模型又有普通模型，
+          // 只要出现过谷价就把整根柱子染绿会误导人（12 点其实是普通计费占大头）。
+          const byTone = { peak: 0, off: 0, plain: 0 };
+          for (const hit of hits) byTone[hit.state] += hit.cost;
+          const tone = byTone.peak > 0 && byTone.peak >= byTone.off && byTone.peak >= byTone.plain
+            ? "peak"
+            : byTone.off > 0 && byTone.off >= byTone.plain
+              ? "off"
+              : "plain";
           const label = `${String(hour).padStart(2, "0")}:00`;
           const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
           const tip = [

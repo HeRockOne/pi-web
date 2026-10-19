@@ -875,6 +875,7 @@ export const zhCNLocale: LocalePlugin = {
     "usageStats.costTrend.title": "费用趋势",
     "usageStats.hour.noPricing": "当前没有配置峰谷定价的模型。",
     "usageStats.hour.recentWindow": "最近 7 天逐小时",
+    "usageStats.hour.todayWindow": "今天逐小时",
     "usageStats.hour.offCost": "谷价花费",
     "usageStats.hour.plainCost": "普通花费",
     "usageStats.hour.peakCost": "峰价花费",

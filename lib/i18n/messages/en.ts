@@ -876,6 +876,7 @@ export const enLocale: LocalePlugin = {
     "usageStats.costTrend.title": "Cost trend",
     "usageStats.hour.noPricing": "No model has peak pricing configured.",
     "usageStats.hour.recentWindow": "Hourly, last 7 days",
+    "usageStats.hour.todayWindow": "Hourly, today",
     "usageStats.hour.offCost": "Off-peak spend",
     "usageStats.hour.plainCost": "Standard spend",
     "usageStats.hour.peakCost": "Peak spend",
