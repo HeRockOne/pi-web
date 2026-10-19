@@ -160,7 +160,7 @@ function main() {
 
   let lastCacheR = null;
   for (const row of rows) {
-    const [ts, , , model, input, output, cacheRead, cacheWrite] = row;
+    const [ts, , , , input, output, cacheRead, cacheWrite] = row;
     stats.total++;
     const hit = hitRateOf(input, cacheRead, cacheWrite);
     if (hit !== null) stats.hits.push(hit);
@@ -171,14 +171,9 @@ function main() {
     if (cacheRead > 0 && prev > 0 && cacheRead < prev * 0.5) { flags.push("cacheR暴跌"); stats.cacheDrop++; }
 
     // compress 对齐：该请求前 compressWindowSec 秒内有 compress 调用 → 标为 compress 后首请求
-    let linked = false;
-    if (compressTimes.length) {
-      const newest = compressTimes[compressTimes.length - 1];
-      if (compressTimes.some((ct) => ts - ct >= 0 && ts - ct <= compressWindowSec * 1000)) {
-        linked = true;
-        flags.push("compress后");
-        stats.compressLinked++;
-      }
+    if (compressTimes.some((ct) => ts - ct >= 0 && ts - ct <= compressWindowSec * 1000)) {
+      flags.push("compress后");
+      stats.compressLinked++;
     }
     if (cacheRead > 0 || input > 0) lastCacheR = cacheRead;
     if (cacheRead === 0 && input === 0) flags.push("(空请求)");
@@ -215,13 +210,11 @@ function main() {
   const avgHit = stats.hits.length ? stats.hits.reduce((a, b) => a + b, 0) / stats.hits.length : 0;
   // compress 后首请求的平均命中率
   let linkedHits = 0, linkedCount = 0;
-  let i = 0;
   for (const row of rows) {
     const [ts, , , , input, , cacheRead, cacheWrite] = row;
     const hit = hitRateOf(input, cacheRead, cacheWrite);
     const isLinked = compressTimes.some((ct) => ts - ct >= 0 && ts - ct <= compressWindowSec * 1000);
     if (isLinked && hit !== null) { linkedHits += hit; linkedCount++; }
-    i++;
   }
   console.log("");
   console.log("──────── 总结 ────────");
