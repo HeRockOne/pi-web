@@ -55,6 +55,7 @@ export function SettingsSectionIcon({ section, size = 16, strokeWidth = 1.8 }: {
   };
 
   if (section === "usage") return <svg {...common}><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="8" width="3" height="10" /><rect x="17" y="4" width="3" height="14" /></svg>;
+  if (section === "theme") return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" /><circle cx="9" cy="9" r="1.4" /><circle cx="15" cy="15" r="1.4" /></svg>;
   if (section === "general") return <svg {...common}><path d="M20 7h-9M14 17H5" /><circle cx="7" cy="7" r="3" /><circle cx="17" cy="17" r="3" /></svg>;
   if (section === "models") return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" /></svg>;
   if (section === "skills") return <svg {...common}><path d="m12 2-10 5 10 5 10-5-10-5Z" /><path d="m2 12 10 5 10-5M2 17l10 5 10-5" /></svg>;
@@ -74,7 +75,6 @@ function ThemeIcon({ preference }: { preference: ThemePreference }) {
 
 function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, onQuoteSelectionChange }: Pick<Props, "sessionId" | "onSessionReloaded" | "quoteSelectionEnabled" | "onQuoteSelectionChange">) {
   const { locale, setLocale, supportedLocales, t } = useI18n();
-  const { preference, setThemePreference } = useTheme();
   const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize, setFontSize } = useChatAppearance();
   const [shellSettings, setShellSettings] = useState<ShellToolSettingsResponse | null>(null);
   const [shellSaving, setShellSaving] = useState(false);
@@ -84,12 +84,6 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
   useEffect(() => {
     setThinkingExpanded(isThinkingExpandedByDefault());
   }, []);
-  const themeOptions: { id: ThemePreference; label: string }[] = [
-    { id: "light", label: t("settings.themeLight") },
-    { id: "dark", label: t("settings.themeDark") },
-    { id: "auto", label: t("settings.themeSystem") },
-  ];
-
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/tools/settings")
@@ -130,29 +124,6 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
   return (
     <div className="settings-general">
       <h2 className="settings-general-title">{t("settings.general")}</h2>
-
-      <section className="settings-general-section">
-        <h3 className="settings-general-heading">{t("settings.appearance")}</h3>
-        <div role="radiogroup" aria-label={t("settings.appearance")} className="settings-theme-options">
-          {themeOptions.map((option) => {
-            const selected = preference === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => setThemePreference(option.id)}
-                className="settings-theme-option"
-              >
-                <ThemeIcon preference={option.id} />
-                <span className="settings-theme-option-label">{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-        <WebThemePicker />
-      </section>
 
       <section className="settings-general-section">
         <h3 className="settings-general-heading">{t("settings.chat")}</h3>
@@ -280,6 +251,50 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
   );
 }
 
+function ThemeSettings() {
+  const { t } = useI18n();
+  const { preference, setThemePreference } = useTheme();
+  const themeOptions: { id: ThemePreference; label: string }[] = [
+    { id: "light", label: t("settings.themeLight") },
+    { id: "dark", label: t("settings.themeDark") },
+    { id: "auto", label: t("settings.themeSystem") },
+  ];
+
+
+  return (
+    <div className="settings-general">
+      <h2 className="settings-general-title">{t("settings.theme")}</h2>
+
+      <section className="settings-general-section">
+        <h3 className="settings-general-heading">{t("settings.appearance")}</h3>
+        <div role="radiogroup" aria-label={t("settings.appearance")} className="settings-theme-options">
+          {themeOptions.map((option) => {
+            const selected = preference === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setThemePreference(option.id)}
+                className="settings-theme-option"
+              >
+                <ThemeIcon preference={option.id} />
+                <span className="settings-theme-option-label">{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="settings-general-section">
+        <h3 className="settings-general-heading">{t("settings.palette")}</h3>
+        <WebThemePicker />
+      </section>
+    </div>
+  );
+}
+
 export function SettingsPanel({ cwd, sessionId, initialSection, onClose, onSessionReloaded, quoteSelectionEnabled, onQuoteSelectionChange }: Props) {
   const { t } = useI18n();
   const [section, setSection] = useState<SettingsSection>(initialSection);
@@ -288,6 +303,7 @@ export function SettingsPanel({ cwd, sessionId, initialSection, onClose, onSessi
   );
   const sections: { id: SettingsSection; label: string; requiresProject: boolean }[] = [
     { id: "general", label: t("settings.general"), requiresProject: false },
+    { id: "theme", label: t("settings.theme"), requiresProject: false },
     { id: "usage", label: t("settings.usage"), requiresProject: false },
     { id: "models", label: t("common.models"), requiresProject: false },
     { id: "skills", label: t("common.skills"), requiresProject: true },
@@ -378,6 +394,7 @@ export function SettingsPanel({ cwd, sessionId, initialSection, onClose, onSessi
 
         <main className="settings-dialog-main">
           {sectionHost("general", <GeneralSettings sessionId={sessionId} onSessionReloaded={onSessionReloaded} quoteSelectionEnabled={quoteSelectionEnabled} onQuoteSelectionChange={onQuoteSelectionChange} />)}
+          {sectionHost("theme", <ThemeSettings />)}
           {sectionHost("usage", <UsageStats embedded onClose={onClose} />)}
           {sectionHost("models", <ModelsConfig embedded cwd={cwd} onClose={onClose} />)}
           {cwd && sectionHost("skills", <SkillsConfig embedded key={cwd} cwd={cwd} onClose={onClose} />)}

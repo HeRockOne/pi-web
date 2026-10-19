@@ -16,6 +16,8 @@ export const enLocale: LocalePlugin = {
     "settings.general": "General",
     "settings.generalDescription": "Choose how Pi Web looks and which language it uses.",
     "settings.appearance": "Appearance",
+    "settings.theme": "Theme",
+    "settings.palette": "Palette",
     "settings.appearanceDescription": "Select a theme or follow your system preference.",
     "settings.chatContentWidth": "Chat content width",
     "settings.chatContentFontSize": "Chat font size",

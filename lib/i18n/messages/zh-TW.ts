@@ -16,6 +16,8 @@ export const zhTWLocale: LocalePlugin = {
     "settings.general": "一般",
     "settings.generalDescription": "選擇 Pi Web 的外觀與介面語言。",
     "settings.appearance": "外觀",
+    "settings.theme": "主題",
+    "settings.palette": "配色",
     "settings.appearanceDescription": "選擇淺色或深色主題，也可以跟隨系統設定。",
     "settings.chatContentWidth": "聊天內容寬度",
     "settings.chatContentFontSize": "聊天字體大小",
