@@ -578,10 +578,6 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
   const hasPricing = peakCost + offCost > 0;
   const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
   const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: new Map(byHour.map((h) => [h.hour, h])).get(hour) }));
-  const hitRows = byHour
-    .flatMap((h) => h.peakHits.filter((hit) => hit.state !== "plain" && (hit.cost > 0 || hit.tokens > 0)).map((hit) => ({ hour: h.hour, ...hit })))
-    .sort((a, b) => a.hour - b.hour);
-
   return (
     <div className="usage-stats-hour-section">
       <p className="usage-stats-hour-summary">
@@ -595,15 +591,10 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
         {hours.map(({ hour, row }) => {
           const tokens = row ? row.totals.tokens : 0;
           const hits = row ? row.peakHits : [];
-          // 按「该小时花费最多的段位」染色：同一小时常常既有谷价模型又有普通模型，
-          // 只要出现过谷价就把整根柱子染绿会误导人（12 点其实是普通计费占大头）。
+          // 堆积柱：一根柱子按 token 量切成「普通 / 谷价 / 峰价」三段。
+          // 同一小时常常既有谷价模型又有普通模型，整根染单色会掩盖构成。
           const byTone = { peak: 0, off: 0, plain: 0 };
-          for (const hit of hits) byTone[hit.state] += hit.cost;
-          const tone = byTone.peak > 0 && byTone.peak >= byTone.off && byTone.peak >= byTone.plain
-            ? "peak"
-            : byTone.off > 0 && byTone.off >= byTone.plain
-              ? "off"
-              : "plain";
+          for (const hit of hits) byTone[hit.state] += hit.tokens;
           const label = `${String(hour).padStart(2, "0")}:00`;
           const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
           const tip = [
@@ -614,11 +605,15 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
             ),
           ].join("\n");
           return (
-            <div key={hour} className={`usage-stats-hour-cell is-${tone}`} title={tip}>
+            <div key={hour} className="usage-stats-hour-cell" title={tip}>
               <div
-                className="usage-stats-hour-bar"
-                style={{ height: tokens > 0 ? `${Math.max(3, (tokens / maxTokens) * 100)}%` : "2px" }}
-              />
+                className="usage-stats-hour-col"
+                style={{ height: tokens > 0 ? `${Math.max(3, Math.round((tokens / maxTokens) * 60))}px` : "2px" }}
+              >
+                {byTone.peak > 0 && <span className="usage-stats-hour-seg is-peak" style={{ flexGrow: byTone.peak }} />}
+                {byTone.off > 0 && <span className="usage-stats-hour-seg is-off" style={{ flexGrow: byTone.off }} />}
+                {byTone.plain > 0 && <span className="usage-stats-hour-seg is-plain" style={{ flexGrow: byTone.plain }} />}
+              </div>
               <span className="usage-stats-hour-label">{hour}</span>
             </div>
           );
@@ -638,39 +633,6 @@ function UsagePeakSection({ data }: { data: UsageAggregated }) {
           {t("usageStats.hour.legendPlain")}
         </span>
       </div>
-      {hitRows.length > 0 && (
-        <div className="usage-stats-hour-hits">
-          <div className="usage-stats-hour-hits-title">{t("usageStats.hour.hitsTitle")}</div>
-          <div className="usage-stats-table-wrap">
-            <table className="usage-stats-table">
-              <thead>
-                <tr>
-                  <th>{t("usageStats.hour.col.hour")}</th>
-                  <th>{t("usageStats.hour.col.hit")}</th>
-                  <th>{t("usageStats.hour.col.model")}</th>
-                  <th>{t("usageStats.hour.col.tokens")}</th>
-                  <th>{t("usageStats.hour.col.cost")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hitRows.map((row, ri) => (
-                  <tr key={ri}>
-                    <td>{`${String(row.hour).padStart(2, "0")}:00–${String(row.hour).padStart(2, "0")}:59`}</td>
-                    <td>
-                      <span className={`usage-stats-hour-badge is-${row.state}`}>
-                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : row.state === "off" ? t("usageStats.hour.hitOff") : t("usageStats.hour.legendPlain")}
-                      </span>
-                    </td>
-                    <td title={row.model}>{row.model}</td>
-                    <td>{formatTokens(row.tokens, locale)}</td>
-                    <td>{formatCost(row.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
