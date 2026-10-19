@@ -1337,6 +1337,30 @@ export function AppShell() {
                 </button>
               );
             })}
+            <div style={{ height: 1, margin: "4px 6px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
+            <button
+              type="button"
+              onClick={() => toggleTheme()}
+              title={translate("menu.theme")}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", height: 30, padding: "0 8px",
+                background: "none", border: "none",
+                borderRadius: "var(--radius-control, 6px)",
+                color: "var(--text)", cursor: "pointer",
+                fontSize: 12, textAlign: "left", transition: "background 0.12s",
+              }}
+              onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <span>{translate("menu.theme")}</span>
+              <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 11 }}>
+                {translate(preference === "light" ? "theme.mode.light" : preference === "dark" ? "theme.mode.dark" : "theme.mode.auto")}
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => { setSettingsSection(getLastSettingsSection(projectTrustCwd)); setSidebarFooterOpen(false); }}
@@ -2482,7 +2506,6 @@ export function AppShell() {
             <>
               {/* Left fixed segment: chrome actions never resize. */}
               <div style={{ display: "flex", alignItems: "center", height: "100%", flexShrink: 0 }}>
-                {renderThemeButton(false)}
                 {renderProjectTrustWarning(false)}
                 {renderMoreMenuButton()}
               </div>
