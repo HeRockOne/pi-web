@@ -2815,7 +2815,6 @@ export function AppShell() {
                     const ws = selectedSession;
                     const sessionRows = [
                        ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
-                       ...(sessionStats.model ? [{ label: translate("session.activeModel"), value: sessionStats.provider ? `${sessionStats.provider}/${sessionStats.model}` : sessionStats.model, copyField: null }] : []),
                        { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
                        { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
                        ...(totalActiveMs > 0 ? [{ label: translate("session.totalActive"), value: formatDuration(totalActiveMs), copyField: null }] : []),
@@ -2841,6 +2840,7 @@ export function AppShell() {
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
                     const extraTokenRows = [
+                       ...(sessionStats.model ? [[translate("session.activeModel"), sessionStats.provider ? `${sessionStats.provider}/${sessionStats.model}` : sessionStats.model]] : []),
                        ...(sessionStats.cost > 0 ? [[translate("session.cost"), formatCost(sessionStats.cost)]] : []),
                        ...(providerBalance !== null ? [[translate("session.balance"), formatCostCompact(providerBalance) ?? formatCost(providerBalance)]] : []),
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatTokens(ctx.tokens) : "?"} / ${formatTokens(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
