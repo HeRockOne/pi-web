@@ -6,7 +6,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
-import { formatCost } from "@/lib/usage-stats-format";
+import { formatCost, formatPercent } from "@/lib/usage-stats-format";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -1904,7 +1904,7 @@ function formatUsage(usage: {
   if (usage.cacheWrite) parts.push(`💾 ${t("i18n.cacheWrite")} ${usage.cacheWrite.toLocaleString()}`);
   const hitTotal = usage.input + usage.cacheRead + usage.cacheWrite;
   if (usage.cacheRead > 0 && hitTotal > 0) {
-    parts.push(`🎯 ${t("i18n.hitRate")} ${((usage.cacheRead / hitTotal) * 100).toFixed(4)}%`);
+    parts.push(`🎯 ${t("i18n.hitRate")} ${formatPercent(usage.cacheRead / hitTotal)}`);
   }
   if (usage.cost?.total) parts.push(`🔥 ${t("i18n.cost")} ${formatCost(usage.cost.total)}`);
   return parts.join(" · ");

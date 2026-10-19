@@ -20,9 +20,23 @@ export function formatCost(n: number): string {
   return `$${Number(n.toPrecision(6)).toString()}`;
 }
 
-/** 百分比格式化：四位小数。 */
-export function formatPercent(rate: number): string {
-  return `${(rate * 100).toFixed(4)}%`;
+/** 百分比格式化：默认两位小数（状态栏等紧凑场合传 digits = 1）。 */
+export function formatPercent(rate: number, digits = 2): string {
+  return `${(rate * 100).toFixed(digits)}%`;
+}
+
+/** 精确 token 数：明细行与悬浮卡片用，按语言加千分位（状态栏用 formatTokens 的短后缀）。 */
+export function formatTokensExact(n: number, locale?: string): string {
+  return n.toLocaleString(locale);
+}
+
+/**
+ * 状态栏成本：0 元显示为 null（不占位），低于 1 分显示 `<$0.01`，
+ * 其余与 formatCost 同规则——避免状态栏出现 `$0.000027038` 这类长尾数字。
+ */
+export function formatCostCompact(n: number): string | null {
+  if (!(n > 0)) return null;
+  return n >= 0.01 ? "$" + n.toFixed(2) : "<$0.01";
 }
 
 /**

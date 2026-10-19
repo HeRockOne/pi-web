@@ -27,6 +27,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { getFileName } from "@/lib/file-paths";
+import { formatCost, formatCostCompact, formatPercent, formatTokens, formatTokensExact } from "@/lib/usage-stats-format";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -1900,19 +1901,14 @@ export function AppShell() {
 
     const tokens = sessionStats?.tokens;
     const cost = sessionStats?.cost ?? 0;
-    const formatCompact = (value: number) => value >= 1_000_000
-      ? `${(value / 1_000_000).toFixed(1)}M`
-      : value >= 1000
-        ? `${(value / 1000).toFixed(0)}k`
-        : String(value);
-    const costText = cost > 0 ? (cost >= 0.01 ? `$${cost.toFixed(2)}` : `<$0.01`) : null;
+    const costText = formatCostCompact(cost);
     // Avg cache hit rate = cache reads / all input-class tokens (same formula as the stats panel).
     // Capsule shows 1 decimal to stay compact; tooltip and the expanded panel keep 4.
     const hitDenominator = tokens ? tokens.cacheRead + tokens.cacheWrite + tokens.input : 0;
     const cacheHitRate = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
       ? tokens.cacheRead / hitDenominator * 100
       : null;
-    const cacheHitRateText = cacheHitRate !== null ? `${cacheHitRate.toFixed(1)}%` : null;
+    const cacheHitRateText = cacheHitRate !== null ? formatPercent(cacheHitRate / 100, 1) : null;
 
     let contextColor = "var(--text-muted)";
     let desktopContextText: string | null = null;
@@ -1922,19 +1918,19 @@ export function AppShell() {
       if (percent !== null && percent > 90) contextColor = "#ef4444";
       else if (percent !== null && percent > 70) contextColor = "rgba(234,179,8,0.95)";
       desktopContextText = contextUsage.tokens !== null
-        ? `${formatCompact(contextUsage.tokens)}/${formatCompact(contextUsage.contextWindow)}`
-        : `?/${formatCompact(contextUsage.contextWindow)}`;
+        ? `${formatTokens(contextUsage.tokens)}/${formatTokens(contextUsage.contextWindow)}`
+        : `?/${formatTokens(contextUsage.contextWindow)}`;
       mobileContextText = percent !== null ? `${percent.toFixed(0)}%` : null;
     }
 
     const tooltipParts: string[] = [];
     if (tokens) {
-      tooltipParts.push(`in: ${tokens.input.toLocaleString(locale)}`);
-      tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
-      tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
-      tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
-      if (cacheHitRate !== null) tooltipParts.push(`${translate("session.cacheHitRate")}: ${cacheHitRate.toFixed(4)}%`);
-      if (cost > 0) tooltipParts.push(`cost: $${cost.toFixed(4)}`);
+      tooltipParts.push(`in: ${formatTokensExact(tokens.input, locale)}`);
+      tooltipParts.push(`out: ${formatTokensExact(tokens.output, locale)}`);
+      tooltipParts.push(`cache read: ${formatTokensExact(tokens.cacheRead, locale)}`);
+      tooltipParts.push(`cache write: ${formatTokensExact(tokens.cacheWrite, locale)}`);
+      if (cacheHitRate !== null) tooltipParts.push(`${translate("session.cacheHitRate")}: ${formatPercent(cacheHitRate / 100)}`);
+      if (cost > 0) tooltipParts.push(`cost: ${formatCost(cost)}`);
     }
     if (contextUsage?.contextWindow) {
       const percent = contextUsage.percent;
@@ -2002,7 +1998,7 @@ export function AppShell() {
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
                 </svg>
-                {formatCompact(tokens.input)}
+                {formatTokens(tokens.input)}
               </span>
             )}
             {tokens && tokens.output > 0 && (
@@ -2010,7 +2006,7 @@ export function AppShell() {
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
                 </svg>
-                {formatCompact(tokens.output)}
+                {formatTokens(tokens.output)}
               </span>
             )}
             {costText && (
@@ -2038,7 +2034,7 @@ export function AppShell() {
                     <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
                     </svg>
-                    {formatCompact(tokens.input)}
+                    {formatTokens(tokens.input)}
                   </span>
                 )}
                 {tokens.output > 0 && (
@@ -2046,7 +2042,7 @@ export function AppShell() {
                     <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
                     </svg>
-                    {formatCompact(tokens.output)}
+                    {formatTokens(tokens.output)}
                   </span>
                 )}
                 {tokens.cacheRead > 0 && (
@@ -2054,7 +2050,7 @@ export function AppShell() {
                     <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
                     </svg>
-                    {formatCompact(tokens.cacheRead)}
+                    {formatTokens(tokens.cacheRead)}
                   </span>
                 )}
               </span>
@@ -2799,13 +2795,12 @@ export function AppShell() {
                        [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
-                    const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
                     const extraTokenRows = [
-                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
-                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatCompact(ctx.tokens) : "?"} / ${formatCompact(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
+                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), formatCost(sessionStats.cost)]] : []),
+                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatTokens(ctx.tokens) : "?"} / ${formatTokens(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
                        // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
                        ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
-                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(4)}%`]]
+                         ? [[translate("session.cacheHitRate"), formatPercent(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input))]]
                          : []),
                     ];
                     const section = (
