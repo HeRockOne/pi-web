@@ -184,96 +184,6 @@ function SectionTitle({ children }: { children: ReactNode }) {
 /** GitHub 风格活跃热力图（自绘 SVG，无图表库依赖）。 */
 
 /** 按小时分布：24 格柱状（红=命中峰价，绿=命中谷价，灰=普通），下方列出峰谷命中明细。 */
-function UsageHourSection({ byHour }: { byHour: UsageHourRow[] }) {
-  const { t, locale } = useI18n();
-  const map = new Map(byHour.map((h) => [h.hour, h]));
-  const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
-  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: map.get(hour) }));
-  const hitRows = byHour
-    .flatMap((h) => h.peakHits.map((hit) => ({ hour: h.hour, ...hit })))
-    .sort((a, b) => a.hour - b.hour);
-
-  return (
-    <div className="usage-stats-hour-section">
-      <h4>{t("usageStats.dayDetail.hoursTitle")}</h4>
-      <div className="usage-stats-hour-bars">
-        {hours.map(({ hour, row }) => {
-          const tokens = row ? row.totals.tokens : 0;
-          const hits = row ? row.peakHits : [];
-          const hasPeak = hits.some((hit) => hit.state === "peak");
-          const hasOff = hits.some((hit) => hit.state === "off");
-          const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
-          const label = `${String(hour).padStart(2, "0")}:00`;
-          const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
-          const tip = [
-            label,
-            detail,
-            ...hits.map((hit) =>
-              `${hit.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")} · ${hit.model} · ${formatCost(hit.cost)}`
-            ),
-          ].join("\n");
-          return (
-            <div key={hour} className={`usage-stats-hour-cell is-${tone}`} title={tip}>
-              <div
-                className="usage-stats-hour-bar"
-                style={{ height: tokens > 0 ? `${Math.max(3, (tokens / maxTokens) * 100)}%` : "2px" }}
-              />
-              <span className="usage-stats-hour-label">{hour}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="usage-stats-hour-legend">
-        <span>
-          <span className="usage-stats-legend-dot is-peak" />
-          {t("usageStats.hour.legendPeak")}
-        </span>
-        <span>
-          <span className="usage-stats-legend-dot is-off" />
-          {t("usageStats.hour.legendOff")}
-        </span>
-        <span>
-          <span className="usage-stats-legend-dot is-plain" />
-          {t("usageStats.hour.legendPlain")}
-        </span>
-      </div>
-      {hitRows.length > 0 && (
-        <div className="usage-stats-hour-hits">
-          <div className="usage-stats-hour-hits-title">{t("usageStats.hour.hitsTitle")}</div>
-          <div className="usage-stats-table-wrap">
-            <table className="usage-stats-table">
-              <thead>
-                <tr>
-                  <th>{t("usageStats.hour.col.hour")}</th>
-                  <th>{t("usageStats.hour.col.hit")}</th>
-                  <th>{t("usageStats.hour.col.model")}</th>
-                  <th>{t("usageStats.hour.col.tokens")}</th>
-                  <th>{t("usageStats.hour.col.cost")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hitRows.map((row, ri) => (
-                  <tr key={ri}>
-                    <td>{`${String(row.hour).padStart(2, "0")}:00–${String(row.hour).padStart(2, "0")}:59`}</td>
-                    <td>
-                      <span className={`usage-stats-hour-badge is-${row.state}`}>
-                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")}
-                      </span>
-                    </td>
-                    <td title={row.model}>{row.model}</td>
-                    <td>{formatTokens(row.tokens, locale)}</td>
-                    <td>{formatCost(row.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** 按天用量明细：日期选择 + 当日卡片 + provider 堆叠条 + 当日模型/项目表。 */
 function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: boolean }) {
   const { t, locale } = useI18n();
@@ -356,8 +266,6 @@ function UsageDayDetail({ rows, costKnown }: { rows: UsageDayRow[]; costKnown: b
             </>
           )}
 
-
-          <UsageHourSection byHour={row.byHour} />
 
           <div className="usage-stats-day-tables">
             <div>
@@ -656,6 +564,141 @@ function ModelCostTable({ rows }: { rows: UsageModelRow[] }) {
   );
 }
 
+/** 峰谷定价：最近 7 天的逐小时柱子（红=峰价、绿=谷价）+ 命中明细表。 */
+function UsagePeakSection({ data }: { data: UsageAggregated }) {
+  const { t, locale } = useI18n();
+  // 峰谷图表看「最近 7 天」的逐小时聚合：既有今天的峰段，也有足够样本量。
+  const byHour: UsageHourRow[] = (() => {
+    const merged = new Map<number, UsageHourRow>();
+    for (const day of data.daily.slice(-7)) {
+      for (const h of day.byHour) {
+        const prev = merged.get(h.hour);
+        if (!prev) { merged.set(h.hour, { ...h, totals: { ...h.totals }, peakHits: h.peakHits.map((hit) => ({ ...hit })) }); continue; }
+        const hits = new Map(prev.peakHits.map((hit) => [hit.model + hit.state, { ...hit }]));
+        for (const hit of h.peakHits) {
+          const key = hit.model + hit.state;
+          const cur = hits.get(key);
+          if (cur) { cur.cost += hit.cost; cur.tokens += hit.tokens; } else { hits.set(key, { ...hit }); }
+        }
+        const a = prev.totals; const b = h.totals;
+        merged.set(h.hour, {
+          hour: h.hour,
+          totals: {
+            ...a,
+            tokens: a.tokens + b.tokens,
+            cost: a.cost + b.cost,
+            turns: a.turns + b.turns,
+            input: a.input + b.input,
+            output: a.output + b.output,
+            cacheRead: a.cacheRead + b.cacheRead,
+            cacheWrite: a.cacheWrite + b.cacheWrite,
+          },
+          peakHits: [...hits.values()].sort((x, y) => y.cost - x.cost),
+        });
+      }
+    }
+    return [...merged.values()];
+  })();
+  const peakCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "peak").reduce((acc, hit) => acc + hit.cost, 0);
+  const offCost = byHour.flatMap((h) => h.peakHits).filter((hit) => hit.state === "off").reduce((acc, hit) => acc + hit.cost, 0);
+  const hasPricing = peakCost + offCost > 0;
+  const maxTokens = Math.max(1, ...byHour.map((h) => h.totals.tokens));
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, row: new Map(byHour.map((h) => [h.hour, h])).get(hour) }));
+  const hitRows = byHour
+    .flatMap((h) => h.peakHits.filter((hit) => hit.cost > 0 || hit.tokens > 0).map((hit) => ({ hour: h.hour, ...hit })))
+    .sort((a, b) => a.hour - b.hour);
+
+  return (
+    <div className="usage-stats-hour-section">
+      <p className="usage-stats-hour-summary">
+        {hasPricing ? (
+          <>
+            <span>{t("usageStats.hour.peakCost")} <b>{costKpi(peakCost)}</b></span>
+            <span>{t("usageStats.hour.offCost")} <b>{costKpi(offCost)}</b></span>
+            <span className="usage-stats-hour-window">{t("usageStats.hour.recentWindow")}</span>
+          </>
+        ) : (
+          <span>{t("usageStats.hour.noPricing")}</span>
+        )}
+      </p>
+      <div className="usage-stats-hour-bars">
+        {hours.map(({ hour, row }) => {
+          const tokens = row ? row.totals.tokens : 0;
+          const hits = row ? row.peakHits : [];
+          const hasPeak = hits.some((hit) => hit.state === "peak");
+          const hasOff = hits.some((hit) => hit.state === "off");
+          const tone = hasPeak ? "peak" : hasOff ? "off" : "plain";
+          const label = `${String(hour).padStart(2, "0")}:00`;
+          const detail = tokens > 0 && row ? `${formatTokens(tokens, locale)} · ${formatCost(row.totals.cost)}` : t("usageStats.hour.noUsage");
+          const tip = [
+            label,
+            detail,
+            ...hits.map((hit) =>
+              `${hit.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")} · ${hit.model} · ${formatCost(hit.cost)}`
+            ),
+          ].join("\n");
+          return (
+            <div key={hour} className={`usage-stats-hour-cell is-${tone}`} title={tip}>
+              <div
+                className="usage-stats-hour-bar"
+                style={{ height: tokens > 0 ? `${Math.max(3, (tokens / maxTokens) * 100)}%` : "2px" }}
+              />
+              <span className="usage-stats-hour-label">{hour}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="usage-stats-hour-legend">
+        <span>
+          <span className="usage-stats-legend-dot is-peak" />
+          {t("usageStats.hour.legendPeak")}
+        </span>
+        <span>
+          <span className="usage-stats-legend-dot is-off" />
+          {t("usageStats.hour.legendOff")}
+        </span>
+        <span>
+          <span className="usage-stats-legend-dot is-plain" />
+          {t("usageStats.hour.legendPlain")}
+        </span>
+      </div>
+      {hitRows.length > 0 && (
+        <div className="usage-stats-hour-hits">
+          <div className="usage-stats-hour-hits-title">{t("usageStats.hour.hitsTitle")}</div>
+          <div className="usage-stats-table-wrap">
+            <table className="usage-stats-table">
+              <thead>
+                <tr>
+                  <th>{t("usageStats.hour.col.hour")}</th>
+                  <th>{t("usageStats.hour.col.hit")}</th>
+                  <th>{t("usageStats.hour.col.model")}</th>
+                  <th>{t("usageStats.hour.col.tokens")}</th>
+                  <th>{t("usageStats.hour.col.cost")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hitRows.map((row, ri) => (
+                  <tr key={ri}>
+                    <td>{`${String(row.hour).padStart(2, "0")}:00–${String(row.hour).padStart(2, "0")}:59`}</td>
+                    <td>
+                      <span className={`usage-stats-hour-badge is-${row.state}`}>
+                        {row.state === "peak" ? t("usageStats.hour.hitPeak") : t("usageStats.hour.hitOff")}
+                      </span>
+                    </td>
+                    <td title={row.model}>{row.model}</td>
+                    <td>{formatTokens(row.tokens, locale)}</td>
+                    <td>{formatCost(row.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UsageStats({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const { t, locale } = useI18n();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -733,6 +776,10 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.costComposition.title")}</SectionTitle>
             <CostComposition totals={data.totals} />
+
+            <div className="usage-stats-divider" />
+            <SectionTitle>{t("usageStats.peak.title")}</SectionTitle>
+            <UsagePeakSection data={data} />
 
             <div className="usage-stats-divider" />
             <SectionTitle>{t("usageStats.costTrend.title")}</SectionTitle>

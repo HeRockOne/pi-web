@@ -2111,8 +2111,8 @@
 }
 .usage-stats-period:first-child .usage-stats-period-cost { color: var(--accent); }
 .usage-stats-period-tokens {
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: 11.5px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 /* 成本构成的自动结论：一行解读，避免用户自己算占比。 */
@@ -2540,6 +2540,22 @@
   background: var(--bg-panel);
   padding: 10px 12px;
 }
+/* 峰谷区顶部的花费小结：峰/谷各自花了多少，一眼看出值不值。 */
+.usage-stats-hour-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.usage-stats-hour-summary b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.usage-stats-hour-window { color: var(--text-dim); font-size: 11.5px; }
 .usage-stats-hour-section h4 {
   margin: 0 0 8px;
   font-size: 12px;

@@ -68,7 +68,7 @@ function UsageCostTooltip({ active, payload, label }: ChartTooltipProps) {
 
 export function UsageCostTrendChart({ data }: { data: UsageAggregated }) {
   const { t } = useI18n();
-  const [mode, setMode] = useState<RangeMode>("month");
+  const [mode, setMode] = useState<RangeMode>("day");
   const buckets = useMemo(() => buildBuckets(data.daily, mode, new Date()), [data, mode]);
   const rangeLabels: Record<RangeMode, string> = {
     day: t("usageStats.daily.rangeDay"),
