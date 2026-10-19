@@ -1198,6 +1198,7 @@
 .settings-chat-range-option input {
   display: block;
   width: 100%;
+  max-width: 420px;
   margin-top: 2px;
   accent-color: var(--accent);
 }
@@ -1396,8 +1397,9 @@
 
 .web-theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 10px;
   width: 100%;
 }
 
@@ -1405,10 +1407,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: var(--radius-card, 10px);
   background: var(--bg-panel);
   color: var(--text);
   text-align: left;
@@ -1424,13 +1426,14 @@
 
 .web-theme-card.is-active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-panel));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .web-theme-card-new {
   align-items: center;
   justify-content: center;
-  min-height: 64px;
+  min-height: 0;
   border-style: dashed;
   color: var(--text-muted);
   font-size: 13px;
@@ -1448,10 +1451,10 @@
 .web-theme-swatch {
   position: relative;
   flex: 1;
-  height: 34px;
+  height: 30px;
   overflow: hidden;
-  border-radius: 5px;
-  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 6px);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 
 .web-theme-swatch-bubble {
@@ -1499,9 +1502,10 @@
 
 .web-theme-card-badge {
   flex-shrink: 0;
-  padding: 1px 5px;
+  padding: 0 5px;
   border-radius: 4px;
-  background: var(--bg-selected);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: transparent;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 400;

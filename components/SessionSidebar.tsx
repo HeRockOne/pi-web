@@ -2051,7 +2051,7 @@ function ProjectFolderRow({
         // macOS-style section headers: no tinted band; folder icon + mono
         // path carry the hierarchy. Hover is an inset pill like session rows.
         margin: "0 6px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-control, 6px)",
         background: hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: "2px solid transparent",
         transition: "background 0.1s",
@@ -2075,15 +2075,15 @@ function ProjectFolderRow({
       ) : (
         <span style={{ width: 20, flexShrink: 0 }} />
       )}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-muted)"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
       <div style={{ flex: 1, minWidth: 0 }}>
         <PathLabel
           text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500, color: "var(--text)" }}
         />
-        <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
+        <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0 }}>
           {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
           <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
         </div>
