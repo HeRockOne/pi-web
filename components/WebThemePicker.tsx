@@ -13,37 +13,62 @@ import {
   type WebThemePalette,
 } from "@/lib/web-theme-types";
 import {
+  DERIVED_FROM,
+  contrastRatio,
+  contrastVerdict,
   deriveDarkFromLight,
+  deriveRelated,
   generatePalettesFromSeed,
   normalizeHex6,
+  restoreDerived,
+  swatchHex,
 } from "@/lib/web-theme-generate";
 
 /**
  * Color-theme picker for the settings "Appearance" section.
- * Builtin presets are selectable only; custom themes can be created,
- * edited, deleted, and live-previewed while editing.
  *
- * New themes start as a copy of an existing theme (base template selector)
- * and every color field has a native color picker next to its text input,
- * so hand-writing hex codes is never required.
+ * Editing is built around the four colors a person can actually reason about
+ * (--bg, --bg-panel, --text, --accent): changing one recomputes every token that
+ * follows from it, hand-picked values are kept and marked "edited" so they can be
+ * restored, and the other ten live behind a collapsed "advanced" section. Each
+ * mode gets a preview strip and WCAG contrast readouts, so "is this readable?"
+ * is answered inside the dialog instead of after saving.
  */
 
-const VARIABLE_LABELS: Record<ThemeVariableKey, string> = {
-  "--bg": "bg 背景",
-  "--bg-panel": "panel 面板",
-  "--bg-hover": "hover 悬浮",
-  "--bg-selected": "selected 选中",
-  "--border": "border 边框",
-  "--text": "text 主文本",
-  "--text-muted": "muted 次级文本",
-  "--text-dim": "dim 弱化文本",
-  "--accent": "accent 强调色",
-  "--accent-hover": "accent hover 悬浮强调",
-  "--user-bg": "user 用户气泡",
-  "--assistant-bg": "assistant 助手消息",
-  "--tool-bg": "tool 工具区",
-  "--bg-subtle": "subtle 聚焦光环",
+type Mode = "light" | "dark";
+type ManualMap = Record<Mode, ThemeVariableKey[]>;
+
+/** The colors a user has to think about; everything else follows from them. */
+const BASIC_KEYS: ThemeVariableKey[] = ["--bg", "--bg-panel", "--text", "--accent"];
+const ADVANCED_KEYS = THEME_VARIABLE_KEYS.filter((key) => !BASIC_KEYS.includes(key));
+
+/** Token -> i18n suffix under `themeField.` */
+const VARIABLE_I18N: Record<ThemeVariableKey, string> = {
+  "--bg": "bg",
+  "--bg-panel": "bgPanel",
+  "--bg-hover": "bgHover",
+  "--bg-selected": "bgSelected",
+  "--border": "border",
+  "--text": "text",
+  "--text-muted": "textMuted",
+  "--text-dim": "textDim",
+  "--accent": "accent",
+  "--accent-hover": "accentHover",
+  "--user-bg": "userBg",
+  "--assistant-bg": "assistantBg",
+  "--tool-bg": "toolBg",
+  "--bg-subtle": "bgSubtle",
 };
+
+const EMPTY_MANUAL: ManualMap = { light: [], dark: [] };
+
+/** Mark every token whose current value is not the one it would derive to. */
+function detectManual(palette: WebThemePalette, mode: Mode): ThemeVariableKey[] {
+  return ADVANCED_KEYS.filter((key) => {
+    const derived = restoreDerived(palette, key, mode);
+    return derived !== undefined && derived !== palette[key];
+  });
+}
 
 interface EditorState {
   id: string | null;
@@ -52,9 +77,10 @@ interface EditorState {
   seed: string; // one-color generator input
   light: WebThemePalette;
   dark: WebThemePalette;
+  manual: ManualMap; // tokens the user has overridden by hand
 }
 
-function paletteFrom(theme: WebTheme, mode: "light" | "dark"): WebThemePalette {
+function paletteFrom(theme: WebTheme, mode: Mode): WebThemePalette {
   return { ...theme[mode] };
 }
 
@@ -66,6 +92,7 @@ function newEditorState(base: WebTheme): EditorState {
     seed: base.light["--accent"],
     light: paletteFrom(base, "light"),
     dark: paletteFrom(base, "dark"),
+    manual: EMPTY_MANUAL,
   };
 }
 
@@ -77,6 +104,10 @@ function editorFromTheme(theme: WebTheme): EditorState {
     seed: theme.light["--accent"],
     light: paletteFrom(theme, "light"),
     dark: paletteFrom(theme, "dark"),
+    manual: {
+      light: detectManual(theme.light, "light"),
+      dark: detectManual(theme.dark, "dark"),
+    },
   };
 }
 
@@ -95,10 +126,19 @@ function buildTheme(editor: EditorState): WebTheme | null {
     dark: editor.dark,
   });
 }
-function ThemeSwatch({ theme, mode }: { theme: WebTheme; mode: "light" | "dark" }) {
+
+function ThemeSwatch({
+  theme,
+  mode,
+  label,
+}: {
+  theme: WebTheme;
+  mode: Mode;
+  label: string;
+}) {
   const palette = theme[mode];
   return (
-    <span className="web-theme-swatch" style={{ background: palette["--bg"] }} title={mode === "light" ? "Light 浅色" : "Dark 深色"}>
+    <span className="web-theme-swatch" style={{ background: palette["--bg"] }} title={label}>
       <span className="web-theme-swatch-bubble" style={{ background: palette["--user-bg"] }} />
       <span className="web-theme-swatch-panel" style={{ background: palette["--bg-panel"] }} />
       <span className="web-theme-swatch-accent" style={{ background: palette["--accent"] }} />
@@ -114,6 +154,10 @@ export function WebThemePicker() {
 
   const activeTheme = useMemo(() => findTheme(themes, activeId) ?? null, [themes, activeId]);
 
+  const fieldLabel = (key: ThemeVariableKey) => t(`themeField.${VARIABLE_I18N[key]}`);
+  const modeLabel = (mode: Mode) =>
+    mode === "light" ? t("settings.colorThemeModeLight") : t("settings.colorThemeModeDark");
+
   const closeEditor = () => {
     setEditor(null);
     setError(null);
@@ -126,6 +170,46 @@ export function WebThemePicker() {
     setEditor(next);
     const candidate = buildTheme(next);
     if (candidate) previewTheme(candidate); // live preview only once all 28 values are valid
+  };
+
+  /** Replace one base color and recompute everything that follows from it. */
+  const setPaletteValue = (mode: Mode, key: ThemeVariableKey, value: string) => {
+    if (!editor) return;
+    const palette: WebThemePalette = { ...editor[mode], [key]: value };
+    const previous = editor.manual[mode];
+    let manual: ThemeVariableKey[];
+    if (BASIC_KEYS.includes(key)) {
+      // Choosing a base color by hand hands the derived tokens back to the rules.
+      manual = previous.filter((entry) => entry !== key);
+      const derived = deriveRelated(palette, key, mode);
+      for (const [derivedKey, derivedValue] of Object.entries(derived)) {
+        if (derivedValue && !manual.includes(derivedKey as ThemeVariableKey)) {
+          palette[derivedKey as ThemeVariableKey] = derivedValue;
+        }
+      }
+    } else {
+      manual = previous.includes(key) ? previous : [...previous, key];
+    }
+    updateEditor({ [mode]: palette, manual: { ...editor.manual, [mode]: manual } } as Partial<EditorState>);
+  };
+
+  /** Drop a hand-picked value and go back to what the rules would produce. */
+  const restoreAuto = (mode: Mode, key: ThemeVariableKey) => {
+    if (!editor) return;
+    const base = DERIVED_FROM[key];
+    if (!base) return;
+    const derived = restoreDerived(editor[mode], key, mode);
+    if (derived === undefined) return;
+    updateEditor({
+      [mode]: { ...editor[mode], [key]: derived },
+      manual: { ...editor.manual, [mode]: editor.manual[mode].filter((entry) => entry !== key) },
+    } as Partial<EditorState>);
+  };
+
+  /** One seed color in, a complete light + dark palette out. */
+  const applySeed = (seed: string) => {
+    const generated = generatePalettesFromSeed(seed);
+    updateEditor({ seed, light: generated.light, dark: generated.dark, manual: EMPTY_MANUAL });
   };
 
   const handleSave = () => {
@@ -157,10 +241,162 @@ export function WebThemePicker() {
   };
 
   if (editor) {
-    const paletteSections: { mode: "light" | "dark"; label: string; palette: WebThemePalette }[] = [
+    const paletteSections: { mode: Mode; label: string; palette: WebThemePalette }[] = [
       { mode: "light", label: t("settings.colorThemeLightPalette"), palette: editor.light },
       { mode: "dark", label: t("settings.colorThemeDarkPalette"), palette: editor.dark },
     ];
+
+    const renderField = (mode: Mode, palette: WebThemePalette, key: ThemeVariableKey) => {
+      const label = fieldLabel(key);
+      const manual = editor.manual[mode].includes(key);
+      return (
+        <label key={key} className="web-theme-editor-field" title={key}>
+          <input
+            type="color"
+            className="web-theme-editor-color"
+            value={swatchHex(palette[key], palette["--bg"])}
+            onChange={(event) => setPaletteValue(mode, key, event.target.value)}
+            aria-label={`${label} ${modeLabel(mode)}`}
+          />
+          <span className="web-theme-editor-key">{label}</span>
+          <input
+            type="text"
+            value={palette[key]}
+            onChange={(event) => setPaletteValue(mode, key, event.target.value.trim())}
+            spellCheck={false}
+            aria-label={`${key} ${modeLabel(mode)}`}
+          />
+          {manual && (
+            <button
+              type="button"
+              className="web-theme-editor-manual"
+              title={t("settings.colorThemeRestoreAuto")}
+              aria-label={`${t("settings.colorThemeRestoreAuto")}: ${label}`}
+              onClick={() => restoreAuto(mode, key)}
+            >
+              {t("settings.colorThemeManual")}
+            </button>
+          )}
+        </label>
+      );
+    };
+
+    const renderBasic = (mode: Mode, palette: WebThemePalette, key: ThemeVariableKey) => {
+      const label = fieldLabel(key);
+      return (
+        <label key={key} className="web-theme-editor-basic" title={key}>
+          <input
+            type="color"
+            className="web-theme-editor-color"
+            value={swatchHex(palette[key], palette["--bg"])}
+            onChange={(event) => setPaletteValue(mode, key, event.target.value)}
+            aria-label={`${label} ${modeLabel(mode)}`}
+          />
+          <span className="web-theme-editor-basic-body">
+            <span className="web-theme-editor-basic-label">
+              {label}
+            </span>
+            <span className="web-theme-editor-basic-hint">{t(`themeField.${VARIABLE_I18N[key]}Hint`)}</span>
+          </span>
+          <input
+            type="text"
+            value={palette[key]}
+            onChange={(event) => setPaletteValue(mode, key, event.target.value.trim())}
+            spellCheck={false}
+            aria-label={`${key} ${modeLabel(mode)}`}
+          />
+        </label>
+      );
+    };
+
+    const renderContrast = (palette: WebThemePalette) => {
+      const checks: { label: string; ratio: number | null }[] = [
+        { label: t("settings.colorThemeTextOnBg"), ratio: contrastRatio(palette["--text"], palette["--bg"]) },
+        { label: t("settings.colorThemeMutedOnBg"), ratio: contrastRatio(palette["--text-muted"], palette["--bg"]) },
+      ];
+      const verdictLabel = { good: t("settings.colorThemeContrastGood"), low: t("settings.colorThemeContrastLow"), bad: t("settings.colorThemeContrastBad") };
+      return (
+        <div className="web-theme-editor-checks">
+          <span className="web-theme-editor-checks-title">{t("settings.colorThemeContrast")}</span>
+          {checks.map((check) => {
+            const verdict = contrastVerdict(check.ratio);
+            return (
+              <span key={check.label} className={`web-theme-editor-check is-${verdict}`}>
+                {check.label}
+                <b>{check.ratio === null ? "—" : `${check.ratio.toFixed(1)}:1`}</b>
+                {verdictLabel[verdict]}
+              </span>
+            );
+          })}
+        </div>
+      );
+    };
+
+    // Every token shown in the preview strip wears its own name, so the sample
+    // doubles as the legend.
+    const renderPreview = (mode: Mode, palette: WebThemePalette) => (
+      <div
+        className="web-theme-editor-preview"
+        style={{ background: palette["--bg"], borderColor: palette["--border"] }}
+        aria-label={`${t("settings.colorThemePreview")} ${modeLabel(mode)}`}
+      >
+        <div
+          className="web-theme-editor-preview-panel"
+          style={{ background: palette["--bg-panel"], borderColor: palette["--border"] }}
+        >
+          <span
+            className="web-theme-editor-preview-item"
+            style={{ background: palette["--bg-selected"], borderLeft: `2px solid ${palette["--accent"]}`, color: palette["--text"] }}
+          >
+            {fieldLabel("--bg-selected")}
+          </span>
+          <span
+            className="web-theme-editor-preview-item"
+            style={{ background: palette["--bg-hover"], color: palette["--text"] }}
+          >
+            {fieldLabel("--bg-hover")}
+          </span>
+        </div>
+        <div className="web-theme-editor-preview-main">
+          <span className="web-theme-editor-preview-line" style={{ color: palette["--text"] }}>
+            {fieldLabel("--text")}
+          </span>
+          <span className="web-theme-editor-preview-line" style={{ color: palette["--text-muted"] }}>
+            {fieldLabel("--text-muted")}
+          </span>
+          <span className="web-theme-editor-preview-line" style={{ color: palette["--text-dim"] }}>
+            {fieldLabel("--text-dim")}
+          </span>
+          <div className="web-theme-editor-preview-row">
+            <span
+              className="web-theme-editor-preview-chip"
+              style={{
+                background: palette["--accent"],
+                color: contrastRatio(palette["--bg"], palette["--accent"]) !== null
+                  && (contrastRatio(palette["--bg"], palette["--accent"]) ?? 0) >= 3
+                  ? palette["--bg"]
+                  : "#ffffff",
+              }}
+            >
+              {fieldLabel("--accent")}
+            </span>
+            <span
+              className="web-theme-editor-preview-chip"
+              style={{ background: palette["--tool-bg"], border: `1px solid ${palette["--border"]}`, color: palette["--text-muted"] }}
+            >
+              {fieldLabel("--tool-bg")}
+            </span>
+            <span
+              className="web-theme-editor-preview-chip"
+              style={{ background: palette["--user-bg"], border: `1px solid ${palette["--border"]}`, color: palette["--text"] }}
+            >
+              {fieldLabel("--user-bg")}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+
     return (
       <div className="web-theme-editor">
         <div className="web-theme-editor-row">
@@ -190,11 +426,18 @@ export function WebThemePicker() {
             className="web-theme-editor-seed"
             value={normalizeHex6(editor.seed) ?? "#2563eb"}
             aria-label={t("settings.colorThemeSeed")}
-            onChange={(event) => {
-              const generated = generatePalettesFromSeed(event.target.value);
-              updateEditor({ seed: event.target.value, light: generated.light, dark: generated.dark });
-            }}
+            onChange={(event) => applySeed(event.target.value)}
           />
+          <button
+            type="button"
+            className="web-theme-button web-theme-button-secondary"
+            onClick={() => applySeed(editor.seed)}
+          >
+            {t("settings.colorThemeGenerate")}
+          </button>
+          <span className="web-theme-editor-tools-hint">{t("settings.colorThemeSeedHint")}</span>
+        </div>
+        <div className="web-theme-editor-tools web-theme-editor-tools-secondary">
           {editor.id === null && (
             <>
               <span className="web-theme-editor-tools-label">{t("settings.colorThemeBase")}</span>
@@ -203,7 +446,11 @@ export function WebThemePicker() {
                 onChange={(event) => {
                   const base = findTheme(themes, event.target.value);
                   if (!base) return;
-                  updateEditor({ light: paletteFrom(base, "light"), dark: paletteFrom(base, "dark") });
+                  updateEditor({
+                    light: paletteFrom(base, "light"),
+                    dark: paletteFrom(base, "dark"),
+                    manual: EMPTY_MANUAL,
+                  });
                 }}
               >
                 {themes.map((theme) => (
@@ -217,7 +464,9 @@ export function WebThemePicker() {
           <button
             type="button"
             className="web-theme-button web-theme-button-secondary"
-            onClick={() => updateEditor({ dark: deriveDarkFromLight(editor.light) })}
+            onClick={() =>
+              updateEditor({ dark: deriveDarkFromLight(editor.light), manual: { ...editor.manual, dark: [] } })
+            }
           >
             {t("settings.colorThemeGenerateDark")}
           </button>
@@ -225,30 +474,26 @@ export function WebThemePicker() {
         {paletteSections.map((section) => (
           <fieldset key={section.mode} className="web-theme-editor-group">
             <legend>{section.label}</legend>
-            <div className="web-theme-editor-grid">
-              {THEME_VARIABLE_KEYS.map((key) => (
-                <label key={key} className="web-theme-editor-field" title={key}>
-                  <input
-                    type="color"
-                    className="web-theme-editor-color"
-                    value={normalizeHex6(section.palette[key]) ?? "#888888"}
-                    onChange={(event) => updateEditor({
-                      [section.mode]: { ...section.palette, [key]: event.target.value },
-                    } as Partial<EditorState>)}
-                    aria-label={`${section.label} ${VARIABLE_LABELS[key]}`}
-                  />
-                  <span className="web-theme-editor-key">{VARIABLE_LABELS[key]}</span>
-                  <input
-                    type="text"
-                    value={section.palette[key]}
-                    onChange={(event) => updateEditor({
-                      [section.mode]: { ...section.palette, [key]: event.target.value.trim() },
-                    } as Partial<EditorState>)}
-                    spellCheck={false}
-                  />
-                </label>
-              ))}
+            <div className="web-theme-editor-basics">
+              {BASIC_KEYS.map((key) => renderBasic(section.mode, section.palette, key))}
             </div>
+            <p className="web-theme-editor-hint">{t("settings.colorThemeBasicsHint")}</p>
+            {renderPreview(section.mode, section.palette)}
+            {renderContrast(section.palette)}
+            <details className="web-theme-editor-advanced">
+              <summary>
+                {t("settings.colorThemeAdvanced")}
+                {editor.manual[section.mode].length > 0 && (
+                  <span className="web-theme-editor-advanced-count">
+                    {t("settings.colorThemeManual")} {editor.manual[section.mode].length}
+                  </span>
+                )}
+              </summary>
+              <p className="web-theme-editor-hint">{t("settings.colorThemeAdvancedHint")}</p>
+              <div className="web-theme-editor-grid">
+                {ADVANCED_KEYS.map((key) => renderField(section.mode, section.palette, key))}
+              </div>
+            </details>
           </fieldset>
         ))}
         {error && <p role="alert" className="settings-general-error">{error}</p>}
@@ -285,8 +530,8 @@ export function WebThemePicker() {
               className={`web-theme-card${selected ? " is-active" : ""}`}
             >
               <div className="web-theme-card-swatches">
-                <ThemeSwatch theme={theme} mode="light" />
-                <ThemeSwatch theme={theme} mode="dark" />
+                <ThemeSwatch theme={theme} mode="light" label={t("settings.colorThemeModeLight")} />
+                <ThemeSwatch theme={theme} mode="dark" label={t("settings.colorThemeModeDark")} />
               </div>
               <div className="web-theme-card-body">
                 <span className="web-theme-card-name">

@@ -1,5 +1,6 @@
 import {
   THEME_VARIABLE_KEYS,
+  type ThemeVariableKey,
   type WebThemePalette,
 } from "./web-theme-types";
 
@@ -150,4 +151,177 @@ export function generatePalettesFromSeed(seedHex: string): { light: WebThemePale
   };
 
   return { light, dark };
+}
+
+/**
+ * Blend two colors in HSL space: `t = 0` keeps `a`, `t = 1` yields `b`.
+ * Non-hex inputs (rgba() and friends) return null — callers fall back to
+ * leaving the token untouched rather than writing a broken value.
+ */
+export function mixHex(a: string, b: string, t: number): string | null {
+  const ha = hexToHsl(normalizeHex6(a) ?? "");
+  const hb = hexToHsl(normalizeHex6(b) ?? "");
+  if (!ha || !hb) return null;
+  const k = clamp(t, 0, 1);
+  // Keep `a`'s hue: interpolating hues would drag neutral surfaces through
+  // unrelated colors when text and background sit on different sides of the wheel.
+  return hslToHex(ha[0], ha[1] + (hb[1] - ha[1]) * k, ha[2] + (hb[2] - ha[2]) * k);
+}
+
+/** #rrggbb / rgb() / rgba() → channels + alpha; null when unparseable. */
+function parseColor(value: string): { r: number; g: number; b: number; a: number } | null {
+  const v = value.trim();
+  const hex = normalizeHex6(v);
+  if (hex) {
+    return {
+      r: parseInt(hex.slice(1, 3), 16),
+      g: parseInt(hex.slice(3, 5), 16),
+      b: parseInt(hex.slice(5, 7), 16),
+      a: 1,
+    };
+  }
+  const m = /^rgba?\(([^)]+)\)$/i.exec(v);
+  if (!m) return null;
+  const parts = m[1].split(/[,/\s]+/).filter(Boolean).map(Number);
+  if (parts.length < 3 || parts.slice(0, 3).some((n) => Number.isNaN(n))) return null;
+  return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 && !Number.isNaN(parts[3]) ? parts[3] : 1 };
+}
+
+function relativeLuminance(rgb: { r: number; g: number; b: number }): number {
+  const channel = (raw: number) => {
+    const c = clamp(raw, 0, 255) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+}
+
+/**
+ * WCAG contrast ratio between two palette colors, or null when either value is
+ * not a color we can read. A translucent foreground is composited over the
+ * background first, which is what the eye sees in the app.
+ */
+export function contrastRatio(foreground: string, background: string): number | null {
+  const fg = parseColor(foreground);
+  const bg = parseColor(background);
+  if (!fg || !bg) return null;
+  const composed = {
+    r: fg.r * fg.a + bg.r * (1 - fg.a),
+    g: fg.g * fg.a + bg.g * (1 - fg.a),
+    b: fg.b * fg.a + bg.b * (1 - fg.a),
+  };
+  const lf = relativeLuminance(composed);
+  const lb = relativeLuminance(bg);
+  const [hi, lo] = lf >= lb ? [lf, lb] : [lb, lf];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** WCAG thresholds: 4.5:1 for body text, 3:1 for the "good enough" tier. */
+export function contrastVerdict(ratio: number | null): "good" | "low" | "bad" {
+  if (ratio === null) return "bad";
+  if (ratio >= 4.5) return "good";
+  if (ratio >= 3) return "low";
+  return "bad";
+}
+
+/**
+ * Which base token every derived token follows. The editor uses this to offer
+ * "restore automatic" on a field the user overrode by hand.
+ */
+export const DERIVED_FROM: Partial<Record<ThemeVariableKey, ThemeVariableKey>> = {
+  "--bg-panel": "--bg",
+  "--bg-hover": "--bg",
+  "--bg-selected": "--bg",
+  "--border": "--bg",
+  "--bg-subtle": "--bg",
+  "--assistant-bg": "--bg",
+  "--tool-bg": "--bg",
+  "--text-muted": "--text",
+  "--text-dim": "--text",
+  "--accent-hover": "--accent",
+  "--user-bg": "--accent",
+};
+
+/**
+ * Recompute the tokens that follow from one base color.
+ *
+ * Every rule is "step away from the page background toward the text color" (for
+ * surfaces) or "step away from the text color toward the page background" (for
+ * quieter text), so a palette stays coherent when the user only picks a handful
+ * of colors by hand. Dark palettes take bigger steps because the same lightness
+ * delta reads as a smaller contrast change on dark surfaces.
+ */
+export function deriveRelated(
+  palette: WebThemePalette,
+  base: ThemeVariableKey,
+  mode: "light" | "dark",
+): Partial<WebThemePalette> {
+  const out: Partial<WebThemePalette> = {};
+  const dark = mode === "dark";
+  const bg = palette["--bg"];
+  const text = palette["--text"];
+  const accent = palette["--accent"];
+
+  const surface = (t: number) => {
+    const mixed = mixHex(bg, text, dark ? t * 1.6 : t);
+    return mixed ?? undefined;
+  };
+  const put = (key: ThemeVariableKey, value: string | undefined) => {
+    if (value) out[key] = value;
+  };
+
+  if (base === "--bg") {
+    put("--bg-panel", surface(0.035));
+    put("--bg-hover", surface(0.07));
+    put("--bg-selected", surface(0.11));
+    put("--tool-bg", surface(0.025));
+    // Stays translucent on purpose: it fills chart hover cursors and stacks on
+    // top of other surfaces, where an opaque tint would hide what is under it.
+    const textRgb = parseColor(text);
+    put(
+      "--bg-subtle",
+      textRgb
+        ? `rgba(${Math.round(textRgb.r)}, ${Math.round(textRgb.g)}, ${Math.round(textRgb.b)}, ${dark ? 0.05 : 0.028})`
+        : undefined,
+    );
+    out["--assistant-bg"] = bg;
+    const border = mixHex(bg, text, dark ? 0.34 : 0.16);
+    put("--border", border ?? undefined);
+  } else if (base === "--text") {
+    put("--text-muted", mixHex(text, bg, dark ? 0.34 : 0.36) ?? undefined);
+    put("--text-dim", mixHex(text, bg, dark ? 0.55 : 0.62) ?? undefined);
+  } else if (base === "--accent") {
+    put("--accent-hover", dark ? mixHex(accent, "#ffffff", 0.16) ?? undefined : mixHex(accent, "#000000", 0.16) ?? undefined);
+    put("--user-bg", mixHex(bg, accent, 0.08) ?? undefined);
+  }
+  return out;
+}
+
+/** Value a derived token would have if it had not been overridden by hand. */
+export function restoreDerived(
+  palette: WebThemePalette,
+  key: ThemeVariableKey,
+  mode: "light" | "dark",
+): string | undefined {
+  const base = DERIVED_FROM[key];
+  if (!base) return undefined;
+  return deriveRelated(palette, base, mode)[key];
+}
+
+/**
+ * A solid hex that approximates how `value` looks on `surface`, for small
+ * color swatches. Translucent tokens are composited over the surface instead of
+ * being shown as their raw (misleading) channel value.
+ */
+export function swatchHex(value: string, surface: string): string {
+  const toHex = (rgb: { r: number; g: number; b: number }) =>
+    `#${[rgb.r, rgb.g, rgb.b].map((c) => clamp(Math.round(c), 0, 255).toString(16).padStart(2, "0")).join("")}`;
+  const fg = parseColor(value);
+  if (!fg) return "#888888";
+  const bg = parseColor(surface);
+  if (fg.a >= 1 || !bg) return toHex(fg);
+  return toHex({
+    r: fg.r * fg.a + bg.r * (1 - fg.a),
+    g: fg.g * fg.a + bg.g * (1 - fg.a),
+    b: fg.b * fg.a + bg.b * (1 - fg.a),
+  });
 }
