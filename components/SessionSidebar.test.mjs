@@ -133,7 +133,13 @@ test("renders the session list as a project folder tree", () => {
   assert.match(source, /const rowPadding = depth === 0 \? 26 : 14 \+ depth \* 18;/);
   assert.match(source, /const lineX = \(layer: number\) => 14 \+ layer \* 18 \+ 8;/);
   assert.match(source, /\[\.\.\.guides, \.\.\.\(hasChildren && !collapsed \? tails : \[\]\)\]/);
-  assert.match(source, /color-mix\(in srgb, var\(--accent\) 9%, var\(--bg-panel\)\)/);
+  assert.match(source, /color-mix\(in srgb, var\(--accent\) 13%, var\(--bg-panel\)\)/);
   assert.match(source, /isSelected \? "2px solid var\(--accent\)"/);
+  // The project header never gets a selection band of its own — otherwise it
+  // competes with the selected session row. It is marked by the accent folder
+  // icon + accent mono path instead.
+  assert.match(source, /background: hovered \? "var\(--bg-hover\)" : "transparent"/);
+  assert.match(source, /fontWeight: selected \? 550 : 450, color: selected \? "var\(--accent\)" : "var\(--text\)"/);
+  assert.doesNotMatch(source, /borderLeft: selected \? "2px solid var\(--accent\)"/);
   assert.doesNotMatch(source, /rgba\(127,127,127,0\.07\)/);
 });

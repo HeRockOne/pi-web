@@ -1762,7 +1762,7 @@ function SessionItem({
         background: confirmDelete
           ? "color-mix(in srgb, #ef4444 7%, transparent)"
           : isSelected
-            ? "color-mix(in srgb, var(--accent) 9%, var(--bg-panel))"
+            ? "color-mix(in srgb, var(--accent) 13%, var(--bg-panel))"
             : hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid #ef4444"
@@ -1903,7 +1903,7 @@ function SessionItem({
                 {title}
               </span>
             </div>
-            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums", minWidth: 0 }}>
+            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden" }}>
               {isRunning ? (
                 <RunningSessionIndicator />
               ) : isUnread ? (
@@ -2048,14 +2048,14 @@ function ProjectFolderRow({
         paddingLeft: 8,
         paddingRight: 8,
         cursor: "pointer",
-        // macOS-style section headers: no tinted band; folder icon + mono
-        // path carry the hierarchy. Hover is an inset pill like session rows.
+        // macOS-style section headers: no tinted band at all — the accent
+        // folder icon + mono path mark the current project, so the selection
+        // highlight stays exclusively on the session row below it. Hover is an
+        // inset pill like session rows.
         margin: "0 6px",
         borderRadius: "var(--radius-control, 6px)",
-        background: selected
-          ? "color-mix(in srgb, var(--accent) 9%, var(--bg-panel))"
-          : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
+        background: hovered ? "var(--bg-hover)" : "transparent",
+        borderLeft: "2px solid transparent",
         transition: "background 0.12s ease, border-color 0.12s ease",
         gap: 6,
         overflow: "hidden",
@@ -2077,15 +2077,15 @@ function ProjectFolderRow({
       ) : (
         <span style={{ width: 18, flexShrink: 0 }} />
       )}
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-muted)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
       <div style={{ flex: 1, minWidth: 0 }}>
         <PathLabel
           text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 450, color: "var(--text)" }}
+          style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: selected ? 550 : 450, color: selected ? "var(--accent)" : "var(--text)" }}
         />
-        <div style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0 }}>
+        <div style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden" }}>
           {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
           <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
         </div>
