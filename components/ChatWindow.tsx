@@ -1915,16 +1915,16 @@ function AskDialog({
   const handleOption = useCallback((position: number) => {
     if (!question) return;
     if (!multi) {
-      // Single-select: one tap settles the question and moves on, matching the
-      // standalone plugin so muscle memory carries over.
-      const next = selectAskOption(drafts, index, position, false);
-      setDrafts(next);
-      if (isLast) submitAll(next);
-      else goNext();
+      // Single-select settles the question on one tap, but only mid-wizard does
+      // it advance. On the last question the pick is merely recorded: submitting
+      // must stay an explicit action, because the user may still want to step
+      // back and revise an earlier answer before committing.
+      setDrafts(selectAskOption(drafts, index, position, false));
+      if (!isLast) goNext();
       return;
     }
     setDrafts((current) => selectAskOption(current, index, position, true));
-  }, [drafts, goNext, index, isLast, multi, question, submitAll]);
+  }, [drafts, goNext, index, isLast, multi, question]);
   const countdown = remainingSeconds !== null && (
     <span style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
       {t("chat.extensionExpiresIn", { seconds: remainingSeconds })}

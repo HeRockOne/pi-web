@@ -41,8 +41,12 @@ test("AskDialog keeps drafts for every question in one state array", () => {
   assert.doesNotMatch(askSource, /const \[selected, setSelected\]/);
 });
 
-test("a multi-select question needs an explicit commit while a single-select does not", () => {
-  assert.match(askSource, /if \(!multi\) \{[\s\S]*?selectAskOption\(drafts, index, position, false\)[\s\S]*?if \(isLast\) submitAll\(next\);\s*else goNext\(\);/);
+test("an option tap only advances mid-wizard, never submits", () => {
+  // Regression: tapping an option on the last question used to fire submitAll,
+  // committing the whole wizard before the user could step back and revise.
+  assert.match(askSource, /setDrafts\(selectAskOption\(drafts, index, position, false\)\);\s*if \(!isLast\) goNext\(\);/);
+  assert.doesNotMatch(askSource, /if \(isLast\) submitAll\(next\)/);
+  // Multi-select toggles only; committing stays the footer button's job.
   assert.match(askSource, /setDrafts\(\(current\) => selectAskOption\(current, index, position, true\)\)/);
 });
 
