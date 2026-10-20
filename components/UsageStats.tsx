@@ -8,7 +8,7 @@
  * 模型明细」这一条主线，其余图表默认收起或已删除，避免图表淹没结论。
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ConfigButton, ConfigPanelShell } from "./SettingsUi";
 import { UsageCostTrendChart } from "./UsageStatsCharts";
@@ -20,6 +20,7 @@ import {
   dayKeyOf,
   formatCost,
   formatCostCompact,
+  formatMoney,
   formatPercent,
   formatTokens,
   formatTokensExact,
@@ -321,14 +322,17 @@ function BalanceBar({ balance, remaining }: { balance: number; remaining: number
 function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onChanged: () => void }) {
   const { t } = useI18n();
   const [rechargeDrafts, setRechargeDrafts] = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState<string | null>(null);
+  /** 行内编辑：recharge = 叠加充值（balance += x）；set = 直接设定余额（balance = x）。 */
+  const [editing, setEditing] = useState<{ provider: string; mode: "recharge" | "set" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [showZero, setShowZero] = useState(false);
 
-  /** 叠加充值：新余额 = 现有余额 + 金额，已扣/基线不动。成功后收起行内编辑。 */
-  const recharge = async (row: BalanceSnapshotRow) => {
+  /** 写入余额：mode=recharge 叠加（balance + x），mode=set 覆盖（balance = x）；已扣/基线不动。 */
+  const writeBalance = async (row: BalanceSnapshotRow) => {
+    // mode 只由「哪一列打开了编辑器」决定：余额列 = 覆盖设定，操作列充值 = 叠加。
+    const mode = editing?.provider === row.provider ? editing.mode : "recharge";
     const raw = rechargeDrafts[row.provider] ?? "";
     const value = Number(raw);
     if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
@@ -341,7 +345,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
       const response = await fetch("/api/usage-stats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: row.provider, add: value }),
+        body: JSON.stringify(mode === "recharge" ? { provider: row.provider, add: value } : { provider: row.provider, balance: value }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
@@ -419,6 +423,7 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
           <thead>
             <tr>
               <th>{t("usageStats.balance.col.provider")}</th>
+              <th>{t("usageStats.balance.col.balance")}</th>
               <th>{t("usageStats.balance.col.remaining")}</th>
               <th>{t("usageStats.balance.col.spent")}</th>
               <th>{t("usageStats.balance.col.actions")}</th>
@@ -429,11 +434,30 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
               const remaining = row.remaining;
               const negative = remaining !== null && remaining < 0;
               return (
-                <tr key={row.provider}>
+              <Fragment key={row.provider}>
+                <tr className={row.balance === null ? "is-no-balance" : undefined}>
                   <td>
                     <span className="usage-stats-legend-dot" style={{ background: colorForProvider(row.provider) }} />
                     <span className="usage-stats-legend-name">{row.provider}</span>
                     {!row.costKnown && <span className="usage-stats-unknown"> *</span>}
+                  </td>
+                  <td>
+                    <div className="usage-stats-balance-actions">
+                      <span className="usage-stats-balance-total">{row.balance === null ? "—" : formatMoney(row.balance)}</span>
+                      {editing?.provider !== row.provider && (
+                        <button
+                          type="button"
+                          className="usage-stats-balance-btn"
+                          onClick={() => {
+                            setRechargeDrafts((prev) => ({ ...prev, [row.provider]: row.balance === null ? "" : row.balance.toFixed(2) }));
+                            setEditing({ provider: row.provider, mode: "set" });
+                          }}
+                          disabled={busy === row.provider}
+                        >
+                          {t("usageStats.balance.setBalance")}
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {remaining === null ? (
@@ -441,63 +465,84 @@ function BalanceSection({ rows, onChanged }: { rows: BalanceSnapshotRow[]; onCha
                     ) : (
                       <>
                         <span className={negative ? "usage-stats-balance-negative usage-stats-balance-total" : "usage-stats-balance-total"}>
-                          {formatCost(remaining)}
+                          {formatMoney(remaining)}
                         </span>
                         <BalanceBar balance={row.balance ?? 0} remaining={remaining} />
                       </>
                     )}
                   </td>
-                  <td>{formatCost(row.spent)}</td>
+                  <td className="usage-stats-balance-total">{formatMoney(row.spent)}</td>
                   <td>
-                    {editing === row.provider ? (
-                      <div className="usage-stats-balance-actions is-open">
+                    <div className="usage-stats-balance-actions">
+                      {saved === row.provider && <span className="usage-stats-balance-saved">{t("usageStats.balance.saved")}</span>}
+                      <button
+                        type="button"
+                        className="usage-stats-balance-btn is-primary"
+                        onClick={() => {
+                          setRechargeDrafts((prev) => ({ ...prev, [row.provider]: "" }));
+                          setEditing({ provider: row.provider, mode: "recharge" });
+                        }}
+                        disabled={busy === row.provider}
+                      >
+                        {t("usageStats.balance.recharge")}
+                      </button>
+                      {row.balance !== null && row.spent > 0 && (
+                        <button type="button" className="usage-stats-balance-btn" onClick={() => void resetSpent(row)} disabled={busy === row.provider}>
+                          {t("usageStats.balance.reset")}
+                        </button>
+                      )}
+                      {row.balance !== null && (
+                        <button type="button" className="usage-stats-balance-btn" onClick={() => void resetBalance(row)} disabled={busy === row.provider}>
+                          {t("usageStats.balance.resetBalance")}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {editing?.provider === row.provider && (
+                  <tr className="usage-stats-balance-editor-row">
+                    <td colSpan={5}>
+                      <div className="usage-stats-balance-editor">
+                        <label className="usage-stats-balance-editor-label" htmlFor={`balance-input-${row.provider}`}>
+                          {t(editing.mode === "set" ? "usageStats.balance.setBalance" : "usageStats.balance.recharge")}
+                        </label>
                         <input
+                          id={`balance-input-${row.provider}`}
                           autoFocus
                           type="number"
                           min={0}
                           step="0.01"
                           className="usage-stats-balance-input"
                           value={rechargeDrafts[row.provider] ?? ""}
-                          placeholder={t("usageStats.balance.rechargePlaceholder")}
-                          aria-label={`${row.provider} ${t("usageStats.balance.recharge")}`}
+                          placeholder={t(editing.mode === "set" ? "usageStats.balance.setPlaceholder" : "usageStats.balance.rechargePlaceholder")}
+                          aria-label={`${row.provider} ${t(editing.mode === "set" ? "usageStats.balance.setBalance" : "usageStats.balance.recharge")}`}
                           onChange={(event) => setRechargeDrafts((prev) => ({ ...prev, [row.provider]: event.target.value }))}
                           onKeyDown={(event) => {
-                            if (event.key === "Enter") void recharge(row);
+                            if (event.key === "Enter") void writeBalance(row);
                             else if (event.key === "Escape") setEditing(null);
                           }}
                         />
+                        <span className="usage-stats-balance-editor-hint">
+                          {editing.mode === "set"
+                            ? t("usageStats.balance.setHint")
+                            : t("usageStats.balance.rechargeHint")}
+                        </span>
                         <button
                           type="button"
                           className="usage-stats-balance-btn is-primary"
-                          onClick={() => void recharge(row)}
+                          onClick={() => void writeBalance(row)}
                           disabled={busy === row.provider}
                         >
-                          {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.recharge")}
+                          {saved === row.provider ? t("usageStats.balance.saved") : t("usageStats.balance.save")}
                         </button>
                         <button type="button" className="usage-stats-balance-btn" onClick={() => setEditing(null)}>
                           {t("i18n.cancel")}
                         </button>
                       </div>
-                    ) : (
-                      <div className="usage-stats-balance-actions">
-                        {saved === row.provider && <span className="usage-stats-balance-saved">{t("usageStats.balance.saved")}</span>}
-                        <button type="button" className="usage-stats-balance-btn is-primary" onClick={() => setEditing(row.provider)}>
-                          {t("usageStats.balance.recharge")}
-                        </button>
-                        {row.balance !== null && row.spent > 0 && (
-                          <button type="button" className="usage-stats-balance-btn" onClick={() => void resetSpent(row)} disabled={busy === row.provider}>
-                            {t("usageStats.balance.reset")}
-                          </button>
-                        )}
-                        {row.balance !== null && (
-                          <button type="button" className="usage-stats-balance-btn" onClick={() => void resetBalance(row)} disabled={busy === row.provider}>
-                            {t("usageStats.balance.resetBalance")}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -723,13 +768,16 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
             <SectionTitle>{t("usageStats.costTrend.title")}</SectionTitle>
             <UsageCostTrendChart data={data} />
 
-            <div className="usage-stats-divider" />
-            <SectionTitle>{t("usageStats.models.title")}</SectionTitle>
-            <ModelCostTable rows={data.byModel} />
 
+            <div className="usage-stats-divider" />
+            <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
             <div className="usage-stats-divider" />
             <details className="usage-stats-details">
               <summary className="usage-stats-details-summary">{t("usageStats.more.title")}</summary>
+
+              <div className="usage-stats-divider" />
+              <SectionTitle>{t("usageStats.models.title")}</SectionTitle>
+              <ModelCostTable rows={data.byModel} />
 
               <div className="usage-stats-facts">
                 <span>{t("usageStats.cards.totalTokens")} {formatTokens(data.totals.tokens, locale)}</span>
@@ -757,8 +805,6 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
                   ])}
               />
 
-              <div className="usage-stats-divider" />
-              <UsageDayDetail rows={data.daily} costKnown={data.costKnown} />
             </details>
           </>
         )}

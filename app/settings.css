@@ -2350,26 +2350,44 @@
      双类选择器保证特异性高于 .usage-stats-table 的 min-width:400px。 */
   min-width: 780px;
 }
-.usage-stats-balance-table th:nth-child(1) { width: 130px; }
-.usage-stats-balance-table th:nth-child(2) { width: 110px; }
-.usage-stats-balance-table th:nth-child(3) { width: 90px; }
-.usage-stats-balance-table th:nth-child(4) { width: 150px; }
-.usage-stats-balance-table th:nth-child(5) { width: 300px; }
+/* 供应商 / 当前余额 / 剩余 / 已扣 / 操作。剩余列最宽，因为进度条挂在它下面。 */
+.usage-stats-balance-table th:nth-child(1) { width: 120px; }
+.usage-stats-balance-table th:nth-child(2) { width: 150px; }
+.usage-stats-balance-table th:nth-child(3) { width: 170px; }
+.usage-stats-balance-table th:nth-child(4) { width: 100px; }
+.usage-stats-balance-table th:nth-child(5) { width: 240px; }
 .usage-stats-balance-table td {
   vertical-align: middle;
   overflow-wrap: break-word;
 }
-.usage-stats-balance-table td:nth-child(4) {
-  position: relative;
-  padding-bottom: 16px;
-}
+/* 进度条走正常文档流：行高由它自己撑开，旁边单元格照常垂直居中，
+   不会再出现「已扣」相对金额上移的错位。 */
 .usage-stats-balance-table .usage-stats-balance-bar {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 4px;
-  margin-top: 0;
-  max-width: none;
+  margin-top: 6px;
+  max-width: 140px;
+}
+/* 行内编辑器独立成行，输入框不再挤在狭窄单元格里。 */
+.usage-stats-balance-editor-row td {
+  padding-top: 0;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.usage-stats-balance-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.usage-stats-balance-editor-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.usage-stats-balance-editor .usage-stats-balance-input {
+  width: 160px;
+}
+.usage-stats-balance-editor-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1 1 200px;
 }
 .usage-stats-date-input:focus-visible {
   outline: 2px solid var(--accent);

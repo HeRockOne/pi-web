@@ -26,6 +26,18 @@ export function formatCost(n: number): string {
   return `$${Number(n.toPrecision(6)).toString()}`;
 }
 
+/**
+ * 金额格式化：永远两位小数、千分位分隔。用于余额、已扣、账单这类「钱的数额」，
+ * 与 formatCost 区分开——后者是成本统计量，允许 6 位有效数字。
+ * 账单界面出现 `$0.740775` 是工程噪声，不是人能读的金额。
+ * 负数（透支）保留负号，不夹带假精度。
+ */
+export function formatMoney(n: number): string {
+  const rounded = Math.round(n * 100) / 100;
+  const abs = Math.abs(rounded).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${rounded < 0 ? "-" : ""}$${abs}`;
+}
+
 /** 百分比格式化：默认两位小数（状态栏等紧凑场合传 digits = 1）。 */
 export function formatPercent(rate: number, digits = 2): string {
   return `${(rate * 100).toFixed(digits)}%`;
