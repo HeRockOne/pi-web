@@ -2208,6 +2208,16 @@ export function AppShell() {
         transform-origin: top right;
         animation: session-info-pop 360ms ease-out both;
         will-change: transform, opacity, filter, background, box-shadow;
+        container-type: inline-size;
+      }
+      /* Three columns stop being readable before they stop fitting: once the
+         sidebar is open and the popover is squeezed, the token column was left
+         wrapping a count like "1,300,748" across lines. Stack instead. */
+      @container (max-width: 760px) {
+        .session-info-grid {
+          grid-template-columns: minmax(0, 1fr) !important;
+          gap: 16px !important;
+        }
       }
       .session-info-popover::after {
         content: "";
@@ -2861,7 +2871,11 @@ export function AppShell() {
                           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
                           <div style={{
                             display: "grid",
-                            gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
+                            // The value column caps at max-content but may shrink below it:
+                            // values like "provider/model" or "82.4K / 1.00M (97.5%)" are wider
+                            // than the track the popover can spare once the sidebar is open, and
+                            // max-content there meant the column simply overflowed instead.
+                            gridTemplateColumns: compact ? "max-content minmax(0, max-content)" : "auto minmax(0, 1fr)",
                             columnGap: compact ? 14 : 12,
                             rowGap: 4,
                             justifyContent: compact ? "start" : undefined,
@@ -2869,12 +2883,14 @@ export function AppShell() {
                             {sectionRows.map(([label, value]) => (
                               <div key={`${title}:${label}`} style={{ display: "contents" }}>
                                 <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
+                                {/* break-word, not anywhere: a token count like 1,300,748 must
+                                    wrap between words, never between two digits. */}
                                 <div style={{
                                   color: "var(--text-muted)",
                                   minWidth: 0,
-                                  overflowWrap: compact ? "normal" : "anywhere",
+                                  overflowWrap: "break-word",
                                   textAlign: valueAlign,
-                                  whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
+                                  whiteSpace: "normal",
                                 }}>{value}</div>
                               </div>
                             ))}
@@ -2977,11 +2993,16 @@ export function AppShell() {
                     ) : null;
 
                     return (
-                      <div style={{
+                      <div className="session-info-grid" style={{
                         display: "grid",
+                        // Zero minimums, not fixed pixel ones: at a comfortable width the fr
+                        // ratios are what decide the tracks, but a fixed minimum such as
+                        // minmax(360px, ...) imposes a floor of 360+140+190+48 = 738px, which
+                        // is wider than the popover gets once the sidebar is open, so the third
+                        // column was pushed past the right edge and clipped.
                         gridTemplateColumns: isMobile
                           ? "1fr"
-                          : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
+                          : "minmax(0, 1.7fr) minmax(0, 0.55fr) minmax(0, 0.75fr)",
                         gap: isMobile ? 16 : 24,
                         fontSize: 12,
                         lineHeight: 1.5,
