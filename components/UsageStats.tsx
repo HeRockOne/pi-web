@@ -725,13 +725,18 @@ export function UsageStats({ onClose, embedded = false }: { onClose: () => void;
           )}
         </div>
 
+        <p className="usage-stats-source-note">
+          {t("usageStats.source.desc")}{" "}
+          <code className="usage-stats-code">{t("usageStats.source.install")}</code>
+        </p>
+
         {phase === "loading" && <div className="usage-stats-hint">{t("usageStats.loading")}</div>}
 
         {phase === "missing" && (
           <div className="usage-stats-not-installed">
             <p>{t("usageStats.notInstalled.desc")}</p>
             <div className="usage-stats-install-row">
-              <code className="usage-stats-code">pi install npm:pi-tracker</code>
+              <code className="usage-stats-code">pi install npm:pi-tracker@0.3.0</code>
             </div>
             <p className="usage-stats-hint">{t("usageStats.notInstalled.restartHint")}</p>
             <p className="usage-stats-hint">{t("usageStats.notInstalled.backfill")}</p>
