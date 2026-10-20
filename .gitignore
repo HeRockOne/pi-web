@@ -50,3 +50,6 @@ tmp-*.html
 # local agent tooling
 /.pi/
 /scripts/dump-system-prompt.ps1
+
+# codegraph local index
+/.codegraph/
