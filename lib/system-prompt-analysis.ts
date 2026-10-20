@@ -1,19 +1,34 @@
-// Breaks a composed pi system prompt into labeled sections and counts
-// tokens exactly with js-tiktoken (OpenAI o200k_base — the same encoding
-// pi's model stack uses). Client-safe: js-tiktoken/lite is pure JS and
-// the rank table ships as plain data; no Node/SDK imports.
+// Breaks a composed pi system prompt into labeled sections and counts tokens
+// with js-tiktoken (o200k_base), the encoding pi-web uses for every number it
+// shows. Client-safe: js-tiktoken/lite is pure JS and the rank table ships as
+// plain data; no Node/SDK imports.
 //
-// Since pi 0.87 the composed prompt is a sequence of named sections joined
-// by blank lines: the preamble is bare text and every other section is
-// wrapped in a `<name>...</name>` tag pair on its own lines (see
-// buildSystemPromptSections in the SDK). Known names map to fixed labels;
-// extension-registered sections surface under their own name. When tool
-// hints (from get_tools) are supplied, rule bullets are attributed to the
-// plugin that registered them via exact string match against each tool's
-// promptGuidelines.
+// Since pi 0.87 the composed prompt is a sequence of named sections joined by
+// blank lines: the preamble is bare text and every other section is wrapped in
+// a `<name>...</name>` tag pair on its own lines (see buildSystemPromptSections
+// in the SDK). Known names map to fixed labels; extension-registered sections
+// surface under their own name. When tool hints (from get_tools) are supplied,
+// rule bullets are attributed to the plugin that registered them via exact
+// string match against each tool's promptGuidelines.
+//
+// Two invariants make the composition panel trustworthy:
+//
+//  1. Every top-level section owns a contiguous char range and the ranges
+//     partition the whole prompt. No text is unowned, so nothing can be
+//     silently dropped and no phantom "other" row appears.
+//  2. A range's token count is the difference between the token counts of two
+//     prefixes of the same prompt, so partitions are exactly additive:
+//     sum(children) == parent == whole prompt. Counting each fragment in
+//     isolation would break this — BPE merges across a boundary make the parts
+//     sum to more than the whole, and rounding `chars / 4` for some fragments
+//     makes them sum to less.
+//
+// Text that genuinely belongs to no named section still surfaces as "other",
+// but it is only emitted when it holds real characters.
 
 import { Tiktoken } from "js-tiktoken/lite";
 import o200kBase from "js-tiktoken/ranks/o200k_base";
+
 export interface PromptSection {
   key: string;
   labelKey?: string;
@@ -62,8 +77,9 @@ function tiktoken(): Tiktoken {
 }
 
 /**
- * Exact token count using js-tiktoken (OpenAI o200k_base, the same encoding
- * pi's model stack uses), client-safe: the rank table ships as plain data.
+ * Token count of a standalone string using js-tiktoken (o200k_base).
+ * Exact for the encoding, but NOT additive across concatenation — for section
+ * accounting use the prefix-difference counter built by `makeCounter`.
  */
 export function estimateTokensOf(text: string): number {
   return tiktoken().encode(text, [], []).length;
@@ -73,22 +89,29 @@ function baseLabelKey(prompt: string): string {
   return prompt.startsWith(DEFAULT_BASE_PREFIX) ? "system.section.base" : "system.section.custom";
 }
 
-function toSection(part: Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number; text?: string }): PromptSection {
-  return {
-    key: part.key,
-    labelKey: part.labelKey,
-    label: part.label,
-    detail: part.detail,
-    text: part.text,
-    chars: part.chars,
-    tokens: part.text !== undefined ? estimateTokensOf(part.text) : Math.ceil(part.chars / 4),
+/**
+ * Token counter that makes any partition of `prompt` exactly additive.
+ * `span(from, to)` returns `tokens(prompt[0..to]) - tokens(prompt[0..from])`,
+ * so contiguous spans telescope to the whole-prompt count.
+ */
+function makeCounter(prompt: string, cuts: number[]): (from: number, to: number) => number {
+  const boundaries = Array.from(new Set(cuts.map((cut) => Math.max(0, Math.min(prompt.length, cut))))).sort(
+    (a, b) => a - b,
+  );
+  const at = new Map<number, number>();
+  for (const boundary of boundaries) {
+    at.set(boundary, boundary === 0 ? 0 : estimateTokensOf(prompt.slice(0, boundary)));
+  }
+  return (from, to) => {
+    const start = at.get(Math.max(0, Math.min(prompt.length, from)));
+    const end = at.get(Math.max(0, Math.min(prompt.length, to)));
+    if (start === undefined || end === undefined) {
+      // A range outside the collected cuts should never happen; fall back to a
+      // real count rather than inventing a number.
+      return estimateTokensOf(prompt.slice(Math.max(0, from), Math.max(0, to)));
+    }
+    return Math.max(0, end - start);
   };
-}
-
-function childrenFromSpans(spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { chars: number; text?: string }>): PromptSection[] | undefined {
-  if (spans.length === 0) return undefined;
-  const children = spans.map(toSection).sort((a, b) => b.tokens - a.tokens);
-  return children;
 }
 
 interface TaggedSection {
@@ -136,6 +159,11 @@ function taggedSectionContent(prompt: string, section: TaggedSection): string {
   return prompt.slice(section.start + openLen, section.end - closeLen);
 }
 
+/** Offset of a section's content start within the whole prompt. */
+function contentStartOf(section: TaggedSection): number {
+  return section.start + section.name.length + 3;
+}
+
 /** Sections are joined by "\n\n"; fold the join into the following section. */
 function spanStartWithJoin(prompt: string, section: TaggedSection): number {
   return section.start >= 2 && prompt.slice(section.start - 2, section.start) === "\n\n"
@@ -148,98 +176,147 @@ interface SectionContext {
   toolSourceByName: Map<string, string | undefined>;
 }
 
-interface Group {
+/** A named item inside a parent section, expressed as absolute prompt offsets. */
+interface Item {
   key: string;
   labelKey?: string;
   label?: string;
   detail?: string;
-  chars: number;
-  text: string;
+  ranges: Array<{ start: number; end: number }>;
 }
 
-const newGroup = (part: Omit<Group, "chars" | "text">): Group => ({ ...part, chars: 0, text: "" });
+interface ScannedItems {
+  items: Item[];
+  /** Parent-relative offsets of every cut, for the counter. */
+  cuts: number[];
+}
 
-function toolChildren(content: string, ctx: SectionContext): PromptSection[] | undefined {
-  const groups: Array<Pick<PromptSection, "key" | "label" | "detail"> & { chars: number; text: string }> = [];
-  const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i += 1) {
-    const toolMatch = TOOL_LINE_PATTERN.exec(lines[i]);
-    if (!toolMatch) continue;
-    const name = toolMatch[1].trim();
-    groups.push({
-      key: `tool:${name}`,
-      label: name,
-      detail: ctx.toolSourceByName.get(name),
-      chars: lines[i].length + (i < lines.length - 1 ? 1 : 0),
-      text: lines[i] + (i < lines.length - 1 ? "\n" : ""),
-    });
+function addRange(item: Item, start: number, end: number): void {
+  if (end > start) item.ranges.push({ start, end });
+}
+
+function toolItems(content: string, contentStart: number, ctx: SectionContext): ScannedItems {
+  const items: Item[] = [];
+  const cuts: number[] = [];
+  const byName = new Map<string, Item>();
+  let lineStart = 0;
+  for (const rawLine of content.split("\n")) {
+    const lineEnd = lineStart + rawLine.length;
+    const toolMatch = TOOL_LINE_PATTERN.exec(rawLine);
+    if (toolMatch) {
+      const name = toolMatch[1].trim();
+      let item = byName.get(name);
+      if (!item) {
+        item = { key: `tool:${name}`, label: name, detail: ctx.toolSourceByName.get(name), ranges: [] };
+        byName.set(name, item);
+        items.push(item);
+      }
+      // Same rule as rules: the terminating newline belongs to the line.
+      const itemEnd = contentStart + lineEnd;
+      addRange(item, contentStart + lineStart, itemEnd);
+      cuts.push(contentStart + lineStart, itemEnd);
+    }
+    lineStart = lineEnd + 1;
   }
-  return childrenFromSpans(groups);
+  return { items, cuts };
 }
 
-function ruleChildren(content: string, ctx: SectionContext): PromptSection[] | undefined {
-  const groups = new Map<string, Group>();
+function ruleItems(content: string, contentStart: number, ctx: SectionContext): ScannedItems {
+  const items: Item[] = [];
+  const cuts: number[] = [];
+  const byKey = new Map<string, Item>();
   let cursor = 0;
   while (cursor < content.length) {
     const nextNewline = content.indexOf("\n", cursor);
     const lineEnd = nextNewline >= 0 ? nextNewline : content.length;
     const line = content.slice(cursor, lineEnd);
-    let group: Group;
+    let key: string;
+    let labelKey: string | undefined;
+    let label: string | undefined;
     if (line.startsWith("- ")) {
       const tool = ctx.guidelineToTool.get(line.slice(2));
       if (tool) {
-        const key = `ext:${tool.source ?? tool.name}`;
-        group = groups.get(key)
-          ?? newGroup({ key, label: tool.source ?? tool.name, detail: "" });
-        group.detail = group.detail
-          ? (group.detail.split(", ").includes(tool.name) ? group.detail : `${group.detail}, ${tool.name}`)
-          : tool.name;
+        key = `ext:${tool.source ?? tool.name}`;
+        label = tool.source ?? tool.name;
       } else {
-        group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
+        key = "pi-core";
+        labelKey = "system.section.core";
       }
     } else {
-      group = groups.get("pi-core") ?? newGroup({ key: "pi-core", labelKey: "system.section.core" });
+      key = "pi-core";
+      labelKey = "system.section.core";
     }
-    group.chars += lineEnd - cursor + (nextNewline >= 0 ? 1 : 0);
-    group.text += line + (nextNewline >= 0 ? "\n" : "");
-    groups.set(group.key, group);
+    let item = byKey.get(key);
+    if (!item) {
+      item = { key, ...(labelKey ? { labelKey } : {}), ...(label ? { label } : {}), detail: "", ranges: [] };
+      byKey.set(key, item);
+      items.push(item);
+    }
+    if (line.startsWith("- ")) {
+      const tool = ctx.guidelineToTool.get(line.slice(2));
+      if (tool) {
+        item.detail = item.detail
+          ? item.detail.split(", ").includes(tool.name)
+            ? item.detail
+            : `${item.detail}, ${tool.name}`
+          : tool.name;
+      }
+    }
+    // The newline that ends a line belongs to that line, not to the wrapper.
+    addRange(item, contentStart + cursor, contentStart + lineEnd + (nextNewline >= 0 ? 1 : 0));
+    cuts.push(contentStart + cursor, contentStart + lineEnd + (nextNewline >= 0 ? 1 : 0));
     cursor = lineEnd + 1;
   }
-  return childrenFromSpans(Array.from(groups.values()));
+  return { items, cuts };
 }
 
-function contextChildren(content: string): PromptSection[] | undefined {
-  const groups: Array<Pick<PromptSection, "key" | "label"> & { chars: number }> = [];
+function contextItems(content: string, contentStart: number): ScannedItems {
+  const items: Item[] = [];
+  const cuts: number[] = [];
   CONTEXT_FILE_PATTERN.lastIndex = 0;
   for (let match = CONTEXT_FILE_PATTERN.exec(content); match; match = CONTEXT_FILE_PATTERN.exec(content)) {
-    groups.push({ key: `context:${match[1]}`, label: match[1], chars: match[0].length });
+    const start = contentStart + match.index;
+    const end = start + match[0].length;
+    items.push({ key: `context:${match[1]}`, label: match[1], ranges: [{ start, end }] });
+    cuts.push(start, end);
   }
-  return childrenFromSpans(groups);
+  return { items, cuts };
 }
 
-function skillChildren(content: string): PromptSection[] | undefined {
-  const groups: Array<Pick<PromptSection, "key" | "label"> & { chars: number }> = [];
+function skillItems(content: string, contentStart: number): ScannedItems {
+  const items: Item[] = [];
+  const cuts: number[] = [];
   SKILL_BLOCK_PATTERN.lastIndex = 0;
   for (let match = SKILL_BLOCK_PATTERN.exec(content); match; match = SKILL_BLOCK_PATTERN.exec(content)) {
+    const start = contentStart + match.index;
+    const end = start + match[0].length;
     const name = SKILL_NAME_PATTERN.exec(match[0])?.[1] ?? "skill";
-    groups.push({ key: `skill:${name}`, label: name, chars: match[0].length });
+    items.push({ key: `skill:${name}`, label: name, ranges: [{ start, end }] });
+    cuts.push(start, end);
   }
-  return childrenFromSpans(groups);
+  return { items, cuts };
 }
 
-type SectionSpan = Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] };
+type TopSpan = {
+  key: string;
+  labelKey?: string;
+  label?: string;
+  detail?: string;
+  start: number;
+  end: number;
+  items?: ScannedItems;
+};
 
-function sectionSpan(prompt: string, section: TaggedSection, ctx: SectionContext): SectionSpan {
+function sectionSpan(prompt: string, section: TaggedSection, ctx: SectionContext): TopSpan {
   const start = spanStartWithJoin(prompt, section);
   const name = section.name;
   const base = { start, end: section.end };
+  const contentStart = contentStartOf(section);
   if (name === "tools") {
-    const content = taggedSectionContent(prompt, section);
-    return { ...base, key: "tools", labelKey: "system.section.tools", children: toolChildren(content, ctx) };
+    return { ...base, key: "tools", labelKey: "system.section.tools", items: toolItems(taggedSectionContent(prompt, section), contentStart, ctx) };
   }
   if (name === "rules") {
-    const content = taggedSectionContent(prompt, section);
-    return { ...base, key: "guidelines", labelKey: "system.section.guidelines", children: ruleChildren(content, ctx) };
+    return { ...base, key: "guidelines", labelKey: "system.section.guidelines", items: ruleItems(taggedSectionContent(prompt, section), contentStart, ctx) };
   }
   if (name === "docs") {
     return { ...base, key: "pi-docs", labelKey: "system.section.docs" };
@@ -248,16 +325,13 @@ function sectionSpan(prompt: string, section: TaggedSection, ctx: SectionContext
     return { ...base, key: "addendum", labelKey: "system.section.addendum" };
   }
   if (name === "project_context") {
-    const content = taggedSectionContent(prompt, section);
-    return { ...base, key: "context", labelKey: "system.section.context", children: contextChildren(content) };
+    return { ...base, key: "context", labelKey: "system.section.context", items: contextItems(taggedSectionContent(prompt, section), contentStart) };
   }
   if (name === "skills") {
-    const content = taggedSectionContent(prompt, section);
-    return { ...base, key: "skills", labelKey: "system.section.skills", children: skillChildren(content) };
+    return { ...base, key: "skills", labelKey: "system.section.skills", items: skillItems(taggedSectionContent(prompt, section), contentStart) };
   }
   if (name === "cwd") {
-    const content = taggedSectionContent(prompt, section);
-    return { ...base, key: "cwd", labelKey: "system.section.cwd", detail: content.trim() };
+    return { ...base, key: "cwd", labelKey: "system.section.cwd", detail: taggedSectionContent(prompt, section).trim() };
   }
   // Extension-registered section: surface it under its own name.
   return { ...base, key: `section:${name}`, label: name };
@@ -268,8 +342,10 @@ function sectionSpan(prompt: string, section: TaggedSection, ctx: SectionContext
  * tools block, the rules zone (attributed per plugin when tool hints are
  * given), the docs appendix, any appended prompt, per-file project context,
  * skills, the working directory, and extension-registered sections.
- * Text the tags cannot account for lands in "other", so sum(top-level
- * sections) always equals the whole prompt.
+ *
+ * The top-level spans partition the prompt, so sum(sections) always equals
+ * totalTokens exactly, and within a section the child rows (items plus one
+ * scaffolding row for the wrapper tags and intro text) also sum exactly.
  */
 export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): SystemPromptAnalysis {
   const totalChars = prompt.length;
@@ -288,7 +364,7 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   const ctx: SectionContext = { guidelineToTool, toolSourceByName };
 
   const tagged = scanTopLevelSections(prompt);
-  const spans: Array<Pick<PromptSection, "key" | "labelKey" | "label" | "detail"> & { start: number; end: number; children?: PromptSection[] }> = [];
+  const spans: TopSpan[] = [];
   let cursor = 0;
   let preambleDone = false;
   for (const section of tagged) {
@@ -296,12 +372,12 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
     if (start > cursor) {
       // Text before the first tag is the preamble (base or a fully custom
       // prompt); anything later is scaffolding the tags cannot explain.
-      if (!preambleDone) {
-        spans.push({ key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: start });
-        preambleDone = true;
-      } else {
-        spans.push({ key: "other", labelKey: "system.section.other", start: cursor, end: start });
-      }
+      spans.push(
+        preambleDone
+          ? { key: "other", labelKey: "system.section.other", start: cursor, end: start }
+          : { key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: start },
+      );
+      preambleDone = true;
     }
     preambleDone = true;
     spans.push(sectionSpan(prompt, section, ctx));
@@ -310,90 +386,89 @@ export function analyzeSystemPrompt(prompt: string, tools: ToolHint[] = []): Sys
   if (cursor < totalChars) {
     // No tags at all: the whole prompt is one bare preamble (e.g. a forced
     // system prompt); a bare tail after real sections is unattributable.
-    spans.push(preambleDone
-      ? { key: "other", labelKey: "system.section.other", start: cursor, end: totalChars }
-      : { key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: totalChars });
+    spans.push(
+      preambleDone
+        ? { key: "other", labelKey: "system.section.other", start: cursor, end: totalChars }
+        : { key: "base", labelKey: baseLabelKey(prompt), start: cursor, end: totalChars },
+    );
   }
 
-  // Merge spans per key and account for everything the tags missed.
-  const accounted = new Array<boolean>(totalChars).fill(false);
-  const merged = new Map<string, PromptSection>();
+  // Every cut point we may need, so one counter serves sections and children.
+  const cuts: number[] = [0, totalChars];
   for (const span of spans) {
-    if (span.end > span.start) {
-      for (let i = span.start; i < span.end; i += 1) accounted[i] = true;
-    }
-    const spanText = prompt.slice(span.start, span.end);
-    const existing = merged.get(span.key);
-    if (existing) {
-      existing.chars += Math.max(0, span.end - span.start);
-      existing.text = (existing.text ?? "") + spanText;
-      existing.tokens = estimateTokensOf(existing.text);
-    } else {
-      const section = toSection({ key: span.key, labelKey: span.labelKey, label: span.label, detail: span.detail, chars: Math.max(0, span.end - span.start), text: spanText });
-      if (span.children && span.children.length > 0) section.children = span.children;
-      merged.set(span.key, section);
-    }
+    cuts.push(span.start, span.end);
+    for (const cut of span.items?.cuts ?? []) cuts.push(cut);
   }
+  const spanTokens = makeCounter(prompt, cuts);
 
-  let otherChars = 0;
-  let otherText = "";
-  for (let i = 0; i < totalChars; i += 1) {
-    if (!accounted[i]) {
-      otherChars += 1;
-      otherText += prompt[i];
-    }
-  }
-  if (otherChars > 0) {
-    merged.set("other", toSection({ key: "other", labelKey: "system.section.other", chars: otherChars, text: otherText }));
-  }
+  const sections: PromptSection[] = [];
+  for (const span of spans) {
+    const chars = Math.max(0, span.end - span.start);
+    const tokens = spanTokens(span.start, span.end);
+    const section: PromptSection = {
+      key: span.key,
+      labelKey: span.labelKey,
+      label: span.label,
+      detail: span.detail,
+      text: prompt.slice(span.start, span.end),
+      chars,
+      tokens,
+    };
 
-  const sections0 = Array.from(merged.values());
-  // Parents with children should read as the sum of their children; the
-  // scaffolding delta (wrapper tags, intro text) rolls into "other" so the
-  // visible numbers add up while totalTokens stays exact.
-  const otherTally = merged.get("other") ?? { key: "other", labelKey: "system.section.other", chars: 0, tokens: 0 } as PromptSection;
-  for (const section of sections0) {
-    if (section.children && section.children.length > 0) {
-      const childSum = section.children.reduce((sum, child) => sum + child.tokens, 0);
-      if (section.tokens > childSum) {
-        otherTally.tokens += section.tokens - childSum;
-        section.tokens = childSum;
+    const items = span.items?.items ?? [];
+    if (items.length > 0) {
+      const children: PromptSection[] = [];
+      let itemTokens = 0;
+      let itemChars = 0;
+      for (const item of items) {
+        const itemTokenCount = item.ranges.reduce((sum, range) => sum + spanTokens(range.start, range.end), 0);
+        const itemCharCount = item.ranges.reduce((sum, range) => sum + (range.end - range.start), 0);
+        if (itemCharCount === 0) continue;
+        itemTokens += itemTokenCount;
+        itemChars += itemCharCount;
+        children.push({
+          key: item.key,
+          labelKey: item.labelKey,
+          label: item.label,
+          detail: item.detail,
+          text: item.ranges.map((range) => prompt.slice(range.start, range.end)).join(""),
+          chars: itemCharCount,
+          tokens: itemTokenCount,
+        });
       }
+
+      // The wrapper tags and intro text belong to nobody's item, but they are
+      // real tokens. Surface them as their own row instead of losing them.
+      const scaffoldChars = chars - itemChars;
+      const scaffoldTokens = Math.max(0, tokens - itemTokens);
+      if (scaffoldChars > 0 && scaffoldTokens > 0) {
+        children.push({
+          key: `scaffold:${span.key}`,
+          labelKey: "system.section.scaffold",
+          chars: scaffoldChars,
+          tokens: scaffoldTokens,
+        });
+      }
+      children.sort((a, b) => b.tokens - a.tokens);
+      section.children = children;
+      section.tokens = children.reduce((sum, child) => sum + child.tokens, 0);
+      section.chars = children.reduce((sum, child) => sum + child.chars, 0);
     }
+
+    // A bucket with no characters has nothing to show; drop it rather than
+    // render an unexplainable number.
+    if (section.chars > 0) sections.push(section);
   }
-  // "other" absorbs the exact residual so top-level sections always sum to
-  // totalTokens: BPE merging means child estimates can slightly exceed the
-  // parent's exact count, so the delta above can drift by a token or two.
-  if (!merged.has("other") && otherTally.tokens > 0) merged.set("other", otherTally);
-  const sections = Array.from(merged.values());
-  const totalTokens = estimateTokensOf(prompt);
-  const otherIdx = sections.findIndex((section) => section.key === "other");
-  if (otherIdx >= 0) {
-    const rest = sections.reduce((sum, section, index) => (index === otherIdx ? sum : sum + section.tokens), 0);
-    sections[otherIdx].tokens = Math.max(0, totalTokens - rest);
-  }
+
   sections.sort((a, b) => b.tokens - a.tokens);
 
-  // Build ordered non-overlapping segments that fully cover the prompt:
-  // every span contributes its range; gaps between spans land in "other".
-  const ordered = spans
-    .map((span) => ({ key: span.key, labelKey: span.labelKey, label: span.label, start: span.start, end: span.end }))
-    .filter((segment) => segment.end > segment.start)
-    .sort((a, b) => a.start - b.start || b.end - a.end);
-  const segments: SystemPromptAnalysis["segments"] = [];
-  let segmentCursor = 0;
-  for (const segment of ordered) {
-    if (segment.start > segmentCursor) {
-      segments.push({ key: "other", labelKey: "system.section.other", start: segmentCursor, end: segment.start });
-    }
-    if (segment.end > segmentCursor) {
-      segments.push(segment);
-      segmentCursor = segment.end;
-    }
-  }
-  if (segmentCursor < totalChars) {
-    segments.push({ key: "other", labelKey: "system.section.other", start: segmentCursor, end: totalChars });
-  }
+  // The spans already partition the prompt, so segments are the spans in
+  // reading order. Sorted by start with ties resolved by the wider span.
+  const segments = spans
+    .filter((span) => span.end > span.start)
+    .slice()
+    .sort((a, b) => a.start - b.start || b.end - a.end)
+    .map((span) => ({ key: span.key, labelKey: span.labelKey, label: span.label, start: span.start, end: span.end }));
 
   return { sections, segments, totalChars, totalTokens: estimateTokensOf(prompt) };
 }

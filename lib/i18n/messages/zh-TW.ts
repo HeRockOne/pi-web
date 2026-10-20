@@ -180,6 +180,7 @@ export const zhTWLocale: LocalePlugin = {
     "system.section.skills": "技能",
     "system.section.cwd": "工作目錄",
     "system.section.other": "其他",
+    "system.section.scaffold": "標籤與引導文字",
     "system.section.addendum": "附加提示詞",
     "system.section.core": "pi 核心指引",
     "system.section.docs": "pi 文件附錄",

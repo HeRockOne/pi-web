@@ -68,7 +68,10 @@ function SectionRow({
   const color = sectionColor(section.key);
   const hasChildren = Boolean(section.children && section.children.length > 0);
   const isChild = depth > 0;
-  const expandable = hasChildren;
+  // Leaf sections carry their own text, so they expand too: a row that only
+  // shows a token count cannot be checked against anything else.
+  const hasText = Boolean(section.text);
+  const expandable = hasChildren || hasText;
   const row = (
     <>
       <span
@@ -102,6 +105,9 @@ function SectionRow({
       </button>
       {expanded ? (
         <div className="system-prompt-composition-expanded">
+          {!hasChildren && section.text ? (
+            <pre className="system-prompt-composition-text">{section.text}</pre>
+          ) : null}
           {hasChildren && section.children ? (
             <ul className="system-prompt-composition-list is-nested">
               {section.children.map((child) => (
@@ -437,6 +443,21 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
         }
         .system-prompt-composition-expanded {
           min-width: 0;
+        }
+        .system-prompt-composition-text {
+          margin: 0;
+          padding: 8px 10px;
+          max-height: 320px;
+          overflow: auto;
+          font-family: var(--font-mono);
+          font-size: 11px;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-word;
+          color: var(--text-dim);
+          background: color-mix(in srgb, var(--bg) 55%, var(--bg-panel));
+          border: 1px solid var(--border);
+          border-radius: 4px;
         }
         .system-prompt-composition-list.is-nested > li {
           padding-right: 6px;
