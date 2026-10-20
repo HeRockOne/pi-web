@@ -1,5 +1,6 @@
 // Types mirrored from pi-mono coding-agent session-manager
 
+import type { AskAnswer, AskQuestion } from "./ask-types";
 export interface SessionHeader {
   type: "session";
   version?: number;
@@ -208,16 +209,27 @@ export type ExtensionUiRequest =
       method: "custom";
       lines: string[];
       closed?: boolean;
+    }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "ask";
+      /** Every question at once, so the browser can page back and forth. */
+      questions: AskQuestion[];
+      timeout?: number;
+      expiresAt?: number;
     };
 
 export type BlockingExtensionUiRequest = Extract<
   ExtensionUiRequest,
-  { method: "select" | "confirm" | "input" | "editor" | "custom" }
+  { method: "select" | "confirm" | "input" | "editor" | "custom" | "ask" }
 >;
 
 export type ExtensionUiResponse =
   | { type: "extension_ui_response"; id: string; value: string }
   | { type: "extension_ui_response"; id: string; confirmed: boolean }
+  /** Answers for a native `ask` request; one entry per question asked. */
+  | { type: "extension_ui_response"; id: string; askAnswers: AskAnswer[] }
   | { type: "extension_ui_response"; id: string; cancelled: true };
 
 export interface ExtensionStatusItem {

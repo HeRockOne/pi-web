@@ -43,6 +43,8 @@ import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { resolveShellTools } from "./powershell-settings";
 import { CHAT_ONLY_RESOURCE_LOADER_OPTIONS, contextFilesSystemPrompt } from "./chat-only";
 import { createExactSystemPromptExtension } from "./exact-system-prompt";
+import { createAskExtension, preferPiWebAskExtension } from "./ask-extension";
+import type { AskAnswer, AskQuestion } from "./ask-types";
 import {
   appendSessionToolSelection,
   readSessionToolSelection,
@@ -328,6 +330,20 @@ export class AgentSessionWrapper {
 
   async waitUntilReady(): Promise<void> {
     await this.waitForExtensionsBound();
+  }
+
+  /** Sends a native `ask` request and resolves with the browser's answers. */
+  askUser(questions: AskQuestion[], signal?: AbortSignal): Promise<AskAnswer[] | undefined> {
+    return this.requestAsk(questions, signal);
+  }
+
+  /**
+   * Bound form for the inline `ask` extension. The extension factory runs while
+   * the wrapper is still being constructed, so it receives this getter instead
+   * of the method itself and calls it once a tool actually executes.
+   */
+  getAskHandler(): (questions: AskQuestion[], signal?: AbortSignal) => Promise<AskAnswer[] | undefined> {
+    return (questions, signal) => this.requestAsk(questions, signal);
   }
 
   private ensureExtensionsBound(): Promise<void> {
@@ -1457,6 +1473,21 @@ export class AgentSessionWrapper {
     });
   }
 
+  /**
+   * Sends the whole question list in ONE request so the browser can page back
+   * and forth; a loop over ctx.ui.select() cannot, because the next question is
+   * only revealed once the previous one resolves.
+   */
+  private requestAsk(questions: AskQuestion[], signal?: AbortSignal): Promise<AskAnswer[] | undefined> {
+    return this.requestExtensionUi(
+      { method: "ask", questions },
+      undefined,
+      (response) => "askAnswers" in response ? response.askAnswers : undefined,
+      undefined,
+      signal,
+    );
+  }
+
   private createExtensionUiContext(): ExtensionUiContextLike {
     return {
       select: (title, options, opts) => this.requestExtensionUi(
@@ -1938,6 +1969,9 @@ export async function startRpcSession(
         sessionManager.getEntries() as unknown as SessionEntry[],
       )
     : null;
+  // Filled once the wrapper exists: the ask extension factory runs earlier, so it
+  // forwards to this ref instead of capturing the wrapper directly.
+  const askWrapperRef: { current?: AgentSessionWrapper } = {};
   const persistedToolNames = subagentResources
     ? undefined
     : readSessionToolSelection(sessionManager.getEntries() as unknown as SessionEntry[]);
@@ -2021,8 +2055,15 @@ export async function startRpcSession(
                 () => listSubagentProfiles(sessionCwd),
                 isBuiltInSubagentsEnabled,
               ),
+              createAskExtension({
+                ask: (questions, signal) => askWrapperRef.current
+                  ? askWrapperRef.current.askUser(questions, signal)
+                  : Promise.resolve(undefined),
+              }),
             ],
-            extensionsOverride: (base) => preferUserBashExtension(preferPiWebSubagentExtension(base)),
+            extensionsOverride: (base) => preferUserBashExtension(
+              preferPiWebAskExtension(preferPiWebSubagentExtension(base)),
+            ),
           },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
@@ -2108,6 +2149,7 @@ export async function startRpcSession(
       },
       suppressCompletionNotifications: Boolean(subagentResources),
     });
+    askWrapperRef.current = wrapper;
     const realSessionId = inner.sessionId as string;
     registerRpcWrapper(wrapper);
 

@@ -5,6 +5,19 @@ import Image from "next/image";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { AskAnswer } from "@/lib/ask-types";
+import {
+  EMPTY_ASK_DRAFT,
+  addAskNote,
+  buildAskAnswers,
+  clearAskDraft,
+  createAskDrafts,
+  nextAskIndex,
+  previousAskIndex,
+  removeAskNote,
+  selectAskOption,
+  type AskDraft,
+} from "@/lib/ask-draft";
 import { normalizeCustomPanelLines } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, isMessageGroupAnchor, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -281,7 +294,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
-    notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput, setNoticePaused,
+    notices, extensionDialog, askDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, respondToAsk, sendExtensionCustomInput, setNoticePaused,
     isAutoModelSelection,
     agentPhase,
     isNew,
@@ -1014,6 +1027,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {extensionDialog && (
           <ExtensionDialog key={extensionDialog.id} request={extensionDialog} onRespond={respondToExtensionUi} />
+        )}
+        {askDialog && (
+          <AskDialog key={askDialog.id} request={askDialog} onRespond={respondToAsk} />
         )}
         {extensionCustomUi && (
           <ExtensionCustomPanel key={extensionCustomUi.id} request={extensionCustomUi} onInput={sendExtensionCustomInput} />
@@ -1818,6 +1834,398 @@ function ExtensionDialog({
           ) : null}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+type AskDialogRequest = Extract<ExtensionUiRequest, { method: "ask" }>;
+
+/**
+ * Native `ask` wizard.
+ *
+ * A standalone extension can only hold one `ctx.ui.select()` at a time, so it can
+ * never page backwards over a multi-question call. The host tool sends every
+ * question in a single request, which is what makes 上一题 / 下一题 possible: all
+ * drafts live here in one component and are submitted together.
+ */
+function AskDialog({
+  request,
+  onRespond,
+}: {
+  request: AskDialogRequest;
+  onRespond: (request: AskDialogRequest, response: { askAnswers: AskAnswer[] } | { cancelled: true }) => void;
+}) {
+  const { t } = useI18n();
+  const questions = request.questions;
+  const [index, setIndex] = useState(0);
+  const [drafts, setDrafts] = useState<AskDraft[]>(() => createAskDrafts(questions));
+  const [collapsed, setCollapsed] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const noteInputRef = useRef<HTMLInputElement>(null);
+
+  const question = questions[index];
+  const draft = drafts[index] ?? EMPTY_ASK_DRAFT;
+  const isLast = index === questions.length - 1;
+  const multi = question?.multiSelect === true;
+  const allowOther = question?.allowOther !== false;
+  const pickedLabels = draft.selected
+    .filter((position) => position >= 0 && position < (question?.options.length ?? 0))
+    .map((position) => question.options[position].label);
+
+  const remainingSeconds = request.expiresAt === undefined
+    ? null
+    : Math.max(0, Math.ceil((request.expiresAt - now) / 1000));
+
+  useEffect(() => {
+    if (request.expiresAt === undefined) return;
+    // The server closes expired requests via extension_ui_closed.
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [request.expiresAt]);
+
+
+  const submitAll = useCallback((overrides?: AskDraft[]) => {
+    const effective = overrides ?? drafts;
+    onRespond(request, { askAnswers: buildAskAnswers(questions, effective) });
+  }, [drafts, onRespond, questions, request]);
+
+  const goNext = useCallback(() => {
+    if (isLast) {
+      submitAll();
+      return;
+    }
+    setIndex((current) => nextAskIndex(current, questions.length));
+    setNoteDraft("");
+  }, [isLast, questions.length, submitAll]);
+
+  const goPrev = useCallback(() => {
+    setIndex((current) => previousAskIndex(current));
+    setNoteDraft("");
+  }, []);
+
+  const addNote = useCallback(() => {
+    if (!noteDraft.trim()) return;
+    setDrafts((current) => addAskNote(current, index, noteDraft));
+    setNoteDraft("");
+    noteInputRef.current?.focus();
+  }, [index, noteDraft]);
+
+  const handleOption = useCallback((position: number) => {
+    if (!question) return;
+    if (!multi) {
+      // Single-select: one tap settles the question and moves on, matching the
+      // standalone plugin so muscle memory carries over.
+      const next = selectAskOption(drafts, index, position, false);
+      setDrafts(next);
+      if (isLast) submitAll(next);
+      else goNext();
+      return;
+    }
+    setDrafts((current) => selectAskOption(current, index, position, true));
+  }, [drafts, goNext, index, isLast, multi, question, submitAll]);
+  const countdown = remainingSeconds !== null && (
+    <span style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap", flexShrink: 0 }}>
+      {t("chat.extensionExpiresIn", { seconds: remainingSeconds })}
+    </span>
+  );
+
+  if (!question) return null;
+
+  return (
+    <div
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onRespond(request, { cancelled: true });
+      }}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 96,
+        display: "flex",
+        alignItems: collapsed ? "flex-start" : "center",
+        justifyContent: "center",
+        padding: 20,
+        pointerEvents: "none",
+      }}
+    >
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          aria-expanded={false}
+          style={{
+            pointerEvents: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            maxWidth: "min(560px, 100%)",
+            width: "100%",
+            padding: "10px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            background: "var(--bg)",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+            color: "var(--text)",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 650, color: "var(--accent)", flexShrink: 0 }}>
+            {questions.length > 1 ? t("chat.askProgress", { current: index + 1, total: questions.length }) : t("chat.extensionPending")}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+            {question.prompt}
+          </span>
+          {countdown}
+          <span style={{ fontSize: 12, color: "var(--text-muted)", flexShrink: 0 }}>
+            {t("chat.extensionExpand")}
+          </span>
+        </button>
+      ) : (
+        <div
+          role="dialog"
+          aria-label={question.prompt}
+          style={{
+            pointerEvents: "auto",
+            width: "min(560px, 100%)",
+            maxHeight: "min(760px, 100%)",
+            display: "flex",
+            flexDirection: "column",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            background: "var(--bg)",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px", borderBottom: "1px solid var(--border)", maxHeight: "50%", overflowY: "auto" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650, lineHeight: 1.45, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{question.prompt}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+                {questions.length > 1 && <span>{t("chat.askProgress", { current: index + 1, total: questions.length })}</span>}
+                {multi && pickedLabels.length > 0 && <span>{t("chat.askSelected", { labels: pickedLabels.join("、") })}</span>}
+                {countdown}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              aria-expanded={true}
+              title={t("chat.extensionCollapse")}
+              aria-label={t("chat.extensionCollapse")}
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "var(--bg-panel)",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <ChevronDownIcon strokeWidth={1.6} />
+            </button>
+          </div>
+
+          <div style={{ padding: 14, flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
+            {question.context && (
+              <div style={{ marginBottom: 10, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{question.context}</div>
+            )}
+            <div style={{ display: "grid", gap: 8 }}>
+              {question.options.map((option, position) => {
+                const selected = draft.selected.includes(position);
+                return (
+                  <button
+                    key={`${option.value}-${position}`}
+                    autoFocus={position === 0 && index === 0}
+                    onClick={() => handleOption(position)}
+                    style={{
+                      width: "100%",
+                      padding: "9px 10px",
+                      borderRadius: 7,
+                      border: selected ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: selected ? "var(--accent-soft, var(--bg-panel))" : "var(--bg-panel)",
+                      color: "var(--text)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: 13,
+                      overflowWrap: "anywhere",
+                      scrollMargin: 14,
+                    }}
+                  >
+                    <span style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                      {multi && (
+                        <span aria-hidden style={{ flexShrink: 0, fontFamily: "var(--font-mono)", color: selected ? "var(--accent)" : "var(--text-muted)" }}>
+                          {selected ? "[x]" : "[ ]"}
+                        </span>
+                      )}
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        {option.label}
+                        {option.description && (
+                          <span style={{ display: "block", marginTop: 2, fontSize: 11.5, color: "var(--text-dim)", lineHeight: 1.5 }}>{option.description}</span>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {allowOther && (
+              <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
+                {draft.notes.length > 0 && (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {draft.notes.map((note, position) => (
+                      <div
+                        key={`${note}-${position}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "7px 9px",
+                          borderRadius: 7,
+                          border: "1px solid var(--accent)",
+                          background: "var(--bg-panel)",
+                          fontSize: 12.5,
+                          color: "var(--text)",
+                        }}
+                      >
+                        <span aria-hidden style={{ color: "var(--accent)" }}>✓</span>
+                        <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>(其他) {note}</span>
+                        <button
+                          type="button"
+                          aria-label={t("chat.cancel")}
+                          onClick={() => setDrafts((current) => removeAskNote(current, index, note))}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            lineHeight: 1,
+                            padding: 2,
+                            flexShrink: 0,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    ref={noteInputRef}
+                    value={noteDraft}
+                    placeholder={t("chat.askOther")}
+                    onChange={(event) => setNoteDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        addNote();
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: "9px 10px",
+                      borderRadius: 7,
+                      border: "1px solid var(--border)",
+                      background: "var(--bg-panel)",
+                      color: "var(--text)",
+                      outline: "none",
+                      fontSize: 13,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addNote}
+                    disabled={!noteDraft.trim()}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid var(--border)",
+                      background: "var(--bg)",
+                      color: noteDraft.trim() ? "var(--text)" : "var(--text-muted)",
+                      cursor: noteDraft.trim() ? "pointer" : "default",
+                      flexShrink: 0,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+            {index > 0 && (
+              <button
+                onClick={goPrev}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                {t("chat.askPrev")}
+              </button>
+            )}
+            {multi && draft.selected.length > 0 && (
+              <button
+                onClick={() => setDrafts((current) => clearAskDraft(current, index))}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg)",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                🗑
+              </button>
+            )}
+            <span style={{ flex: 1 }} />
+            <button
+              autoFocus={pickedLabels.length === 0 && question.options.length === 0}
+              onClick={() => onRespond(request, { cancelled: true })}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "var(--bg)",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              {t("chat.cancel")}
+            </button>
+            <button
+              onClick={goNext}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--accent)",
+                background: "var(--accent)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {isLast ? (questions.length > 1 ? t("chat.askSubmitAll") : t("chat.submit")) : t("chat.askNext")}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

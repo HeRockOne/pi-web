@@ -18,6 +18,7 @@ import { clearDraft, rekeyDraft, restoreDraftSubmission } from "@/lib/draft-stor
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
 import { getPresetFromToolNames, getToolNamesForPreset, type ToolEntry, type ToolPreset } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import type { AskAnswer } from "@/lib/ask-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
 import { userMessageKey } from "@/lib/prompt-recovery";
 import { AgentEventConnection } from "@/lib/agent-event-connection";
@@ -92,6 +93,7 @@ function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] 
 }
 
 type ExtensionUiDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
+export type ExtensionUiAskRequest = Extract<ExtensionUiRequest, { method: "ask" }>;
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
 
@@ -345,6 +347,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [noticeState, dispatchNotice] = useReducer(noticeReducer, { visible: [], pending: [] });
   const [sessionStatsOverride, setSessionStatsOverride] = useState<SessionStatsInfo | null>(null);
   const [extensionDialog, setExtensionDialog] = useState<ExtensionUiDialogRequest | null>(null);
+  const [askDialog, setAskDialog] = useState<ExtensionUiAskRequest | null>(null);
   const [extensionCustomUi, setExtensionCustomUi] = useState<ExtensionUiCustomRequest | null>(null);
   const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
@@ -795,6 +798,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
+  const respondToAsk = useCallback(async (
+    request: ExtensionUiAskRequest,
+    response: { askAnswers: AskAnswer[] } | { cancelled: true },
+  ) => {
+    const sid = sessionIdRef.current;
+    setAskDialog((current) => current?.id === request.id ? null : current);
+    if (!sid) return;
+    try {
+      await sendAgentCommand(sid, {
+        type: "extension_ui_response",
+        id: request.id,
+        ...response,
+      });
+    } catch (e) {
+      console.error("Failed to send ask response:", e);
+    }
+  }, []);
+
   const sendExtensionCustomInput = useCallback(async (request: ExtensionUiCustomRequest, data: string) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -831,6 +852,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "input":
       case "editor":
         setExtensionDialog(request);
+        break;
+      case "ask":
+        setAskDialog(request);
         break;
       case "notify": {
         addNotice({
@@ -1366,6 +1390,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         break;
       case "extension_ui_closed":
         setExtensionDialog((current) => current?.id === event.id ? null : current);
+        setAskDialog((current) => current?.id === event.id ? null : current);
         break;
     }
   }, [addNotice, applyContextUsage, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
@@ -2163,7 +2188,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
-    notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
+    notices: noticeState.visible, extensionDialog, askDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, respondToAsk, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
