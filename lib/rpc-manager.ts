@@ -609,8 +609,10 @@ export class AgentSessionWrapper {
               source: "rpc",
               // Match pi's RPC contract: acknowledge only after synchronous prompt
               // validation and extension preflight have accepted the submission.
-              preflightResult: (success) => {
-                if (success) acceptPreflight();
+              // Since 1.4.0 the SDK calls this only for an accepted submission and
+              // passes the disposition, so every call acknowledges.
+              preflightResult: () => {
+                acceptPreflight();
               },
             });
           } catch (error) {
