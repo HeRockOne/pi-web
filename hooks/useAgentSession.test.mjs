@@ -332,7 +332,9 @@ test("keeps one reducer-owned assistant partial and consumes Pi JSON deltas", ()
   assert.match(connectedSource, /agentRunningRef\.current = true/);
   assert.match(streamSource, /msg\?\.role === "assistant"[\s\S]*dispatch\(\{ type: "snapshot", message: msg \}\)/);
   assert.match(streamSource, /event\.assistantMessageEvent as ClientAssistantMessageEvent/);
-  assert.match(streamSource, /dispatch\(\{ type: "delta", event: delta \}\)/);
+  // Deltas queue through the per-frame coalescer instead of dispatching directly.
+  assert.match(streamSource, /queueStreamDelta\(delta\)/);
+  assert.doesNotMatch(streamSource, /dispatch\(\{ type: "delta", event: delta \}\)/);
   assert.match(streamSource, /delta\.type !== "toolcall_start" && delta\.type !== "toolcall_delta"/);
   assert.doesNotMatch(streamSource, /case "message_delta"/);
   assert.match(messageEndSource, /const completed = event\.message as AgentMessage/);

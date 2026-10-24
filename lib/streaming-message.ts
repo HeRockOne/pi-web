@@ -150,3 +150,31 @@ export function streamReducer(
       return state;
   }
 }
+
+/**
+ * Merge a queued run of delta events so one animation frame produces at most
+ * one render per content block: consecutive text/thinking/toolcall deltas on
+ * the same contentIndex collapse into a single delta. Order is preserved and
+ * block boundaries (start/end) stay untouched. Deltas arrive in bursts of
+ * several per frame; applying each directly re-parses markdown per event and
+ * the stream stutters instead of flowing.
+ */
+export function coalesceStreamDeltas(
+  queue: ClientAssistantMessageEvent[],
+): ClientAssistantMessageEvent[] {
+  const out: ClientAssistantMessageEvent[] = [];
+  for (const event of queue) {
+    const last = out[out.length - 1];
+    if (
+      last
+      && (last.type === "text_delta" || last.type === "thinking_delta" || last.type === "toolcall_delta")
+      && last.type === event.type
+      && last.contentIndex === event.contentIndex
+    ) {
+      (last as { delta: string }).delta += event.delta;
+      continue;
+    }
+    out.push(event);
+  }
+  return out;
+}

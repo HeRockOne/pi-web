@@ -34,6 +34,7 @@ import {
 } from "@/lib/chat-lazy-load";
 import {
   INITIAL_STREAMING_STATE,
+  coalesceStreamDeltas,
   streamReducer,
   type ClientAssistantMessageEvent,
 } from "@/lib/streaming-message";
@@ -302,6 +303,38 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [hasEarlierMessages, setHasEarlierMessages] = useState(false);
   const [streamState, dispatch] = useReducer(streamReducer, INITIAL_STREAMING_STATE);
+  // SSE deltas arrive in bursts of several per frame; applying each directly
+  // re-parses the streaming markdown per event and the output stutters. Queue
+  // them and flush merged deltas once per animation frame so the text flows
+  // like a steady stream instead of irregular bursts.
+  const streamDeltaQueueRef = useRef<ClientAssistantMessageEvent[]>([]);
+  const streamFlushScheduledRef = useRef(false);
+  const flushStreamDeltas = useCallback(() => {
+    streamFlushScheduledRef.current = false;
+    const queue = streamDeltaQueueRef.current;
+    if (queue.length === 0) return;
+    streamDeltaQueueRef.current = [];
+    for (const event of coalesceStreamDeltas(queue)) {
+      dispatch({ type: "delta", event });
+    }
+  }, []);
+  const queueStreamDelta = useCallback((event: ClientAssistantMessageEvent) => {
+    streamDeltaQueueRef.current.push(event);
+    if (streamFlushScheduledRef.current) return;
+    streamFlushScheduledRef.current = true;
+    // rAF coalesces the flush with the browser's paint cycle. Background tabs
+    // pause rAF; message_end and the other stream transitions flush inline, so
+    // nothing is lost — visibility reconciliation catches the rest.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(flushStreamDeltas);
+    } else {
+      setTimeout(flushStreamDeltas, 16);
+    }
+  }, [flushStreamDeltas]);
+  const dropStreamDeltas = useCallback(() => {
+    streamDeltaQueueRef.current = [];
+    streamFlushScheduledRef.current = false;
+  }, []);
   const [agentRunning, setAgentRunning] = useState(false);
   const [bashRunning, setBashRunning] = useState(false);
   // Actual wall-clock start of each tool execution, from tool_execution_start SSE
@@ -927,10 +960,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(false);
     setAgentPhase(null);
     setRetryInfo(null);
+    flushStreamDeltas();
     dispatch({ type: "end" });
     setToolStartTimes((prev) => prev.size > 0 ? new Map<string, number>() : prev);
     return wasRunning;
-  }, []);
+  }, [flushStreamDeltas]);
 
   const notifyPromptStage = useCallback((runId: number) => {
     if (notifiedPromptRunIdRef.current === runId) return false;
@@ -1183,6 +1217,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     switch (event.type) {
       case "connected": {
+        flushStreamDeltas();
         dispatch({ type: "end" });
         if (event.isStreaming === true) {
           cancelEventStreamGrace();
@@ -1199,6 +1234,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         agentRunningRef.current = true;
         setAgentRunning(true);
         setAgentPhase({ kind: "waiting_model" });
+        // A new run begins: leftover deltas from a previous stream are stale.
+        dropStreamDeltas();
         dispatch({ type: "start" });
         break;
       case "agent_end":
@@ -1208,6 +1245,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (!agentRunningRef.current) break;
         setAgentPhase(null);
         setRetryInfo(null);
+        flushStreamDeltas();
         dispatch({ type: "end" });
         if (sessionIdRef.current) {
           loadSession(sessionIdRef.current);
@@ -1283,6 +1321,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const msg = event.message as AgentMessage | undefined;
           if (msg?.role === "user") break;
           if (msg?.role === "assistant") {
+            flushStreamDeltas();
             dispatch({ type: "snapshot", message: msg });
             if (msg.content.length > 0) setAgentPhase(null);
           } else if (msg) {
@@ -1291,7 +1330,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         } else {
           const delta = event.assistantMessageEvent as ClientAssistantMessageEvent | undefined;
           if (delta) {
-            dispatch({ type: "delta", event: delta });
+            queueStreamDelta(delta);
             if (delta.type !== "toolcall_start" && delta.type !== "toolcall_delta") {
               setAgentPhase(null);
             }
@@ -1337,6 +1376,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         } else if (completed) {
           setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
         }
+        flushStreamDeltas();
         dispatch({ type: "end" });
         setAgentPhase({ kind: "waiting_model" });
         break;
@@ -1421,7 +1461,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAskDialog((current) => current?.id === event.id ? null : current);
         break;
     }
-  }, [addNotice, applyContextUsage, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
+  }, [addNotice, applyContextUsage, cancelEventStreamGrace, dropStreamDeltas, flushStreamDeltas, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, queueStreamDelta, scheduleEventStreamClose, scrollToBottom, settleUiStage, syncLiveModel]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -1463,6 +1503,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunningRef.current = true;
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
+    dropStreamDeltas();
     dispatch({ type: "start" });
     pendingScrollToUserRef.current = true;
     setPromptAnchorActive(true);
@@ -1539,10 +1580,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       closeEvents();
       setAgentRunning(false);
       setAgentPhase(null);
+      flushStreamDeltas();
       dispatch({ type: "end" });
       setToolStartTimes((prev) => prev.size > 0 ? new Map<string, number>() : prev);
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, composerDraftKey, reconcileAgentState, restoreSubmission]);
+  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, composerDraftKey, dropStreamDeltas, flushStreamDeltas, reconcileAgentState, restoreSubmission]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -2080,6 +2122,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             agentRunningRef.current = true;
             setAgentRunning(true);
             setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
+            dropStreamDeltas();
             dispatch({ type: "resume" });
             void maintainEventsConnected(session.id);
             if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
