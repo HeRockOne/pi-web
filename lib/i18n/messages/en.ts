@@ -399,6 +399,7 @@ export const enLocale: LocalePlugin = {
     "chat.turnUsageOutput": "Output",
     "chat.collapseProcess": "Collapse process details",
     "chat.expandProcess": "Expand process details",
+    "chat.showEarlierSteps": "Show {count} earlier steps",
     "chat.filesWritten": "Files changed",
     "chat.openWrittenFile": "Open {name}",
     "chat.loadEarlier": "Scroll up to load earlier messages",

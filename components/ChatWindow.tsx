@@ -2,7 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { ChevronDownIcon } from "./Icons";
 import Image from "next/image";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, Children } from "react";
 import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import type { TurnUsage } from "@/lib/turn-usage";
@@ -107,6 +107,8 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 
 const CHAT_MINIMAP_WIDTH = 36;
 const CHAT_COLUMN_PADDING = 16;
+/** Messages of the streaming turn kept on screen; earlier ones fold away. */
+const LIVE_TAIL_VISIBLE = 12;
 
 function NewSessionUpdateLink({
   label,
@@ -214,20 +216,36 @@ function withAssistantBlocks(
   return next;
 }
 
+/** Steps visible in an expanded process group before earlier ones fold away. */
+const PROCESS_STEP_LIMIT = 14;
+
 function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [showAllSteps, setShowAllSteps] = useState(false);
   useLayoutEffect(() => {
     if (reveal) setExpanded(true);
   }, [reveal]);
   const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
   if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
 
+  // An expanded group shows only the latest steps; earlier ones fold behind a
+  // button so a 50-call turn does not unroll as a wall. Search reveal wins.
+  const items = Array.isArray(children) ? children : Children.toArray(children);
+  const hiddenSteps = expanded && !reveal && !showAllSteps
+    ? Math.max(0, items.length - PROCESS_STEP_LIMIT)
+    : 0;
+
   return (
     <div style={{ marginBottom: 14 }}>
       <button
         type="button"
         aria-expanded={expanded || reveal}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => {
+          setExpanded((v) => {
+            if (v) setShowAllSteps(false);
+            return !v;
+          });
+        }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -253,7 +271,29 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
       </button>
       {(expanded || reveal) && (
         <div style={{ marginTop: 8 }}>
-          {children}
+          {hiddenSteps > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllSteps(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                margin: "0 0 6px 8px",
+                padding: "1px 8px",
+                border: "none",
+                borderRadius: 6,
+                background: "transparent",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: 11.5,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              {t("chat.showEarlierSteps", { count: hiddenSteps })}
+            </button>
+          )}
+          {hiddenSteps > 0 ? items.slice(hiddenSteps) : items}
         </div>
       )}
     </div>
@@ -318,6 +358,9 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   });
 
   const sessionBusy = agentRunning || bashRunning;
+  // Live-tail folds the streaming turn's early steps; per-turn reveal persists
+  // until the turn settles and the collapsed process group takes over.
+  const [revealedLiveTails, setRevealedLiveTails] = useState<Record<string, boolean>>({});
   const [quotedSelection, setQuotedSelection] = useState<{
     text: string;
     top: number;
@@ -1164,7 +1207,41 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
                 const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
-                  for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
+                  rendered.push(renderMessage(userIdx));
+                  // While the turn streams in, keep only the newest steps on
+                  // screen; earlier ones fold behind a button so a long run
+                  // does not unroll as a wall of tool rows.
+                  const turnKey = entryIds[userIdx] ?? `idx-${userIdx}`;
+                  const turnMessageCount = endIdx - userIdx - 1;
+                  const hiddenLiveSteps = revealedLiveTails[turnKey]
+                    ? 0
+                    : Math.max(0, turnMessageCount - LIVE_TAIL_VISIBLE);
+                  if (hiddenLiveSteps > 0) {
+                    rendered.push(
+                      <button
+                        key={`live-fold-${turnKey}`}
+                        type="button"
+                        onClick={() => setRevealedLiveTails((prev) => ({ ...prev, [turnKey]: true }))}
+                        style={{
+                          display: "block",
+                          margin: "0 0 6px 8px",
+                          padding: "1px 8px",
+                          border: "none",
+                          borderRadius: 6,
+                          background: "transparent",
+                          color: "var(--text-dim)",
+                          cursor: "pointer",
+                          fontSize: 11.5,
+                          textAlign: "left",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+                      >
+                        {t("chat.showEarlierSteps", { count: hiddenLiveSteps })}
+                      </button>
+                    );
+                  }
+                  for (let renderIdx = userIdx + 1 + hiddenLiveSteps; renderIdx < endIdx; renderIdx++) {
                     rendered.push(renderMessage(renderIdx));
                   }
                   idx = endIdx;

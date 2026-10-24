@@ -163,7 +163,8 @@ test("renders subagents as standard tool calls with only an extra session button
     onOpenSession() {},
   });
 
-  assert.match(html, /border:1px solid rgba\(34,197,94,0\.25\)/);
+  // Flat tool row: the guide rail carries the structure, no card border.
+  assert.match(html, /border-left:1px solid var\(--border\)/);
   assert.match(html, />Agent</);
   assert.match(html, />Explore</);
   assert.match(html, /aria-label="Open sub-agent session"/);

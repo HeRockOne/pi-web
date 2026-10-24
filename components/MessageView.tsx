@@ -966,6 +966,21 @@ function AssistantMessageView({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [runActive, isStreaming]);
+
+  // Tree rail: consecutive thinking/toolCall blocks hang off one guide line,
+  // narration text breaks the rail. Keeps long tool runs readable as a list
+  // instead of a stack of bordered cards.
+  const railGroups = useMemo(() => {
+    const groups: Array<{ rail: boolean; items: Array<{ block: AssistantContentBlock; originalIndex: number }> }> = [];
+    for (const item of blockItems) {
+      const isRailItem = item.block.type === "toolCall" || item.block.type === "thinking";
+      const last = groups[groups.length - 1];
+      if (last && last.rail === isRailItem) last.items.push(item);
+      else groups.push({ rail: isRailItem, items: [item] });
+    }
+    return groups;
+  }, [blockItems]);
+
   if (blocks.length === 0 && !isStreaming && !providerError) return null;
 
   return (
@@ -1022,9 +1037,28 @@ function AssistantMessageView({
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} searchTarget={block === searchBlock} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} liveDuration={liveDurations.get(originalIndex)} liveToolDuration={liveToolDurations.get((block as ToolCallContent).toolCallId ?? "")} blockStart={blockStartTimesRef.current.get(originalIndex)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
-        ))}
+        {railGroups.map((group, groupIndex) => {
+          const renderBlock = ({ block, originalIndex }: { block: AssistantContentBlock; originalIndex: number }) => (
+            <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} searchTarget={block === searchBlock} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} liveDuration={liveDurations.get(originalIndex)} liveToolDuration={liveToolDurations.get((block as ToolCallContent).toolCallId ?? "")} blockStart={blockStartTimesRef.current.get(originalIndex)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          );
+          if (!group.rail) return group.items.map(renderBlock);
+          return (
+            <div
+              key={`rail-${entryId ?? "stream"}-${groupIndex}`}
+              style={{
+                borderLeft: "1px solid var(--border)",
+                margin: "1px 0 1px 7px",
+                padding: "1px 0 1px 10px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 5,
+                minWidth: 0,
+              }}
+            >
+              {group.items.map(renderBlock)}
+            </div>
+          );
+        })}
       </div>
 
       {providerError && (
@@ -1063,9 +1097,12 @@ function AssistantMessageView({
             {t("chat.turnDuration", { time: formatTurnDuration(turnDurationMs) })}
           </span>
         )}
-        {message.usage && !isStreaming && (() => {
+        {message.usage && !isStreaming && (showTimestamp || turnUsage !== undefined || turnDurationMs !== undefined) && (() => {
           // This is one request's own hit rate: the share of this response's prompt
-          // that came from cache. The turn's token-weighted rate lives in the card.
+          // that came from cache. Only a turn's closer shows it — the final answer
+          // (turn usage/duration props) or a standalone last message. Process-group
+          // and live-tail intermediates carry none of those, so the dot no longer
+          // repeats under every tool row; the card holds the turn's weighted rate.
           const hitTotal = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
           if (!(message.usage.cacheRead > 0) || hitTotal <= 0) return null;
           const rate = message.usage.cacheRead / hitTotal;
@@ -1207,10 +1244,8 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0, flexWrap: "wrap",
-      border: "1px solid var(--border)",
       borderRadius: 7,
-      padding: "6px 10px",
-      background: "var(--bg)",
+      padding: "4px 8px",
       fontFamily: "var(--font-mono)",
       fontSize: "calc(11px + var(--chat-font-size-offset, 0px))",
       lineHeight: 1.5,
@@ -1306,6 +1341,31 @@ function isSubagentToolDetails(value: unknown): value is SubagentToolDetails {
   return details.kind === "pi-web-subagent" && typeof details.sessionId === "string";
 }
 
+/** Left-edge status of a flat tool row: pulsing dot while running, check/cross after. */
+function ToolCallStatusDot({ pending, isError }: { pending: boolean; isError: boolean }) {
+  if (pending) {
+    return (
+      <span
+        aria-hidden="true"
+        className="animate-[pulse_1.6s_ease-in-out_infinite]"
+        style={{ width: 7, height: 7, borderRadius: 4, background: "#d97706", flex: "0 0 auto", margin: "0 2px" }}
+      />
+    );
+  }
+  if (isError) {
+    return (
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#e5484d" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" style={{ flex: "0 0 auto", margin: "0 2px" }}>
+        <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#46a758" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "0 0 auto", margin: "0 2px" }}>
+      <polyline points="2.5 6.5 5 9 9.5 3.5" />
+    </svg>
+  );
+}
+
 function ToolCallBlock({ block, result, duration, onOpenSession }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; onOpenSession?: (sessionId: string) => void }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -1332,35 +1392,33 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
   const subagent = isSubagentToolDetails(result?.details) ? result.details : null;
 
   return (
-    <div
-      style={{
-        borderRadius: 7,
-        overflow: "hidden",
-        fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
-      }}
-    >
-      {/* ── Tool call header ── */}
+    <div style={{ minWidth: 0 }}>
+      {/* ── Flat tool row: no card chrome — the rail + status dot carry the structure ── */}
       <div style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
         <button
           onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-subtle)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = expanded ? "var(--bg-subtle)" : "transparent"; }}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 7,
             flex: 1,
             minWidth: 0,
-            padding: "6px 10px",
-            background: "none",
+            padding: "4px 8px",
+            background: expanded ? "var(--bg-subtle)" : "transparent",
             border: "none",
+            borderRadius: 7,
             color: "var(--text-muted)",
             cursor: "pointer",
             fontSize: 12,
             textAlign: "left",
+            transition: "background 0.12s",
           }}
         >
-          <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+          <ToolCallStatusDot pending={!result} isError={isError} />
+          <span style={{ color: isError ? "#e5484d" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
             {block.toolName}
           </span>
           <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -1382,52 +1440,61 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             onClick={() => onOpenSession(subagent.sessionId)}
             title={t("subagent.open")}
             aria-label={t("subagent.open")}
-            style={{ width: 32, display: "grid", placeItems: "center", border: "none", borderLeft: "1px solid var(--border)", background: "none", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+            style={{ width: 30, display: "grid", placeItems: "center", border: "none", background: "none", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
           </button>
         )}
       </div>
 
-      {/* ── Expanded: input args ── */}
-      {expanded && (isStreamingInput || !isEditTool) && (
-        <pre
+      {/* ── Expanded detail panel: input args, nested calls, paired result ── */}
+      {expanded && (
+        <div
           style={{
-            margin: 0,
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
-            lineHeight: 1.5,
-            overflow: "auto",
-            background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
+            margin: "2px 0 2px 4px",
+            border: isError ? "1px solid rgba(229,72,77,0.35)" : "1px solid var(--border)",
+            borderRadius: 8,
+            overflow: "hidden",
+            background: "var(--bg)",
           }}
         >
-          {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
-        </pre>
-      )}
+          {(isStreamingInput || !isEditTool) && (
+            <pre
+              style={{
+                margin: 0,
+                padding: "8px 10px",
+                color: "var(--text-muted)",
+                fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
+                lineHeight: 1.5,
+                overflow: "auto",
+                background: "var(--bg-subtle)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}
+            >
+              {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
+            </pre>
+          )}
 
-      {/* ── Codemode nested calls, between the script and its output ── */}
-      {expanded && codemode && (
-        <CodemodeCallList calls={codemode.calls} omitted={codemode.omitted} isError={isError} />
-      )}
+          {codemode && (
+            <CodemodeCallList calls={codemode.calls} omitted={codemode.omitted} isError={isError} />
+          )}
 
-      {/* ── Paired result — only shown when expanded ── */}
-      {expanded && result && !codemodeRunning && (
-        resultDiff ? (
-          <PairedDiffResult
-            diff={resultDiff}
-          />
-        ) : (
-          <PairedResult
-            text={resultText ?? ""}
-            images={resultImages}
-            isEmpty={resultIsEmpty}
-            isError={isError}
-          />
-        )
+          {result && !codemodeRunning && (
+            resultDiff ? (
+              <PairedDiffResult
+                diff={resultDiff}
+              />
+            ) : (
+              <PairedResult
+                text={resultText ?? ""}
+                images={resultImages}
+                isEmpty={resultIsEmpty}
+                isError={isError}
+              />
+            )
+          )}
+        </div>
       )}
     </div>
   );

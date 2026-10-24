@@ -402,6 +402,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.turnUsageOutput": "输出",
     "chat.collapseProcess": "收起处理详情",
     "chat.expandProcess": "展开处理详情",
+    "chat.showEarlierSteps": "显示更早的 {count} 步",
     "chat.filesWritten": "改动的文件",
     "chat.openWrittenFile": "打开 {name}",
     "chat.loadEarlier": "向上滚动以加载更早的消息",
