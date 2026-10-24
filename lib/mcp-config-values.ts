@@ -1,12 +1,12 @@
-import { execSync } from "node:child_process";
-
 // Which values of an `mcp.json` entry pi resolves before it connects, and the
 // PI_WEB_PASSWORD rule over them (ADR 0006, "Safety → Environment"). Mirrors
 // the SDK's core/resolve-config-value.js, which pi-coding-agent does not
 // re-export, so a resolution change upstream has to be re-ported here.
-// Client-safe apart from `!command` execution: the MCP routes and the
-// transport share this walk, so a change to which fields pi resolves is made
-// once.
+// Client-safe with no runtime imports: the add pane
+// (components/mcp-add-helpers.ts) previews and pre-blocks with the same walk
+// the server-side reader, the transport and the routes use, so a change to
+// which fields pi resolves is made once. `!command` execution lives in
+// ./mcp-config-resolve (server only).
 
 export const WEB_PASSWORD_VARIABLE = "PI_WEB_PASSWORD";
 
@@ -66,7 +66,7 @@ type TemplatePart = { type: "literal"; value: string } | { type: "env"; name: st
 
 // Ported from the SDK's parseConfigValueTemplate: `${NAME}` and `$NAME`
 // references, with `$$` and `$!` escaping a literal `$` and `!`.
-function parseConfigValueTemplate(config: string): TemplatePart[] {
+export function parseConfigValueTemplate(config: string): TemplatePart[] {
   const parts: TemplatePart[] = [];
   const appendLiteral = (value: string) => {
     if (!value) return;
@@ -130,50 +130,6 @@ export function getConfigValueEnvVarNames(config: string): string[] {
     if (part.type === "env" && !names.includes(part.name)) names.push(part.name);
   }
   return names;
-}
-
-// The SDK resolves commands with its configured shell on Windows and falls
-// back to the default one; here the default shell covers both, with the same
-// 10s timeout and trimmed stdout. Cached per process like the SDK.
-const commandResultCache = new Map<string, string | undefined>();
-
-function executeCommand(commandConfig: string): string | undefined {
-  const cached = commandResultCache.get(commandConfig);
-  if (commandResultCache.has(commandConfig)) return cached;
-  let value: string | undefined;
-  try {
-    const output = execSync(commandConfig.slice(1), {
-      encoding: "utf-8",
-      timeout: 10000,
-      stdio: ["ignore", "pipe", "ignore"],
-      windowsHide: true,
-    });
-    value = output.trim() || undefined;
-  } catch {
-    value = undefined;
-  }
-  commandResultCache.set(commandConfig, value);
-  return value;
-}
-
-/**
- * Resolve one config value in this process: `!command` runs and uses its
- * stdout, a template interpolates this process's environment, and a missing
- * variable resolves to undefined.
- */
-export function resolveConfigValue(config: string): string | undefined {
-  if (isCommandConfigValue(config)) return executeCommand(config);
-  let resolved = "";
-  for (const part of parseConfigValueTemplate(config)) {
-    if (part.type === "literal") {
-      resolved += part.value;
-      continue;
-    }
-    const value = process.env[part.name];
-    if (value === undefined) return undefined;
-    resolved += value;
-  }
-  return resolved;
 }
 
 /**
