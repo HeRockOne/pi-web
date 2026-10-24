@@ -2,8 +2,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { PRISM_DARK_THEME, PRISM_LIGHT_THEME } from "@/lib/prism-themes";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
@@ -300,7 +299,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
             fontSize: "calc(12.5px + var(--chat-font-size-offset, 0px))",
             lineHeight: 1.62,
             overflowX: "auto",
-            background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+            backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
           }}
         >
           <code style={{ fontFamily: "var(--font-mono)" }}>{code}</code>
@@ -308,7 +307,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
       ) : (
         <SyntaxHighlighter
           language={lang || "text"}
-          style={isDark ? vscDarkPlus : vs}
+          style={isDark ? PRISM_DARK_THEME : PRISM_LIGHT_THEME}
           showLineNumbers
           lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
           customStyle={{
@@ -317,7 +316,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
             fontSize: "calc(12.5px + var(--chat-font-size-offset, 0px))",
             lineHeight: 1.62,
             borderRadius: 0,
-            background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+            backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
           }}
           codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
         >

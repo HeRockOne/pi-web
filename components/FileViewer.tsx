@@ -6,8 +6,7 @@ import {
   createElement as renderSyntaxNode,
   type SyntaxHighlighterProps,
 } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { PRISM_DARK_THEME, PRISM_LIGHT_THEME } from "@/lib/prism-themes";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -1427,7 +1426,7 @@ function TextFileViewer({
       <SyntaxHighlighter
         className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
         language={language === "text" ? "plaintext" : language}
-        style={isDark ? vscDarkPlus : vs}
+        style={isDark ? PRISM_DARK_THEME : PRISM_LIGHT_THEME}
         showLineNumbers
         lineNumberStyle={{
           ...FILE_LINE_NUMBER_STYLE,
@@ -1436,7 +1435,7 @@ function TextFileViewer({
           margin: 0,
           padding: 0,
           border: 0,
-          background: "var(--bg)",
+          backgroundColor: "var(--bg)",
           ...FILE_CODE_STYLE,
           width: wrapLines ? "100%" : "max-content",
           minWidth: "100%",
