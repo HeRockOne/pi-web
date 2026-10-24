@@ -9,6 +9,7 @@ import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { createBuiltinExtensionFactories } from "./builtin-extensions";
 import { createReadOnlyMcpPolicyExtension } from "./mcp-read-only-policy";
+import { SYSTEM_TOOL_TOGGLE_NAMES } from "./tool-presets";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
@@ -208,7 +209,11 @@ const CUSTOM_UI_KEYBINDINGS = new TuiKeybindingsManager(TUI_KEYBINDINGS);
 // Nothing else is added: pi itself activates the extension tools it registers,
 // so `carry` already holds them, while tools registered with
 // `defaultActive: false` (codemode, tool_search) stay off until something
-// activates them. An empty selection is Chat only.
+// activates them. The codemode / tool_search dropdown switches are excluded from
+// the carry: they only ride an explicit request, so unchecking one does not get
+// undone by the tool still being active. An empty selection is Chat only.
+const SESSION_TOOL_TOGGLE_SET = new Set<string>(SYSTEM_TOOL_TOGGLE_NAMES);
+
 export function resolveActiveToolNames(
   session: AgentSessionLike,
   requested: readonly string[],
@@ -230,7 +235,7 @@ export function resolveActiveToolNames(
   // activate even when currently inactive, while the carry keeps everything
   // else that is already active, e.g. tools pi's extensions turned on.
   const requestedToolNames = requested.filter(isSelectable);
-  const carriedToolNames = carry.filter(isSelectable);
+  const carriedToolNames = carry.filter((name) => !SESSION_TOOL_TOGGLE_SET.has(name)).filter(isSelectable);
 
   return [...new Set([...selectedToolNames, ...requestedToolNames, ...carriedToolNames])];
 }

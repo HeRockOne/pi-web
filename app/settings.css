@@ -123,6 +123,9 @@
 }
 
 .config-sidebar-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 8px 3px;
   color: var(--text-dim);
   font-family: inherit;
@@ -131,6 +134,41 @@
   line-height: 1.4;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+/* Sits in the heading row, so the sidebar gains no height for it. */
+.config-sidebar-group-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-sidebar-group-count {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+/* Three lines, then scroll: the phone layout gives the whole sidebar 190px. */
+.config-sidebar-group-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 4.2em;
+  padding: 0 8px 4px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.config-sidebar-group-note {
+  color: var(--text-muted);
+}
+
+.config-sidebar-group-error {
+  color: #ef4444;
 }
 
 .config-sidebar-item {
