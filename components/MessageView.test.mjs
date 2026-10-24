@@ -294,3 +294,32 @@ test("renders custom-message images as buttons that open a larger preview", () =
   assert.match(html, /<button[^>]+aria-label="Preview image"[^>]*>/);
   assert.match(html, /<img[^>]+src="data:image\/png;base64,YWJj"/);
 });
+
+test("footnotes a finished answer with its tokens, cost and turn duration", () => {
+  const message = {
+    role: "assistant",
+    content: [{ type: "text", text: "done" }],
+    model: "deepseek-v4.1-flash",
+    provider: "opencode",
+    usage: {
+      input: 1200,
+      output: 34,
+      cacheRead: 50000,
+      cacheWrite: 7,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.0123 },
+    },
+  };
+
+  const html = renderMessage(message, { turnDurationMs: 125000 });
+  assert.match(html, /1,200 in/);
+  assert.match(html, /34 out/);
+  assert.match(html, /50,000 cache R/);
+  assert.match(html, /7 cache W/);
+  assert.match(html, /\$0\.0123/);
+  assert.match(html, /took 2m 5s/);
+
+  // While the answer streams there is no finished turn to footnote.
+  const streaming = renderMessage(message, { isStreaming: true, turnDurationMs: 125000 });
+  assert.doesNotMatch(streaming, /1,200 in/);
+  assert.doesNotMatch(streaming, /took 2m 5s/);
+});

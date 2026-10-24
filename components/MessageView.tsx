@@ -6,7 +6,8 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
-import { formatPercent } from "@/lib/usage-stats-format";
+import { formatPercent, formatTokensExact } from "@/lib/usage-stats-format";
+import { formatTurnDuration } from "@/lib/turn-duration";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -211,12 +212,36 @@ interface Props {
   runActive?: boolean;
   /** Exact wall-clock start of each tool execution, from SSE tool_execution_start. */
   toolStartTimes?: Map<string, number>;
+  /**
+   * How long the finished turn took, from lib/turn-duration. Only the turn's
+   * final answer carries it: the number describes the whole turn, not one step.
+   */
+  turnDurationMs?: number;
 }
 
 
 /** Duration display: integers as-is ("8s"), live fractional values with one decimal ("3.4s"). */
 function formatSeconds(seconds: number): string {
   return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+}
+
+/**
+ * What one assistant response consumed, as pi reports it: the uncached input,
+ * the output, the prompt cache traffic and the cost. Ported from upstream
+ * (components/MessageView.tsx formatUsage) — the labels stay compact because
+ * the line is a footnote under the answer.
+ */
+function formatUsage(
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } },
+  locale?: string,
+): string {
+  const parts: string[] = [];
+  if (usage.input) parts.push(`${formatTokensExact(usage.input, locale)} in`);
+  if (usage.output) parts.push(`${formatTokensExact(usage.output, locale)} out`);
+  if (usage.cacheRead) parts.push(`${formatTokensExact(usage.cacheRead, locale)} cache R`);
+  if (usage.cacheWrite) parts.push(`${formatTokensExact(usage.cacheWrite, locale)} cache W`);
+  if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
+  return parts.join(" · ");
 }
 
 export function getModelDisplayName(
@@ -284,12 +309,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes, turnDurationMs }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} turnDurationMs={turnDurationMs} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -322,6 +347,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
     && prev.writtenFiles === next.writtenFiles
+    && prev.turnDurationMs === next.turnDurationMs
     && prev.sessionId === next.sessionId;
 });
 
@@ -622,6 +648,7 @@ function AssistantMessageView({
   writtenFiles,
   runActive,
   toolStartTimes,
+  turnDurationMs,
 }: {
   message: AssistantMessage;
   /** Streamed model output still growing — the streaming-phase live tick. */
@@ -640,8 +667,9 @@ function AssistantMessageView({
   entryId?: string;
   searchBlock?: AssistantContentBlock;
   writtenFiles?: WrittenFile[];
+  turnDurationMs?: number;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blockItems = useMemo(() => getDisplayableAssistantBlocks(message, { isStreaming })
     .map((block, originalIndex) => ({ block, originalIndex })), [message, isStreaming]);
@@ -908,6 +936,19 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
+        {!isStreaming && message.usage && formatUsage(message.usage, locale) !== "" && (
+          <span
+            title={t("chat.turnUsage")}
+            style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+          >
+            {formatUsage(message.usage, locale)}
+          </span>
+        )}
+        {!isStreaming && turnDurationMs !== undefined && (
+          <span style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+            {t("chat.turnDuration", { time: formatTurnDuration(turnDurationMs) })}
+          </span>
+        )}
         {message.usage && !isStreaming && (() => {
           const hitTotal = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
           if (!(message.usage.cacheRead > 0) || hitTotal <= 0) return null;
@@ -917,7 +958,7 @@ function AssistantMessageView({
           const tone = rate >= 0.9 ? "#46a758" : rate >= 0.7 ? "#d9a441" : "#e5484d";
           return (
             <span
-              title={`${t("i18n.cacheHitRate")} ${formatPercent(rate)}`}
+              title={`${t("session.cacheHitRate")} ${formatPercent(rate)}`}
               style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}
             >
               <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: tone, flex: "0 0 auto" }} />
