@@ -24,6 +24,7 @@ import {
 } from "@/lib/file-fuzzy";
 import { isBareMcpCommand, isBuiltinMcpCommand } from "@/lib/mcp-command";
 import { FolderIcon, getFileIcon } from "./FileIcons";
+import { ImagePreview } from "./ImagePreview";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useChatAppearance } from "@/hooks/useChatAppearance";
@@ -531,6 +532,32 @@ export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
   );
 }
 
+/** Chip for the controls popover: pill that fills with the accent when active. */
+function controlChipStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "4px 11px",
+    borderRadius: 999,
+    border: `1px solid ${active ? "color-mix(in srgb, var(--accent) 55%, transparent)" : "color-mix(in srgb, var(--border) 85%, transparent)"}`,
+    background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
+    color: active ? "var(--accent)" : "var(--text-muted)",
+    fontSize: 12,
+    fontWeight: active ? 500 : 400,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "background 0.12s, color 0.12s, border-color 0.12s",
+  };
+}
+
+/** Small caps-style label above a controls-popover section. */
+function controlSectionLabelStyle(): React.CSSProperties {
+  return {
+    fontSize: 11,
+    color: "var(--text-dim)",
+    marginBottom: 6,
+    whiteSpace: "nowrap",
+  };
+}
+
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange, modelSwitching,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
@@ -549,8 +576,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const { fontSize } = useChatAppearance();
   const isMobile = useIsMobile();
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
-  const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
-  const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
@@ -586,8 +611,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : {};
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const toolDropdownRef = useRef<HTMLDivElement>(null);
-  const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1659,12 +1682,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (toolDropdownRef.current && !toolDropdownRef.current.contains(e.target as Node)) {
-        setToolDropdownOpen(false);
-      }
-      if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
-        setThinkingDropdownOpen(false);
-      }
       if (controlsMenuRef.current && !controlsMenuRef.current.contains(e.target as Node)) {
         setControlsMenuOpen(false);
       }
@@ -1851,14 +1868,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
             {attachedImages.map((img, i) => (
               <div key={i} style={{ position: "relative", flexShrink: 0 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.previewUrl}
-                  alt=""
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
-                />
+                <ImagePreview src={img.previewUrl}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.previewUrl}
+                    alt=""
+                    style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
+                  />
+                </ImagePreview>
                 <button
                   onClick={() => removeImage(i)}
+                  title={t("chat.removeImage")}
+                  aria-label={t("chat.removeImage")}
                   style={{
                     position: "absolute", top: -4, right: -4,
                     width: 16, height: 16, borderRadius: "50%",
@@ -2458,40 +2479,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <>
               <div style={{ height: 1, flexShrink: 0, margin: "6px -10px 0 -14px", background: "color-mix(in srgb, var(--border) 55%, transparent)" }} />
               <div ref={controlsMenuRef} style={{ display: "flex", alignItems: "center", gap: 2, position: "relative", padding: "3px 0 6px" }}>
-                {isMobile && (
-                  <button
-                    type="button"
-                    title={controlsMenuOpen ? undefined : t("chat.moreControls")}
-                    aria-label={t("chat.moreControls")}
-                    aria-expanded={controlsMenuOpen}
-                    onClick={() => {
-                      setControlsMenuOpen(true);
-                    }}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                      height: 28, padding: "0 10px", flexShrink: 0,
-                      background: controlsMenuOpen ? "var(--bg-hover)" : "none",
-                      border: "none", borderRadius: 7,
-                      color: "var(--text-muted)",
-                      cursor: "pointer", fontSize: 12, fontWeight: 500,
-                      transition: "background 0.12s, color 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                      e.currentTarget.style.color = "var(--text)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = controlsMenuOpen ? "var(--bg-hover)" : "none";
-                      e.currentTarget.style.color = "var(--text-muted)";
-                    }}
-                  >
-                    {t("chat.moreControls")}
-                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="3 6.2 5 8.2 7 6.2" />
-                    </svg>
-                  </button>
-                )}
-                {isMobile && <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />}
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   title={t("chat.attachFile")}
@@ -2532,350 +2519,210 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   )}
                 </div>
                 <div style={{ flex: 1 }} />
-                <div style={{
-                  display: isMobile ? (controlsMenuOpen ? "flex" : "none") : "flex",
-                  alignItems: "center",
-                  gap: isMobile ? 1 : 0,
-                  ...(isMobile ? {
-                    position: "absolute",
-                    left: 0,
-                    bottom: "calc(100% + 8px)",
-                    zIndex: 60,
-                    padding: 1,
-                    width: "max-content",
-                    maxWidth: "calc(100vw - 32px)",
-                    flexWrap: "nowrap",
-                    justifyContent: "flex-end",
-                    border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                    borderRadius: 12,
-                    background: "var(--surface-2)",
-                    boxShadow: "var(--shadow-lg)",
-                    backdropFilter: "blur(10px)",
-                  } : null),
-                }}>
-            {!isStreaming && onThinkingLevelChange && (
-              <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
+                {/* Everything adjustable lives in one popover: reasoning level,
+                    tool presets, compaction, sound. The bar itself stays a quiet
+                    attach → model → sliders row on every screen size. */}
                 <button
-                  onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                   title={t("chat.changeReasoning", { level: thinkingDisplayLabel })}
-                   aria-label={t("chat.changeReasoningLabel")}
+                  type="button"
+                  onClick={() => setControlsMenuOpen((v) => !v)}
+                  title={t("chat.moreControls")}
+                  aria-label={t("chat.moreControls")}
+                  aria-expanded={controlsMenuOpen}
                   style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "0 8px",
-                    width: isMobile ? "auto" : undefined,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 28,
                     height: 28,
-                    background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
+                    padding: 0,
+                    background: controlsMenuOpen ? "var(--bg-hover)" : "none",
                     border: "none",
                     borderRadius: 7,
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
+                    color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
+                    cursor: "pointer",
                     transition: "background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={(e) => {
-                    if (isStreaming) return;
                     e.currentTarget.style.background = "var(--bg-hover)";
                     e.currentTarget.style.color = "var(--text)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.background = controlsMenuOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = controlsMenuOpen ? "var(--text)" : "var(--text-muted)";
                   }}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-                    <line x1="7" y1="18" x2="12" y2="18" />
-                    <line x1="8" y1="21" x2="11" y2="21" />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <line x1="4" y1="7" x2="20" y2="7" />
+                    <circle cx="14.5" cy="7" r="2.2" />
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <circle cx="8" cy="12" r="2.2" />
+                    <line x1="4" y1="17" x2="20" y2="17" />
+                    <circle cx="15.5" cy="17" r="2.2" />
                   </svg>
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
                 </button>
-                {thinkingDropdownOpen && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)",
-                    ...(isMobile ? { left: 0 } : { right: 0 }),
-                    zIndex: 100, background: "var(--surface-2)", border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
-                    borderRadius: "var(--radius-overlay)", boxShadow: "var(--shadow-lg)", padding: 5,
-                    overflow: "hidden", minWidth: 200,
-                  }}>
-                    {THINKING_LEVELS.filter((lvl) => {
-                      if (!availableThinkingLevels) return true;
-                      if (lvl === "auto") return true;
-                      return availableThinkingLevels.includes(lvl);
-                    }).map((lvl) => {
-                      const isActive = (thinkingLevel ?? "auto") === lvl;
-                       const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
-                      const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                      const showOriginal = mappedVal != null && mappedVal !== lvl;
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            borderRadius: 10,
-                            background: isActive ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--accent)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 500 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>
-                            {displayLabel}
-                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            {!isStreaming && onToolPresetChange && (
-              <div ref={toolDropdownRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                  title={t("chat.changeToolPreset") + `: ${toolPresetLabel}`}
-                  aria-label={t("chat.changeToolPreset")}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "0 8px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 28,
-                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 7,
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                  </svg>
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
-                </button>
-                {toolDropdownOpen && (
-                  <div style={{
-                    position: "absolute",
-                    bottom: "calc(100% + 6px)",
-                    right: isMobile ? undefined : 0,
-                    left: isMobile ? 0 : undefined,
-                    zIndex: 100, background: "var(--surface-2)", border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
-                    borderRadius: "var(--radius-overlay)", boxShadow: "var(--shadow-lg)", padding: 5,
-                    overflow: "hidden", minWidth: 140,
-                  }}>
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = (toolPreset ?? "default") === preset;
-                      let desc: string;
-                      if (lvl === "chat-only") desc = t("chat.chatOnly");
-                      else if (lvl === "read-only") desc = t("chat.readOnlyTools", { count: 4 });
-                      else if (lvl === "default") desc = t("chat.builtInTools", { count: 4 });
-                      else desc = t("chat.allBuiltInTools");
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            borderRadius: 10,
-                            background: isActive ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--accent)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 500 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                    {systemToolToggles && systemToolToggles.length > 0 && onSystemToolToggle && (
-                      <>
-                        <div style={{ height: 1, margin: "4px 8px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
-                        {systemToolToggles.map((tool) => (
+                {controlsMenuOpen && (
+                  <div
+                    role="menu"
+                    style={{
+                      position: "absolute",
+                      bottom: "calc(100% + 8px)",
+                      right: 0,
+                      zIndex: 100,
+                      width: "min(320px, calc(100vw - 32px))",
+                      padding: 12,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      background: "var(--surface-2)",
+                      border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                      borderRadius: 12,
+                      boxShadow: "var(--shadow-lg)",
+                      backdropFilter: "blur(10px)",
+                    }}
+                  >
+                    {!isStreaming && onThinkingLevelChange && (
+                      <div>
+                        <div style={controlSectionLabelStyle()}>{t("chat.controlsThinking")}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {THINKING_LEVELS.filter((lvl) => {
+                            if (!availableThinkingLevels) return true;
+                            if (lvl === "auto") return true;
+                            return availableThinkingLevels.includes(lvl);
+                          }).map((lvl) => {
+                            const isActive = (thinkingLevel ?? "auto") === lvl;
+                            const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                            const chipLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                            const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
+                            return (
+                              <button
+                                key={lvl}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={isActive}
+                                title={desc}
+                                onClick={() => { setControlsMenuOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
+                                style={controlChipStyle(isActive)}
+                              >
+                                {chipLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {!isStreaming && onToolPresetChange && (
+                      <div>
+                        <div style={controlSectionLabelStyle()}>{t("chat.controlsTools")}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {TOOL_PRESETS.map((lvl) => {
+                            const preset = TOOL_PRESET_MAP[lvl];
+                            const isActive = (toolPreset ?? "default") === preset;
+                            let desc: string;
+                            if (lvl === "chat-only") desc = t("chat.chatOnly");
+                            else if (lvl === "read-only") desc = t("chat.readOnlyTools", { count: 4 });
+                            else if (lvl === "default") desc = t("chat.builtInTools", { count: 4 });
+                            else desc = t("chat.allBuiltInTools");
+                            return (
+                              <button
+                                key={lvl}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={isActive}
+                                title={desc}
+                                onClick={() => { setControlsMenuOpen(false); if (!isActive) onToolPresetChange(preset); }}
+                                style={controlChipStyle(isActive)}
+                              >
+                                {lvl}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {systemToolToggles && systemToolToggles.length > 0 && onSystemToolToggle && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                            {systemToolToggles.map((tool) => (
+                              <button
+                                key={tool.name}
+                                type="button"
+                                role="menuitemcheckbox"
+                                aria-checked={tool.active}
+                                title={tool.description}
+                                onClick={() => onSystemToolToggle(tool.name, !tool.active)}
+                                style={controlChipStyle(tool.active)}
+                              >
+                                {tool.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(onCompact || onSoundToggle !== undefined) && (
+                      <div style={{ borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)", paddingTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        {onCompact && (
                           <button
-                            key={tool.name}
-                            onClick={() => onSystemToolToggle(tool.name, !tool.active)}
-                            title={tool.description}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setControlsMenuOpen(false); if (isCompacting) onAbortCompaction?.(); else onCompact(); }}
+                            disabled={isStreaming && !isCompacting}
+                            title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                             style={{
-                              display: "flex", alignItems: "center", gap: 8,
-                              width: "100%", padding: "7px 12px",
-                              borderRadius: 10,
-                              background: tool.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "5px 10px",
+                              background: isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "transparent",
                               border: "none",
-                              color: tool.active ? "var(--accent)" : "var(--text-muted)",
-                              cursor: "pointer", fontSize: 12, textAlign: "left",
-                              fontWeight: tool.active ? 500 : 400,
-                              whiteSpace: "nowrap",
+                              borderRadius: 7,
+                              color: isCompacting ? "var(--err)" : "var(--text-muted)",
+                              cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
+                              fontSize: 12,
+                              opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
+                              transition: "background 0.12s, color 0.12s",
                             }}
-                            onMouseEnter={(e) => { if (!tool.active) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                            onMouseLeave={(e) => { if (!tool.active) e.currentTarget.style.background = "none"; }}
                           >
-                            {tool.active
-                              ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                              : <span style={{ width: 10, flexShrink: 0 }} />}
-                            <span style={{ flex: 1 }}>{tool.name}</span>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{t("chat.systemTool")}</span>
+                            {isCompacting ? (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>
+                            ) : (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                                <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+                              </svg>
+                            )}
+                            {isCompacting ? t("chat.compacting") : t("chat.compact")}
                           </button>
-                        ))}
-                      </>
+                        )}
+                        <span style={{ flex: 1 }} />
+                        {onSoundToggle !== undefined && (
+                          <button
+                            type="button"
+                            role="menuitemcheckbox"
+                            aria-checked={!!soundEnabled}
+                            onClick={onSoundToggle}
+                            title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "5px 10px",
+                              background: "transparent",
+                              border: "none",
+                              borderRadius: 7,
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              opacity: soundEnabled ? 1 : 0.6,
+                              transition: "background 0.12s, color 0.12s, opacity 0.12s",
+                            }}
+                          >
+                            <MorphVolumeIcon on={!!soundEnabled} />
+                            {soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
-            {!isStreaming && onCompact && (
-              <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
-            )}
-
-            {!isStreaming && onCompact && (
-              <div>
-                <button
-                  onClick={isCompacting ? onAbortCompaction : onCompact}
-                  disabled={isStreaming && !isCompacting}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "0 8px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 28,
-                    background: isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "none",
-                    border: "none",
-                    borderRadius: 7,
-                    color: isCompacting ? "var(--err)" : "var(--text-muted)",
-                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--err) 16%, transparent)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "var(--err)" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "var(--err)" : "var(--text-muted)";
-                  }}
-                   title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                   aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                >
-                  {isCompacting ? (
-                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compacting")}</span>}</>
-                  ) : (
-                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                      <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                    </svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compact")}</span>}</>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {onSoundToggle !== undefined && (
-              <button
-                onClick={onSoundToggle}
-                 title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                 aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: 28,
-                  height: 28,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 7,
-                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: "pointer",
-                  opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                <MorphVolumeIcon on={!!soundEnabled} />
-              </button>
-            )}
-            {isMobile && controlsMenuOpen && (
-              <button
-                type="button"
-                 title={t("chat.collapseControls")}
-                 aria-label={t("chat.collapseControls")}
-                aria-expanded={true}
-                onClick={() => {
-                  setToolDropdownOpen(false);
-                  setThinkingDropdownOpen(false);
-                  setControlsMenuOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 32,
-                  height: 28,
-                  padding: 0,
-                  marginLeft: 0,
-                  background: "var(--bg-hover)",
-                  border: "none",
-                  borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                  borderRadius: "0 11px 11px 0",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-            </div>
               </div>
             </>
           )}

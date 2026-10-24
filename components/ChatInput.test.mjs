@@ -181,7 +181,7 @@ test("keeps the model selector visible when a model error leaves no options", ()
   assert.match(html, /title="No available models"/);
 });
 
-test("renders the read-only tool preset as the active selection", () => {
+test("hides the tool preset behind the consolidated controls popover", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       I18nProvider,
@@ -196,11 +196,14 @@ test("renders the read-only tool preset as the active selection", () => {
     ),
   );
 
-  assert.match(html, /title="Change tool preset: read-only"/);
-  assert.match(html, />read-only<\/span>/);
+  // The bar carries one sliders trigger; the preset label lives in the popover.
+  assert.match(html, /aria-label="More controls"/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.doesNotMatch(html, /title="Change tool preset: read-only"/);
+  assert.doesNotMatch(html, />read-only<\/span>/);
 });
 
-test("renders the empty tool preset as Chat only", () => {
+test("keeps the controls popover closed until opened", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       I18nProvider,
@@ -215,8 +218,8 @@ test("renders the empty tool preset as Chat only", () => {
     ),
   );
 
-  assert.match(html, /title="Change tool preset: Chat only"/);
-  assert.match(html, />Chat only<\/span>/);
+  assert.match(html, /aria-label="More controls"/);
+  assert.doesNotMatch(html, />Chat only</);
 });
 
 test("renders the compact composer with the standard Send button and no session controls", () => {
