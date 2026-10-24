@@ -15,13 +15,14 @@ import type {
   McpTransportKind,
   McpVariableReference,
 } from "./api-types";
-import { isMcpDisabledByEnvironment } from "./builtin-extensions";
-
-// lib/builtin-extensions.ts grows its switch readers (readBuiltinExtensionSwitches,
-// checkCodemodeSandbox) in the MCP phase-2 port (Slice 3); until then Settings ›
-// MCP reports no extension switch at all. The local peek below reads the
-// self-test store a session-side writer will set under the same Symbol.for key.
-const MCP_DISABLE_VARIABLE = "PI_WEB_DISABLE_MCP";
+import {
+  isMcpDisabledByOperator,
+  MCP_DISABLE_VARIABLE,
+  peekCodemodeSandbox,
+  readBuiltinExtensionSwitches,
+  type BuiltinExtensionName,
+  type BuiltinExtensionSwitch,
+} from "./builtin-extensions";
 import {
   CODEMODE_INLINE_BUDGET_DEFAULT,
   CODEMODE_INLINE_BUDGET_MAX,
@@ -37,11 +38,11 @@ import { jsonErrorMessage } from "./mcp-json-error";
 import { isMcpOverrideEntry, MCP_OVERRIDE_KEYS, mcpOverrideRefusal } from "./mcp-override";
 import { maskArgs, maskCommand, maskUrl } from "./mcp-secrets";
 import { withMcpStatuses } from "./mcp-status";
-import { resolvedConfigValues, WEB_PASSWORD_VARIABLE } from "./mcp-config-values";
+import { findWebPasswordField, resolvedConfigValues, WEB_PASSWORD_VARIABLE } from "./mcp-config-values";
 import { samePath } from "./paths";
 import { hasParentDirectorySegment, isPathWithinRoots, resolveRealRoots } from "./path-security";
 import { loadPiSdkInternals, type PiSdkInternals } from "./pi-sdk-internals";
-import { getProjectTrustStatus } from "./project-trust";
+import { freshFolderTrustBreadth, getProjectTrustStatus, hasTrustRelevantEntries } from "./project-trust";
 
 // What Settings › MCP and the trust dialog list (ADR 0006): the entries of the
 // global `mcp.json` and of a project's `.pi/mcp.json`, read from the files
@@ -400,25 +401,6 @@ interface DescribedServer {
   config?: McpServerConfig;
 }
 
-/**
- * The upstream two-argument `findWebPasswordField()` (`lib/mcp-config-values.ts`),
- * fed the SDK's own value parsers when they have loaded. Our one-argument
- * version in `lib/mcp-config-values.ts` ports the same parsers, and stays the
- * fallback while the internals are unavailable.
- */
-function findWebPasswordFieldWith(
-  config: unknown,
-  parsers: { isCommandConfigValue(value: string): boolean; getConfigValueEnvVarNames(value: string): string[] },
-): McpConfigFieldRef | undefined {
-  for (const { value, ...field } of resolvedConfigValues(config)) {
-    const references = parsers.isCommandConfigValue(value)
-      ? value.toUpperCase().includes(WEB_PASSWORD_VARIABLE)
-      : parsers.getConfigValueEnvVarNames(value).some((name) => name.toUpperCase() === WEB_PASSWORD_VARIABLE);
-    if (references) return field;
-  }
-  return undefined;
-}
-
 const TEMPLATE_REFERENCE = /\$(?:[$!]|\{([^}]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -533,7 +515,7 @@ function describeServer(
     .map((field): McpVariableReference => ({ ...fieldRef(field), variables: variableNames(field.value) }))
     .filter((reference) => reference.variables.length > 0);
   const webPasswordField = internals
-    ? findWebPasswordFieldWith(config, internals)
+    ? findWebPasswordField(config, internals)
     : values.find((field) => field.value.toUpperCase().includes(WEB_PASSWORD_VARIABLE));
   if (webPasswordField) info.webPasswordField = fieldRef(webPasswordField);
 
@@ -760,7 +742,7 @@ export function readMcpServerEntry(options: {
 /** Whether a decision, exact or inherited, trusts the project; one that cannot be read does not. */
 function projectTrustedByDecision(cwd: string, agentDir: string): boolean {
   try {
-    return getProjectTrustStatus(cwd, agentDir).trusted === true;
+    return getProjectTrustStatus(cwd, agentDir).decision === true;
   } catch {
     return false;
   }
@@ -801,9 +783,9 @@ export async function readProjectMcpServers(options: {
 function mcpAvailability(
   environment: NodeJS.ProcessEnv,
   internals: Awaited<ReturnType<typeof loadPiSdkInternals>>,
-  mcpSwitch?: { enabled: boolean; settingsPath?: string },
+  mcpSwitch: BuiltinExtensionSwitch | undefined,
 ): McpAvailability {
-  if (isMcpDisabledByEnvironment(environment)) {
+  if (isMcpDisabledByOperator(environment)) {
     return { available: false, reason: "operator-disabled", error: `${MCP_DISABLE_VARIABLE} is set` };
   }
   if (!internals.ok) {
@@ -825,24 +807,6 @@ function mcpAvailability(
   return { available: true };
 }
 
-// The self-test's result once it has settled, without ever starting it: the
-// first normal session runs it (Slice 3's checkCodemodeSandbox()), and Settings
-// only reports what it found. A test still running, or not started since the
-// server did, is state "not-checked". A promise that has already settled wins
-// the race against one resolved now, because their reactions run in the order
-// they were attached.
-async function codemodeSandboxStatus(): Promise<CodemodeSandboxStatus> {
-  type BuiltinFeatureStatus = { available: true } | { available: false; reason: string };
-  const CODEMODE_SANDBOX_KEY: symbol = Symbol.for("pi-web.codemodeSandbox");
-  const NOT_SETTLED: unique symbol = Symbol("not settled");
-  const store = globalThis as Record<symbol, Promise<BuiltinFeatureStatus> | undefined>;
-  const pending = store[CODEMODE_SANDBOX_KEY];
-  if (!pending) return { state: "not-checked" };
-  const settled = await Promise.race([pending, Promise.resolve(NOT_SETTLED)]);
-  if (settled === NOT_SETTLED) return { state: "not-checked" };
-  return settled.available ? { state: "available" } : { state: "unavailable", error: settled.reason };
-}
-
 /**
  * Code mode as a session would get it: the global preference, mode and inline
  * budget, the sandbox self-test and `-builtin:codemode` (both as the project's
@@ -850,11 +814,24 @@ async function codemodeSandboxStatus(): Promise<CodemodeSandboxStatus> {
  * `trustedCwd`, the project settings that decide any of them there whatever
  * the global value.
  */
-async function codemodeInfo(agentDir: string, trustedCwd: string | undefined): Promise<McpCodemodeInfo> {
-  const sandbox = await codemodeSandboxStatus();
-  // The `extensions` switch over Code mode is read by readBuiltinExtensionSwitches(),
-  // which comes with the MCP phase-2 port (Slice 3); until then it reports on.
-  const info: McpCodemodeInfo = { sandbox, builtinDisabled: false };
+async function codemodeInfo(
+  agentDir: string,
+  codemodeSwitch: BuiltinExtensionSwitch | undefined,
+  trustedCwd: string | undefined,
+): Promise<McpCodemodeInfo> {
+  const peek = await peekCodemodeSandbox();
+  const sandbox: CodemodeSandboxStatus = !peek.checked
+    ? { state: "not-checked" }
+    : peek.available
+      ? { state: "available" }
+      : { state: "unavailable", error: peek.reason };
+  const info: McpCodemodeInfo = { sandbox, builtinDisabled: codemodeSwitch?.enabled === false };
+  if (codemodeSwitch?.settingsPath) info.builtinSettingsPath = codemodeSwitch.settingsPath;
+  // What the global `extensions` alone say, which is what Always on, a global setting, depends on.
+  const globalSwitch = codemodeSwitch?.global ?? codemodeSwitch;
+  if (globalSwitch?.enabled === false) {
+    info.globalBuiltinSettingsPath = globalSwitch.settingsPath ?? getGlobalSettingsPath(agentDir);
+  }
   try {
     info.preference = await readCodemodePreference(getGlobalSettingsPath(agentDir));
   } catch (error) {
@@ -904,6 +881,18 @@ export async function readMcpOverview(options: McpOverviewOptions): Promise<McpR
     } catch (error) {
       projectInfo.trustError = errorMessage(error);
     }
+    const trust = projectInfo.trust;
+    // A fresh folder: adding a project server trusts it in the same step, unless that would trust too
+    // much, or a link to nothing where the SDK looks would need trust later. The same checks, in the
+    // same order, as trustFreshFolderAndWrite(), so the pane never offers a step the route refuses.
+    if (trust && !trust.requiresTrust && trust.decision === null && trust.decisionError === undefined) {
+      const breadth = freshFolderTrustBreadth(project.cwd, { agentDir, knownFolders: project.allowedRoots });
+      projectInfo.trustFolder = breadth
+        ? { allowed: false, reason: "trust-too-broad", breadth }
+        : hasTrustRelevantEntries(project.cwd)
+          ? { allowed: false, reason: "folder-not-fresh" }
+          : { allowed: true };
+    }
   }
   // Whether sessions load the project's settings, as `projectTrustReloadOptions()` decides when one
   // starts: a folder that requires trust only with a decision that trusts it, never while trust.json
@@ -913,16 +902,30 @@ export async function readMcpOverview(options: McpOverviewOptions): Promise<McpR
     agentDir,
     project,
     internals: internals.ok ? internals : undefined,
-    // The panel's rule for a project's servers being read (trust that trusts it).
-    projectUntrusted: projectInfo?.trust?.trusted !== true,
+    // The panel's rule for a project's servers being read (`trust.decision === true`).
+    projectUntrusted: projectInfo?.trust?.decision !== true,
   });
+  let switches: Record<BuiltinExtensionName, BuiltinExtensionSwitch> | undefined;
+  try {
+    switches = await readBuiltinExtensionSwitches({
+      agentDir,
+      cwd: project?.cwd,
+      projectTrusted: projectSettingsLoad,
+    });
+  } catch (error) {
+    // A settings file that cannot be read leaves the built-ins as the session would find them: on.
+    console.warn(`[pi-web] cannot read the extensions settings for Settings › MCP: ${errorMessage(error)}`);
+  }
   // A file whose servers are all listed: statuses of names it no longer defines can go.
   const listedFiles = files.filter((file) => !file.problems.some((item) => item.reason !== "auto-enable-codemode-invalid"));
   return {
-    mcp: mcpAvailability(environment, internals),
-    codemode: await codemodeInfo(agentDir, project && projectSettingsLoad ? project.cwd : undefined),
+    mcp: mcpAvailability(environment, internals, switches?.mcp),
+    codemode: await codemodeInfo(agentDir, switches?.codemode, project && projectSettingsLoad ? project.cwd : undefined),
     files,
     servers: withMcpStatuses(servers, listedFiles),
     ...(projectInfo ? { project: projectInfo } : {}),
+    ...(switches?.["tool-search"].enabled === false
+      ? { toolSearchDisabled: switches["tool-search"].settingsPath ? { settingsPath: switches["tool-search"].settingsPath } : {} }
+      : {}),
   };
 }

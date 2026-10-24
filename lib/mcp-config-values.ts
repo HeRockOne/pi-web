@@ -181,14 +181,25 @@ export function resolveConfigValue(config: string): string | undefined {
  * Values resolve against this process's environment, which still holds the
  * password, so removing it from the server's environment is not enough. Names
  * compare case-insensitively, as Windows resolves them. A `!command` can read
- * the variable without a `$` reference, so any mention counts.
+ * the variable without a `$` reference, so any mention counts; the SDK still
+ * runs it with this process's whole environment. The browser passes its port
+ * of the SDK's value parsers; the server uses this module's own.
  */
-export function findWebPasswordField(config: unknown): McpConfigFieldRef | undefined {
+export function findWebPasswordField(
+  config: unknown,
+  parsers: McpConfigValueParsers = { isCommandConfigValue, getConfigValueEnvVarNames },
+): McpConfigFieldRef | undefined {
   for (const { value, ...field } of resolvedConfigValues(config)) {
-    const references = isCommandConfigValue(value)
+    const references = parsers.isCommandConfigValue(value)
       ? value.toUpperCase().includes(WEB_PASSWORD_VARIABLE)
-      : getConfigValueEnvVarNames(value).some((name) => name.toUpperCase() === WEB_PASSWORD_VARIABLE);
+      : parsers.getConfigValueEnvVarNames(value).some((name) => name.toUpperCase() === WEB_PASSWORD_VARIABLE);
     if (references) return field;
   }
   return undefined;
+}
+
+/** The SDK's value parsers `findWebPasswordField()` needs; the browser passes its port of them. */
+export interface McpConfigValueParsers {
+  isCommandConfigValue(value: string): boolean;
+  getConfigValueEnvVarNames(value: string): string[];
 }

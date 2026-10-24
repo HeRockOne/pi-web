@@ -8,7 +8,16 @@ import type {
   McpResponse,
   McpScope,
   McpServerRef,
+  ProjectTrustStatus,
 } from "@/lib/api-types";
+import {
+  MCP_ADD_MAX_TEXT,
+  prepareMcpAdd,
+  readMcpAddSecretReferences,
+  readMcpAddValues,
+  type McpAddRefusal,
+  type McpAddRequest,
+} from "@/lib/mcp-add";
 import {
   insertMcpServer,
   isMcpConfigWriteError,
@@ -19,7 +28,7 @@ import {
   type McpConfigFileTarget,
   type McpEnabledOutcome,
 } from "@/lib/mcp-config-file";
-import { readMcpOverview, readMcpServerEntry } from "@/lib/mcp-config-read";
+import { readMcpOverview, readMcpServerConfigs, readMcpServerEntry } from "@/lib/mcp-config-read";
 import { findWebPasswordField } from "@/lib/mcp-config-values";
 import {
   isMcpEntryRefusal,
@@ -30,7 +39,10 @@ import {
   type McpEntryRefusal,
 } from "@/lib/mcp-entry-request";
 import { holdRemovedEntry, returnRemovedEntry, takeRemovedEntry } from "@/lib/mcp-undo";
+import { MCP_EXPOSURES, isMcpExposure, suggestFreeName } from "@/lib/mcp-import";
+import { invalidateModelsCache } from "@/lib/models-cache";
 import type { PiSdkInternals } from "@/lib/pi-sdk-internals";
+import { freshFolderTrustBreadth, getProjectTrustStatus, trustFreshFolderAndWrite } from "@/lib/project-trust";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -44,15 +56,7 @@ export const dynamic = "force-dynamic";
 // SDK editor's bytes) and answers with the overview GET would give, so the
 // panel replaces its listing without a second request. Open sessions apply a
 // change at their next message, when their MCP host reads the files again.
-// The `add` and `sign-out` actions follow in the later MCP phase-2 slices.
-
-// `lib/mcp-import-core.ts` owns these in the MCP phase-2 port (Slice 3); the
-// set-exposure action needs only this guard until then.
-const MCP_EXPOSURES: readonly McpExposure[] = ["codemode", "deferred", "direct", "hidden"];
-
-function isMcpExposure(value: unknown): value is McpExposure {
-  return typeof value === "string" && (MCP_EXPOSURES as readonly string[]).includes(value);
-}
+// The `sign-out` action (OAuth, not ported) follows in a later slice.
 
 type Project = { cwd: string; allowedRoots: Set<string> };
 
@@ -394,15 +398,160 @@ async function undoRemoval(agentDir: string, project: Project | undefined, token
   return overviewResponse(agentDir, project, { restored: server });
 }
 
+/** The names a file defines now, for a name the add must not take; empty when the file cannot be listed (the write then says why). */
+function namesInFile(agentDir: string, project: Project | undefined, scope: McpScope, internals: PiSdkInternals): string[] {
+  try {
+    const { servers } = readMcpServerConfigs({ agentDir, project: scope === "project" ? project : undefined, internals });
+    return servers.filter((server) => server.scope === scope).map((server) => server.name);
+  } catch {
+    return [];
+  }
+}
+
+function addRefusal({ status, reason, error, name, suggestedName, notes, names, fields }: McpAddRefusal): Refusal {
+  return new Refusal(status, reason, error, {
+    ...(name !== undefined ? { name } : {}),
+    ...(suggestedName !== undefined ? { suggestedName } : {}),
+    ...(notes ? { notes } : {}),
+    ...(names ? { names } : {}),
+    ...(fields ? { fields } : {}),
+  });
+}
+
+/** A failed insert as the add answers it: a name taken meanwhile gets a free one to suggest. */
+function insertRefusal(error: unknown, agentDir: string, project: Project | undefined, scope: McpScope, internals: PiSdkInternals): Refusal {
+  if (isMcpConfigWriteError(error) && error.reason === "name-taken" && error.serverName !== undefined) {
+    const suggestedName = suggestFreeName(error.serverName, namesInFile(agentDir, project, scope, internals));
+    return new Refusal(409, "name-taken", error.message, { path: error.path, name: error.serverName, suggestedName });
+  }
+  return writeRefusal(error);
+}
+
+function readAddRequest(body: Record<string, unknown>): McpAddRequest | Refusal {
+  const scope = readScope(body.scope);
+  const values = readMcpAddValues(body.values);
+  const secretReferences = readMcpAddSecretReferences(body.secretReferences);
+  const server = body.server === undefined ? 0 : body.server;
+  const confirm = body.confirmHostEnv === undefined ? [] : body.confirmHostEnv;
+  if (
+    typeof body.text !== "string" || body.text.length > MCP_ADD_MAX_TEXT || !scope || !values || !secretReferences
+    || typeof server !== "number" || !Number.isInteger(server) || server < 0
+    || (body.name !== undefined && readName(body.name) === undefined)
+    || (body.rawPi !== undefined && typeof body.rawPi !== "boolean")
+    || (body.trustFolder !== undefined && typeof body.trustFolder !== "boolean")
+    || !Array.isArray(confirm) || confirm.length > 100 || !confirm.every((name) => typeof name === "string")
+  ) {
+    return new Refusal(400, "invalid-request", `add needs text (at most ${MCP_ADD_MAX_TEXT} characters), scope, and optionally values, secretReferences, server, name, rawPi, trustFolder and confirmHostEnv`);
+  }
+  return {
+    text: body.text,
+    values,
+    secretReferences,
+    server,
+    ...(typeof body.name === "string" ? { name: body.name } : {}),
+    scope,
+    rawPi: body.rawPi === true,
+    confirmHostEnv: confirm as string[],
+  };
+}
+
+/** The folder's trust for the page after a project write: `.pi/mcp.json` alone makes it require trust. */
+function trustAfterWrite(cwd: string, agentDir: string): ProjectTrustStatus | undefined {
+  try {
+    const status = getProjectTrustStatus(cwd, agentDir);
+    return status.decisionError === undefined ? status : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Adds a pasted server: `prepareMcpAdd()` parses the text again, fills in the
+ * values and checks the result; then it is appended to its file through the
+ * writer, under the file's lock, which refuses a name taken meanwhile. A
+ * project server goes only to a folder a decision trusts (the rule of every
+ * project write), except with `trustFolder` for a fresh folder, which
+ * `trustFreshFolderAndWrite()` trusts first and then writes, as one step.
+ */
+async function addServer(
+  agentDir: string,
+  project: Project | undefined,
+  internals: PiSdkInternals,
+  body: Record<string, unknown>,
+) {
+  const request = readAddRequest(body);
+  if (request instanceof Refusal) return request.response();
+  const { scope } = request;
+  if (scope === "project" && !project) return refusal(400, "invalid-request", "A project server needs the project's cwd");
+  const trustFolder = scope === "project" && body.trustFolder === true && project !== undefined;
+  // Where it may go is said first: a confirmation asked for a server the folder then refuses would be asked for nothing.
+  const target = trustFolder ? undefined : writeTarget(scope, project, agentDir);
+  if (target instanceof Refusal) return target.response();
+  if (trustFolder && project) {
+    const breadth = freshFolderTrustBreadth(project.cwd, { agentDir, knownFolders: project.allowedRoots });
+    if (breadth) return refusal(409, "trust-too-broad", `Trusting ${project.cwd} would also trust ${breadth.path}`, { breadth });
+  }
+  const prepared = prepareMcpAdd(request, { takenNames: namesInFile(agentDir, project, scope, internals), internals });
+  if (!prepared.ok) return addRefusal(prepared).response();
+  const { name, entry } = prepared;
+
+  if (trustFolder && project) {
+    const target = { scope: "project" as const, cwd: project.cwd, allowedRoots: project.allowedRoots };
+    const result = await trustFreshFolderAndWrite(
+      project.cwd,
+      agentDir,
+      () => insertMcpServer(target, name, entry),
+      { knownFolders: project.allowedRoots },
+    );
+    if (!result.ok) {
+      switch (result.reason) {
+        case "trust-too-broad":
+          return refusal(409, "trust-too-broad", result.error, { breadth: result.breadth });
+        case "folder-not-fresh":
+          return refusal(409, "folder-not-fresh", result.error, result.status ? { trust: result.status } : {});
+        case "trust-unreadable":
+          return refusal(409, "trust-unreadable", result.error);
+        case "write-failed": {
+          const failure = insertRefusal(result.writeError, agentDir, project, scope, internals);
+          if (result.rollbackError === undefined) return failure.response();
+          // The write's own reason still says why nothing was added; `trustKept` says the folder stays trusted.
+          return refusal(failure.status, failure.reason, `${failure.error}; the folder stays trusted, since taking the trust back failed: ${result.rollbackError}`, {
+            ...failure.params,
+            trustKept: true,
+            ...(result.status ? { trust: result.status } : {}),
+          });
+        }
+      }
+    }
+    invalidateModelsCache();
+    return overviewResponse(agentDir, project, {
+      added: { scope, name, path: result.value.path },
+      trust: result.status,
+      trustedFolder: true,
+    });
+  }
+
+  if (!target) return refusal(500, "internal", "No file to write to");
+  let path: string;
+  try {
+    ({ path } = await insertMcpServer(target, name, entry));
+  } catch (error) {
+    return insertRefusal(error, agentDir, project, scope, internals).response();
+  }
+  const trust = scope === "project" && project ? trustAfterWrite(project.cwd, agentDir) : undefined;
+  return overviewResponse(agentDir, project, { added: { scope, name, path }, ...(trust ? { trust } : {}) });
+}
+
 // POST /api/mcp body: { action, cwd?, ... }
 //   enable | disable | remove: { scope, name }
 //   set-enabled: { enabled, servers: [{ scope, name }] } → per-server `results`
 //   set-exposure: { scope, name, exposure }
 //   set-in-project: { name, enabled } → a global server on or off in `cwd`'s project alone
 //   undo: { token } (from a remove's `undo`)
+//   add: { text, scope, values?, secretReferences?, server?, name?, rawPi?, trustFolder?, confirmHostEnv? }
 // `cwd` is the panel's project: required for a project server, and the
-// overview in the answer covers it. The `add` and `sign-out` actions follow
-// in the later MCP phase-2 slices.
+// overview in the answer covers it. The `sign-out` action (OAuth, not ported)
+// follows in a later slice.
 export async function POST(req: Request) {
   if (!isApiRequestAllowed(req)) return refusal(403, "request-denied", "Untrusted API request");
   if (!hasJsonContentType(req)) return refusal(415, "content-type", "Content-Type must be application/json");
@@ -464,8 +613,10 @@ export async function POST(req: Request) {
         }
         return await undoRemoval(agentDir, project, body.token);
       }
+      case "add":
+        return await addServer(agentDir, project, internals, body);
       default:
-        return refusal(400, "invalid-request", "action must be enable, disable, remove, set-enabled, set-exposure, set-in-project or undo");
+        return refusal(400, "invalid-request", "action must be add, enable, disable, remove, set-enabled, set-exposure, set-in-project or undo");
     }
   } catch (error) {
     return refusal(500, "internal", errorMessage(error));

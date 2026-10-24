@@ -2072,9 +2072,10 @@ export async function startRpcSession(
         : {
             extensionFactories: [
               // Builtin pi extensions (codemode, tool_search, MCP) under pi-web
-              // control: the MCP factory reads only the global mcp.json and never
-              // blocks the first prompt (see createBuiltinExtensionFactories).
-              ...createBuiltinExtensionFactories({ agentDir }),
+              // control: the MCP factory reads the global mcp.json and, while the
+              // project is trusted, its own, and never blocks the first prompt
+              // (see createBuiltinExtensionFactories).
+              ...createBuiltinExtensionFactories({ agentDir, cwd: sessionCwd }),
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
                 settings: settingsManager,

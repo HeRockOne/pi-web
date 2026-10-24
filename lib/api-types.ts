@@ -91,6 +91,30 @@ export interface ProjectTrustStatus {
   decisionError?: string;
 }
 
+/**
+ * What a project's `.pi/mcp.json` declares, as `GET /api/project-trust` lists it.
+ */
+export interface ProjectMcpListing {
+  /** The project file; absent only when listing failed (`mcpError`). */
+  mcpFile?: McpConfigFileInfo;
+  /** Its entries in file order, described like `McpResponse.servers`. */
+  mcpServers: McpServerInfo[];
+  /** Listing failed unexpectedly. */
+  mcpError?: string;
+}
+
+export interface ProjectTrustResponse extends ProjectTrustStatus, ProjectMcpListing {}
+
+/**
+ * GET /api/project-trust when `trust.json` cannot be read (500): the listing
+ * still comes along, since it does not depend on the trust store, so the
+ * dialog can show it while saying why the status is unknown.
+ */
+export interface ProjectTrustUnreadableResponse extends ProjectMcpListing {
+  error: string;
+  reason: "trust-unreadable";
+}
+
 export interface AppUpdateResponse {
   currentVersion: string;
   latestVersion: string;
@@ -564,6 +588,12 @@ export interface McpProjectInfo {
   /** Absent when `trust.json` cannot be read; the project then counts as untrusted. */
   trust?: ProjectTrustStatus;
   trustError?: string;
+  /**
+   * Present only for a fresh folder (no resources that need trust, no
+   * decision for it or an ancestor): adding a project server then trusts the
+   * folder in the same request, unless that would trust too much.
+   */
+  trustFolder?: McpTrustFolderInfo;
 }
 
 export interface McpResponse {
@@ -800,6 +830,16 @@ export interface FreshFolderTrustBreadth {
   kind: "home" | "root" | "contains-home" | "contains-agent-dir" | "contains-folder" | "contains-project" | "too-many-folders";
   path: string;
 }
+
+/**
+ * Whether adding a project server may trust the folder in the same step: only
+ * a fresh folder (no resources that need trust, no decision for it or an
+ * ancestor) may, and only when trusting would not reach past it.
+ */
+export type McpTrustFolderInfo =
+  | { allowed: true }
+  | { allowed: false; reason: "trust-too-broad"; breadth: FreshFolderTrustBreadth }
+  | { allowed: false; reason: "folder-not-fresh" };
 
 /**
  * An open session whose MCP host hands no server to the SDK, because the

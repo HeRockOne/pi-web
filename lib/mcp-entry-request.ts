@@ -154,11 +154,9 @@ export function mcpProjectTrustRefusal(
 ): McpEntryRefusal | undefined {
   try {
     const status = getProjectTrustStatus(cwd, agentDir);
-    // Our phase-1 ProjectTrustStatus carries only { requiresTrust, trusted };
-    // the upstream status adds the decision's exact state (decision /
-    // decisionPath / inherited / decisionError), which the MCP phase-2 port
-    // (Slice 3) brings over with the trust dialog.
-    if (status.trusted !== true) return mcpEntryRefusal(403, "project-untrusted", untrustedMessage);
+    // A folder that requires no trust reports an unreadable store here instead of throwing.
+    if (status.decisionError !== undefined) return mcpEntryRefusal(409, "trust-unreadable", status.decisionError);
+    if (status.decision !== true) return mcpEntryRefusal(403, "project-untrusted", untrustedMessage);
     return undefined;
   } catch (error) {
     return mcpEntryRefusal(409, "trust-unreadable", errorMessage(error));
