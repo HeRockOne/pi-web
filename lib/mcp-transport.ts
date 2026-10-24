@@ -1,21 +1,23 @@
-import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
 import type { McpServerConfig, McpTransportFactory } from "@earendil-works/pi-coding-agent";
-import { StdioTransport, StreamableHttpTransport, type McpTransport } from "@earendil-works/pi-mcp";
-import {
-  describeConfigField,
-  findWebPasswordField,
-  resolveConfigValue,
-  WEB_PASSWORD_VARIABLE,
-} from "./mcp-config-values";
+import type { McpConfigFieldRef } from "./api-types";
+import { findWebPasswordField, resolvedConfigValues, WEB_PASSWORD_VARIABLE, type McpResolvedConfigValue } from "./mcp-config-values";
+import type { PiSdkInternals } from "./pi-sdk-internals";
 import { sanitizeProjectCommandEnvironment } from "./project-command-env";
+
+// The resolved-value walk and the PI_WEB_PASSWORD rule are client-safe (`lib/mcp-config-values.ts`).
+export { findWebPasswordField, resolvedConfigValues, WEB_PASSWORD_VARIABLE, type McpResolvedConfigValue };
 
 // MCP servers are started on behalf of a project like its bash commands, so
 // they get the same environment: the server's own, without the variables that
 // configure or guard this Next.js process (ADR 0006, "Safety → Environment").
-// The SDK's default transport passes the whole `process.env` instead, and
-// pi-coding-agent does not re-export it, so this factory builds the transports
-// itself from pi-mcp's primitives.
+// The SDK's default stdio transport passes the whole `process.env` instead.
+
+
+type TransportInternals = Pick<
+  PiSdkInternals,
+  "createDefaultTransport" | "StdioTransport" | "getConfigValueEnvVarNames" | "isCommandConfigValue"
+>;
+type ConfigValueInternals = Pick<PiSdkInternals, "getConfigValueEnvVarNames" | "isCommandConfigValue">;
 
 export interface PiWebMcpTransportOptions {
   /** Environment stdio servers start from, before sanitizing. Defaults to `process.env` at connect time. */
@@ -23,11 +25,19 @@ export interface PiWebMcpTransportOptions {
   platform?: NodeJS.Platform;
 }
 
-/** A leading `~` expands to the home directory, as the SDK does for server commands. */
-function expandTilde(value: string): string {
-  if (value === "~") return homedir();
-  if (value.startsWith("~/") || value.startsWith("~\\")) return join(homedir(), value.slice(2));
-  return value;
+/** `env "KEY"`, `header "Name"` or `oauth.clientSecret`, for messages. */
+export function describeConfigField(field: McpConfigFieldRef): string {
+  if (field.kind === "oauth-client-secret") return "oauth.clientSecret";
+  return `${field.kind} "${field.name}"`;
+}
+
+/** `findWebPasswordField()` as the field's description, for messages. */
+export function findWebPasswordReference(
+  config: McpServerConfig,
+  internals: ConfigValueInternals,
+): string | undefined {
+  const field = findWebPasswordField(config, internals);
+  return field && describeConfigField(field);
 }
 
 /** The sanitized environment with the server's own `env` on top; a Windows name replaces any casing of itself. */
@@ -51,62 +61,41 @@ function serverEnvironment(
   return environment;
 }
 
-/** Resolve the server's own `env` and header values in this process, failing loudly on a missing variable. */
-function resolveConfiguredValues(
-  entry: { name: string },
-  kind: string,
-  values: Record<string, string> | undefined,
-): Record<string, string> {
-  const resolved: Record<string, string> = {};
-  for (const [name, raw] of Object.entries(values ?? {})) {
-    const value = resolveConfigValue(raw);
-    if (value === undefined) {
-      throw new Error(
-        `MCP server "${entry.name}" ${kind} "${name}" references a missing environment variable or a failed command`,
-      );
-    }
-    resolved[name] = value;
-  }
-  return resolved;
-}
-
 /**
- * The transport factory pi-web gives the SDK's MCP connections. A stdio server
- * starts with `inheritEnv: false` from the sanitized environment, its `env`
- * values resolved like the SDK resolves them, with `~` in the command and
- * arguments expanded and its `cwd` resolved against the session. HTTP servers
- * use pi-mcp's transport with their header values resolved and the OAuth auth
- * provider passed through. It never falls back to the SDK's default transport.
+ * The transport factory pi-web gives the SDK's MCP connections. HTTP servers
+ * use the SDK's transport unchanged. A stdio server gets the transport the
+ * SDK would build, with every option it passes (command and args with `~`
+ * expanded, cwd resolved against the session, piped stderr) and its `env`
+ * values resolved by the SDK, but started with `inheritEnv: false` from the
+ * sanitized environment. It never falls back to the SDK's stdio transport.
  */
-export function createPiWebMcpTransportFactory(options: PiWebMcpTransportOptions = {}): McpTransportFactory {
+export function createPiWebMcpTransportFactory(
+  internals: TransportInternals,
+  options: PiWebMcpTransportOptions = {},
+): McpTransportFactory {
   const platform = options.platform ?? process.platform;
-  return (entry, cwd, authProvider): McpTransport => {
-    const config = entry.config as McpServerConfig;
-    const field = findWebPasswordField(config);
+  return (entry, cwd, authProvider) => {
+    const field = findWebPasswordReference(entry.config, internals);
     if (field) {
-      throw new Error(
-        `MCP server "${entry.name}" ${describeConfigField(field)} references ${WEB_PASSWORD_VARIABLE}, which Pi Web does not pass to MCP servers`,
-      );
+      throw new Error(`MCP server "${entry.name}" ${field} references ${WEB_PASSWORD_VARIABLE}, which Pi Web does not pass to MCP servers`);
     }
-    if ("url" in config) {
-      const headers = resolveConfiguredValues(entry, "header", config.headers);
-      return new StreamableHttpTransport({
-        url: config.url,
-        ...(Object.keys(headers).length > 0 ? { headers } : {}),
-        ...(authProvider ? { authProvider } : {}),
-      });
+    const transport = internals.createDefaultTransport(entry, cwd, authProvider);
+    if ("url" in entry.config) return transport;
+    if (!(transport instanceof internals.StdioTransport)) {
+      throw new Error(`MCP server "${entry.name}": the SDK did not create a stdio transport`);
     }
-    return new StdioTransport({
-      command: expandTilde(config.command),
-      args: config.args?.map(expandTilde),
-      cwd: config.cwd ? resolve(cwd, expandTilde(config.cwd)) : isAbsolute(cwd) ? cwd : resolve(cwd),
-      env: serverEnvironment(
-        options.baseEnvironment ?? process.env,
-        resolveConfiguredValues(entry, "env", config.env),
-        platform,
-      ),
+    const { env: configured = {}, ...stdioOptions } = transport.options;
+    // `env` must hold only the entry's own values; anything else would be the
+    // SDK passing environment that pi-web has not sanitized.
+    const declared = new Set(Object.keys(entry.config.env ?? {}));
+    const unexpected = Object.keys(configured).find((name) => !declared.has(name));
+    if (unexpected !== undefined) {
+      throw new Error(`MCP server "${entry.name}": the SDK set environment variable ${unexpected}, which its config does not declare`);
+    }
+    return new internals.StdioTransport({
+      ...stdioOptions,
+      env: serverEnvironment(options.baseEnvironment ?? process.env, configured, platform),
       inheritEnv: false,
-      stderr: "pipe",
     });
   };
 }

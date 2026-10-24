@@ -178,6 +178,9 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  const openSettingsSection = useCallback((section: SettingsSection) => {
+    setSettingsSection(section);
+  }, []);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
@@ -3049,6 +3052,7 @@ export function AppShell() {
           {showChat ? (
             <ChatWindow
               key={sessionKey}
+              onOpenSettings={openSettingsSection}
               session={selectedSession}
               searchTarget={searchTarget?.sessionId === selectedSession?.id ? searchTarget : null}
               onSearchTargetHandled={handleSearchTargetHandled}

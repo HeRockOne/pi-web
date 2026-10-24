@@ -11,7 +11,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const React = await jiti.import("react");
 const { renderToStaticMarkup } = await jiti.import("react-dom/server");
-const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCommandInput, canRestoreUserMessage, canRunBuiltinSlashCommandWhileStreaming, compressImageFile, filterModelOptions, getUpwardMenuMaxHeight, getUserMessageText, getUserMessageDraftImages, isExactSlashCommand, modelSupportsImageInput, replaceLinksWithMarkdown, shouldCompressImageFile } = await jiti.import("./ChatInput.tsx");
+const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCommandInput, canRestoreUserMessage, canRunBuiltinSlashCommandWhileStreaming, compressImageFile, filterModelOptions, getUpwardMenuMaxHeight, getUserMessageText, getUserMessageDraftImages, isExactSlashCommand, modelSupportsImageInput, offersBuiltinSlashCommandWhileStreaming, replaceLinksWithMarkdown, shouldCompressImageFile, submitsSlashCommandOnEnter } = await jiti.import("./ChatInput.tsx");
 const { ModelSelector } = await jiti.import("./ModelSelector.tsx");
 const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("@/lib/draft-store");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
@@ -88,7 +88,7 @@ test("Shift+Enter sends, bare Enter keeps a newline, IME and completions still w
       onSteer() {}, onFollowUp() {},
       sendQueued(mode) { action = mode; }, handleSend() { action = "send"; },
       applySlashCommand() { action = "slash"; },
-      isExactSlashCommand, value: "", setSlashMenuOpen() {},
+      isExactSlashCommand, submitsSlashCommandOnEnter, value: "", setSlashMenuOpen() {},
       applyAtCompletion() { action = "file"; },
       applyHistoryInput() { action = "history"; },
       ...state,
@@ -617,4 +617,30 @@ test("renders image warnings for known text-only defaults without an explicit mo
   } finally {
     clearDraft(draftKey);
   }
+});
+
+test("Enter on pi's built-in /mcp submits it at once; other extension commands still complete first", () => {
+  const builtinMcp = { name: "mcp", source: "extension", sourceInfo: { path: "builtin:mcp", source: "builtin", scope: "temporary", origin: "top-level" } };
+  const otherMcp = { ...builtinMcp, sourceInfo: { ...builtinMcp.sourceInfo, path: "/ext/mcp.ts" } };
+  const copy = { name: "copy", description: "", source: "builtin", availableWhileStreaming: true };
+  const compact = { name: "compact", description: "", source: "builtin" };
+
+  assert.equal(submitsSlashCommandOnEnter("/mcp", builtinMcp, false), true);
+  assert.equal(submitsSlashCommandOnEnter("/mcp", builtinMcp, true), true);
+  assert.equal(submitsSlashCommandOnEnter("/mc", builtinMcp, false), false);
+  assert.equal(submitsSlashCommandOnEnter("/mcp", otherMcp, false), false);
+  assert.equal(submitsSlashCommandOnEnter("/deploy", { ...otherMcp, name: "deploy" }, false), false);
+  // The composer's built-ins keep their rule: typed in full, and while streaming only those allowed then.
+  assert.equal(submitsSlashCommandOnEnter("/copy", copy, true), true);
+  assert.equal(submitsSlashCommandOnEnter("/compact", compact, false), true);
+  assert.equal(submitsSlashCommandOnEnter("/compact", compact, true), false);
+  assert.equal(submitsSlashCommandOnEnter("/co", copy, false), false);
+
+  // /mcp streams like a built-in even though it is an extension command; subcommands do not.
+  assert.equal(offersBuiltinSlashCommandWhileStreaming("/mcp"), true);
+  assert.equal(offersBuiltinSlashCommandWhileStreaming("/copy"), true);
+  assert.equal(offersBuiltinSlashCommandWhileStreaming("/compact"), false);
+  assert.equal(offersBuiltinSlashCommandWhileStreaming("/mcp login docs"), false);
+  assert.equal(offersBuiltinSlashCommandWhileStreaming("/mcp:1"), false);
+  assert.equal(canRunBuiltinSlashCommandWhileStreaming("/mcp"), false);
 });

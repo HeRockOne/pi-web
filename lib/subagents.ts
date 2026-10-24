@@ -13,6 +13,9 @@ export const SUBAGENT_META_TYPE = "pi-web:subagent";
 export const SUBAGENT_RESULT_TYPE = "pi-web:subagent-result";
 export const SUBAGENT_CONTROL_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"] as const;
 
+/** Every tool the SDK builds in (its `allToolNames`, which the package does not export). */
+export const SDK_BUILTIN_TOOLS: readonly string[] = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
+
 export type SubagentStatus = SubagentSessionStatus;
 export type SubagentScope = "builtin" | "global" | "workspace" | "project";
 export type SubagentWritableScope = Extract<SubagentScope, "global" | "project">;

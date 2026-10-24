@@ -8,6 +8,7 @@ import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { createBuiltinExtensionFactories } from "./builtin-extensions";
+import { createReadOnlyMcpPolicyExtension } from "./mcp-read-only-policy";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
@@ -2076,6 +2077,7 @@ export async function startRpcSession(
               // project is trusted, its own, and never blocks the first prompt
               // (see createBuiltinExtensionFactories).
               ...createBuiltinExtensionFactories({ agentDir, cwd: sessionCwd }),
+              createReadOnlyMcpPolicyExtension(),
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
                 settings: settingsManager,

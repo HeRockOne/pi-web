@@ -623,7 +623,7 @@ function sessionMcpExtensionFactory(options: { agentDir: string; cwd: string }):
     const session = { cwd: options.cwd, sessionId: "" };
     await createMcpExtension({
       loadConfig: (ctx) => loadSessionMcpConfig(internals, options.agentDir, ctx, session),
-      createTransport: wrapTransportFactoryForSession(createPiWebMcpTransportFactory(), session),
+      createTransport: wrapTransportFactoryForSession(createPiWebMcpTransportFactory(internals), session),
       startupWaitMs: 0,
       openUrl: () => {},
     })(pi);
