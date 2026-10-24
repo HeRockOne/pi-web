@@ -12,6 +12,8 @@ import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { isEditToolName } from "@/lib/tool-names";
+import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
+import { CodemodeCallList } from "./CodemodeToolView";
 import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thinking-expansion-preference";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
@@ -1154,12 +1156,20 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
   const isStreamingInput = block.rawInput !== undefined;
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
+  // A codemode script and the calls it made, instead of the input JSON.
+  // Streamed input is still incomplete JSON and keeps the generic view.
+  const codemodeCode = block.toolName === CODEMODE_TOOL_NAME && !isStreamingInput ? codemodeScript(block.input) : null;
+  const codemode = codemodeCode === null ? null : { code: codemodeCode, ...codemodeCalls(result?.details) };
+  // A running script's progress snapshot has calls but no content yet.
+  const codemodeRunning = codemode !== null && result !== undefined && result.content.length === 0;
+  const codemodeCallCount = codemode ? codemode.calls.length + codemode.omitted : 0;
 
   // Result display
+  const resultContent = result ? (codemode ? stripCodemodeHeader(result.content) : result.content) : [];
   const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+    ? resultContent.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
     : null;
-  const resultImages = getMessageImages(result?.content ?? []);
+  const resultImages = getMessageImages(resultContent);
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
   const subagent = isSubagentToolDetails(result?.details) ? result.details : null;
@@ -1197,8 +1207,13 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             {block.toolName}
           </span>
           <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-            {isStreamingInput ? t("chat.generatingToolInput") : getToolPreview(block)}
+            {isStreamingInput ? t("chat.generatingToolInput") : codemode ? codemodeScriptPreview(codemode.code) : getToolPreview(block)}
           </span>
+          {codemodeCallCount > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+              {codemodeCallCount === 1 ? t("codemode.callCountOne") : t("codemode.callCount", { count: codemodeCallCount })}
+            </span>
+          )}
           {duration !== undefined && (
             <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration !== undefined ? formatSeconds(duration) : ""}</span>
           )}
@@ -1233,12 +1248,17 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             wordBreak: "break-all",
           }}
         >
-          {inputStr}
+          {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
         </pre>
       )}
 
+      {/* ── Codemode nested calls, between the script and its output ── */}
+      {expanded && codemode && (
+        <CodemodeCallList calls={codemode.calls} omitted={codemode.omitted} isError={isError} />
+      )}
+
       {/* ── Paired result — only shown when expanded ── */}
-      {expanded && result && (
+      {expanded && result && !codemodeRunning && (
         resultDiff ? (
           <PairedDiffResult
             diff={resultDiff}

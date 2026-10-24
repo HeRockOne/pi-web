@@ -24,6 +24,7 @@ import { userMessageKey } from "@/lib/prompt-recovery";
 import { AgentEventConnection } from "@/lib/agent-event-connection";
 import { isSystemMessageEvent } from "@/lib/agent-event-wire";
 import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
+import { CODEMODE_TOOL_NAME, getCodemodeProgress } from "@/lib/codemode-view";
 import {
   CHAT_SCROLL_REATTACH_TOLERANCE,
   CHAT_SCROLL_TAIL_TOLERANCE,
@@ -1330,7 +1331,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_update": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
-        const progress = getToolExecutionProgress(event.partialResult);
+        // For codemode, the progress is the newest call the script has made so far.
+        const progress = name === CODEMODE_TOOL_NAME
+          ? getCodemodeProgress(event.partialResult)
+          : getToolExecutionProgress(event.partialResult);
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           const existing = tools.find((tool) => tool.id === id);

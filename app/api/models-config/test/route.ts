@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { completeSimple, type AssistantMessage } from "@earendil-works/pi-ai/compat";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
@@ -77,7 +77,9 @@ export async function POST(req: Request) {
     const startedAt = Date.now();
 
     try {
-      const message = await completeSimple(model, {
+      // ModelRuntime implements pi-ai's Models interface since 1.4.0; the old
+      // global completeSimple() only lives in the temporary pi-ai/compat module.
+      const message = await modelRuntime.completeSimple(model, {
         messages: [{
           role: "user",
           content: "Reply with OK only.",

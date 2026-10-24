@@ -26,6 +26,8 @@ export interface ToolInfo {
   parameters?: unknown;
   promptGuidelines?: string[];
   sourceInfo?: unknown;
+  /** How the tool reaches the model (pi 1.4). "hidden" tools are never carried into an active set. */
+  exposure?: "direct" | "model-only" | "codemode" | "deferred" | "hidden";
 }
 
 export interface NavigateTreeResult {

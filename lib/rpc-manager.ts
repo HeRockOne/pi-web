@@ -7,6 +7,7 @@ import { resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
+import { createBuiltinExtensionFactories } from "./builtin-extensions";
 import {
   createProjectCommandBashExtension,
   createProjectCommandBashOperations,
@@ -199,17 +200,33 @@ class PlainTextTheme extends Theme {
 const PLAIN_TEXT_THEME = new PlainTextTheme();
 const CUSTOM_UI_KEYBINDINGS = new TuiKeybindingsManager(TUI_KEYBINDINGS);
 
-function withExtensionTools(session: AgentSessionLike, toolNames: string[]): string[] {
-  if (toolNames.length === 0) return [];
+// The active tools for a coding tool selection. The selection replaces only the
+// coding tools: every other tool named in `carry` that is still registered and
+// not withdrawn stays active, so a tool an extension, `tool_search`, or
+// `defaultTools` activated survives, and a tool one switched off stays off.
+// Nothing else is added: pi itself activates the extension tools it registers,
+// so `carry` already holds them, while tools registered with
+// `defaultActive: false` (codemode, tool_search) stay off until something
+// activates them. An empty selection is Chat only.
+export function resolveActiveToolNames(
+  session: AgentSessionLike,
+  requested: readonly string[],
+  carry: readonly string[],
+): string[] {
+  if (requested.length === 0) return [];
 
   const codingToolNames = new Set(CODING_TOOL_NAMES);
-  const selectedToolNames = resolveShellTools(toolNames, session.settingsManager.getDefaultTools());
-  const extensionToolNames = session
-    .getAllTools()
-    .map((t) => t.name)
-    .filter((name) => !codingToolNames.has(name));
+  const registered = new Map(session.getAllTools().map((tool) => [tool.name, tool]));
+  const selectedToolNames = resolveShellTools(
+    requested.filter((name) => codingToolNames.has(name)),
+    session.settingsManager.getDefaultTools(),
+  );
+  const carriedToolNames = carry.filter((name) => {
+    const tool = registered.get(name);
+    return tool !== undefined && !codingToolNames.has(name) && tool.exposure !== "hidden";
+  });
 
-  return [...new Set([...selectedToolNames, ...extensionToolNames])];
+  return [...new Set([...selectedToolNames, ...carriedToolNames])];
 }
 
 // ============================================================================
@@ -422,8 +439,9 @@ export class AgentSessionWrapper {
     }
   }
 
-  setActiveToolSelection(toolNames: string[]): void {
-    this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+  /** Apply a coding tool selection; `carry` defaults to the tools active now. */
+  setActiveToolSelection(toolNames: string[], carry: readonly string[] = this.inner.getActiveToolNames()): void {
+    this.inner.setActiveToolsByName(resolveActiveToolNames(this.inner, toolNames, carry));
   }
 
   private emit(event: AgentEvent): void {
@@ -2048,6 +2066,10 @@ export async function startRpcSession(
           ? { ...CHAT_ONLY_RESOURCE_LOADER_OPTIONS, extensionFactories: [exactSystemPromptExtension] }
         : {
             extensionFactories: [
+              // Builtin pi extensions (codemode, tool_search, MCP) under pi-web
+              // control: the MCP factory reads only the global mcp.json and never
+              // blocks the first prompt (see createBuiltinExtensionFactories).
+              ...createBuiltinExtensionFactories({ agentDir }),
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
                 settings: settingsManager,
@@ -2126,11 +2148,13 @@ export async function startRpcSession(
     );
     if (persistedPreferences.modelDefaultChanged) invalidateModelsCache();
 
-    // If specific tool names were requested (non-empty), set the active tools to the
-    // requested builtin coding tools PLUS all extension/package tools, so installed
-    // extensions stay usable in Pi Web just like in the `pi` CLI.
+    // Apply the session's coding tool selection. Extension tools pi already
+    // activated stay active (the carry), while tools registered with
+    // `defaultActive: false` — codemode, tool_search — wait for the user's
+    // selection, `defaultTools`, or the MCP extension to activate them.
     if (!subagentResources && !chatOnly) {
-      inner.setActiveToolsByName(withExtensionTools(inner, selectedToolNames ?? inner.getActiveToolNames()));
+      const requestedToolSelection = selectedToolNames ?? inner.getActiveToolNames();
+      inner.setActiveToolsByName(resolveActiveToolNames(inner, requestedToolSelection, requestedToolSelection));
     }
 
     const exactSystemPrompt = subagentResources?.exactSystemPrompt !== undefined
