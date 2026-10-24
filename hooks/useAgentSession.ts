@@ -1160,6 +1160,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const d = await res.json() as { running: boolean; state?: AgentStateResponse };
         if (sessionIdRef.current !== sid) return;
         if (d.running && d.state?.contextUsage !== undefined) applyContextUsage(d.state.contextUsage ?? null);
+        // Extensions (MCP servers connecting, codemode activating) can change
+        // the prompt without an agent run; keep the panel in step with it.
+        if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
       } catch { /* offline — the next tick retries */ }
     };
     const interval = setInterval(refresh, IDLE_CONTEXT_USAGE_POLL_MS);
@@ -1779,12 +1782,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         case "reload": {
           if (!sid) return complete({ handled: true, error: "No active session to reload" });
           await sendAgentCommand(sid, { type: "reload" });
-          await Promise.all([
+          const [state] = await Promise.all([
+            sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" }).catch(() => undefined),
             loadSession(sid, false, true),
             loadTools(sid),
             loadSlashCommands(),
             loadModels(),
           ]);
+          if (state && sessionHookMountedRef.current && sessionIdRef.current === sid) {
+            setSystemPrompt(state.systemPrompt ?? "");
+            syncLiveModel(state);
+          }
           return complete({ handled: true, message: "Reloaded session resources" });
         }
 
@@ -1854,7 +1862,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [activeLeafId, addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp]);
+  }, [activeLeafId, addNotice, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onOpenSettings, onSessionForked, onSessionStatsPanelOpen, slashCommandsForMcp, syncLiveModel]);
 
   // Let AgentSession.prompt decide atomically whether to queue against the
   // current run or start a new turn if it settled while the request was in

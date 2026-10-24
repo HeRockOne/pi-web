@@ -981,7 +981,7 @@ export const enLocale: LocalePlugin = {
     "mcp.codemode.saveFailed": "Could not save the choice:",
     "mcp.codemode.saveTimedOut": "Pi Web did not answer in time, so the choice may not have been saved.",
     "mcp.codemode.title": "Code mode",
-    "mcp.codemode.toolMode": "Built-in tools",
+    "mcp.codemode.toolMode": "How built-in tools are called",
     "mcp.codemode.toolMode.automaticNote": "Under Automatic, this waits until Code mode turns on.",
     "mcp.codemode.toolMode.invalid": "codemode.mode in {path} is {value}, which pi reads as \"on\". Choosing either option replaces it.",
     "mcp.codemode.toolMode.on": "Direct",

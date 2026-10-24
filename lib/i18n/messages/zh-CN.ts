@@ -980,7 +980,7 @@ export const zhCNLocale: LocalePlugin = {
     "mcp.codemode.saveFailed": "无法保存此选择：",
     "mcp.codemode.saveTimedOut": "Pi Web 没有及时响应，此选择可能未保存。",
     "mcp.codemode.title": "代码模式",
-    "mcp.codemode.toolMode": "内置工具",
+    "mcp.codemode.toolMode": "内置工具调用方式",
     "mcp.codemode.toolMode.automaticNote": "模式为“自动”时，要等代码模式开启后才生效。",
     "mcp.codemode.toolMode.invalid": "{path} 中的 codemode.mode 为 {value}，pi 会把它当作 \"on\"。选择任一选项都会替换它。",
     "mcp.codemode.toolMode.on": "直接调用",
