@@ -69,6 +69,23 @@ export function codemodeCalls(details: unknown): CodemodeCalls {
   return { calls, omitted: omitted !== undefined && omitted > 0 ? Math.floor(omitted) : 0 };
 }
 
+/**
+ * List keys for the card's rows. The SDK numbers nested calls under their parent
+ * (`<parent>/1`, `<parent>/2`, ...), but a call that was cancelled before it
+ * started is recorded as `<parent>/?` — four of those in one script share an id,
+ * which React rejects as duplicate keys. A repeated id is therefore
+ * disambiguated by its occurrence in the list.
+ */
+export function codemodeCallKeys(calls: readonly CodemodeCallView[]): string[] {
+  const seen = new Map<string, number>();
+  return calls.map((call) => {
+    const base = call.id || "call";
+    const occurrence = seen.get(base) ?? 0;
+    seen.set(base, occurrence + 1);
+    return `${base}#${occurrence}`;
+  });
+}
+
 const SCRIPT_HEADER = /^Script (completed|failed)\nWall time ([\d.]+) seconds\nOutput:\n$/;
 
 /**

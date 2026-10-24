@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
+  codemodeCallKeys,
   codemodeTotalCost,
   formatCodemodeCost,
   formatCodemodeDuration,
@@ -70,6 +71,7 @@ export function CodemodeCallList({ calls, omitted, isError }: {
   if (calls.length === 0 && omitted === 0) return null;
   const hidden = showAll ? 0 : Math.max(0, calls.length - CODEMODE_VISIBLE_CALLS);
   const shown = hidden > 0 ? calls.slice(hidden) : calls;
+  const shownKeys = codemodeCallKeys(shown);
   // Folded rows still count: the total covers every call the result lists.
   const totalCost = codemodeTotalCost(calls);
   return (
@@ -102,7 +104,7 @@ export function CodemodeCallList({ calls, omitted, isError }: {
       )}
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
         {shown.map((call, index) => (
-          <CallRow key={call.id || `${hidden + index}`} call={call} />
+          <CallRow key={shownKeys[index]} call={call} />
         ))}
       </ul>
       {totalCost !== null && (
