@@ -1067,10 +1067,10 @@ function AssistantMessageView({
           style={{
             marginTop: blocks.length > 0 ? 8 : 0,
             padding: "7px 10px",
-            border: "1px solid rgba(239,68,68,0.3)",
+            border: "1px solid color-mix(in srgb, var(--err) 30%, transparent)",
             borderRadius: 6,
-            background: "rgba(239,68,68,0.07)",
-            color: "#ef4444",
+            background: "color-mix(in srgb, var(--err) 7%, transparent)",
+            color: "var(--err)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             lineHeight: 1.5,
@@ -1108,7 +1108,7 @@ function AssistantMessageView({
           const rate = message.usage.cacheRead / hitTotal;
           // 缓存命中率是唯一保留在消息底部的内容：它是每条消息都会变的
           // 质量指标，掉档时值得一眼看见。颜色分档由数值决定，不靠 emoji。
-          const tone = rate >= 0.9 ? "#46a758" : rate >= 0.7 ? "#d9a441" : "#e5484d";
+          const tone = rate >= 0.9 ? "var(--ok)" : rate >= 0.7 ? "var(--warn)" : "var(--err)";
           return (
             <span
               title={`${t("session.cacheHitRate")} ${formatPercent(rate)}`}
@@ -1285,7 +1285,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
           style={{
             flex: 1,
             minWidth: 0,
-            color: error ? "#f87171" : "var(--text-muted)",
+            color: error ? "var(--err)" : "var(--text-muted)",
             whiteSpace: "pre-wrap",
             overflowWrap: "anywhere",
           }}
@@ -1348,19 +1348,19 @@ function ToolCallStatusDot({ pending, isError }: { pending: boolean; isError: bo
       <span
         aria-hidden="true"
         className="animate-[pulse_1.6s_ease-in-out_infinite]"
-        style={{ width: 7, height: 7, borderRadius: 4, background: "#d97706", flex: "0 0 auto", margin: "0 2px" }}
+        style={{ width: 7, height: 7, borderRadius: 4, background: "var(--warn)", flex: "0 0 auto", margin: "0 2px" }}
       />
     );
   }
   if (isError) {
     return (
-      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#e5484d" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" style={{ flex: "0 0 auto", margin: "0 2px" }}>
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" style={{ stroke: "var(--err)", flex: "0 0 auto", margin: "0 2px" }}>
         <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
       </svg>
     );
   }
   return (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#46a758" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "0 0 auto", margin: "0 2px" }}>
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ stroke: "var(--ok)", flex: "0 0 auto", margin: "0 2px" }}>
       <polyline points="2.5 6.5 5 9 9.5 3.5" />
     </svg>
   );
@@ -1418,7 +1418,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
           }}
         >
           <ToolCallStatusDot pending={!result} isError={isError} />
-          <span style={{ color: isError ? "#e5484d" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+          <span style={{ color: isError ? "var(--err)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
             {block.toolName}
           </span>
           <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -1452,7 +1452,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
         <div
           style={{
             margin: "2px 0 2px 4px",
-            border: isError ? "1px solid rgba(229,72,77,0.35)" : "1px solid var(--border)",
+            border: isError ? "1px solid color-mix(in srgb, var(--err) 35%, transparent)" : "1px solid var(--border)",
             borderRadius: 8,
             overflow: "hidden",
             background: "var(--bg)",
@@ -1510,7 +1510,7 @@ function PairedDiffResult({ diff }: {
   return (
     <div
       style={{
-        borderTop: "1px solid rgba(34,197,94,0.15)",
+        borderTop: "1px solid color-mix(in srgb, var(--ok) 15%, transparent)",
         background: "var(--bg)",
       }}
     >
@@ -1596,16 +1596,16 @@ function SplitDiffHeader({ title, side }: { title: string; side: "left" | "right
 function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" | "right" }) {
   const bg =
     cell.type === "added"
-      ? "rgba(34,197,94,0.12)"
+      ? "color-mix(in srgb, var(--ok) 12%, transparent)"
       : cell.type === "removed"
-      ? "rgba(248,113,113,0.13)"
+      ? "color-mix(in srgb, var(--err) 13%, transparent)"
       : cell.type === "empty"
       ? "var(--bg-subtle)"
       : "transparent";
   const marker =
     cell.type === "added" ? "+" : cell.type === "removed" ? "-" : " ";
   const markerColor =
-    cell.type === "added" ? "#22c55e" : cell.type === "removed" ? "#f87171" : "var(--text-dim)";
+    cell.type === "added" ? "var(--ok)" : cell.type === "removed" ? "var(--err)" : "var(--text-dim)";
 
   return (
     <div
@@ -1670,13 +1670,13 @@ function PatchTextView({ text }: { text: string }) {
           line.startsWith("-") && !line.startsWith("---") ? "removed" :
           "context";
         const bg =
-          kind === "added" ? "rgba(34,197,94,0.12)" :
-          kind === "removed" ? "rgba(248,113,113,0.13)" :
+          kind === "added" ? "color-mix(in srgb, var(--ok) 12%, transparent)" :
+          kind === "removed" ? "color-mix(in srgb, var(--err) 13%, transparent)" :
           kind === "hunk" ? "rgba(96,165,250,0.12)" :
           "transparent";
         const color =
           kind === "added" ? "#22c55e" :
-          kind === "removed" ? "#f87171" :
+          kind === "removed" ? "var(--err)" :
           kind === "hunk" ? "var(--accent)" :
           "var(--text)";
 
@@ -1689,7 +1689,7 @@ function PatchTextView({ text }: { text: string }) {
               borderLeft: kind === "added"
                 ? "3px solid #22c55e"
                 : kind === "removed"
-                ? "3px solid #f87171"
+                ? "3px solid var(--err)"
                 : kind === "hunk"
                 ? "3px solid var(--accent)"
                 : "3px solid transparent",
@@ -1747,8 +1747,8 @@ function PairedResult({ text, images, isEmpty, isError }: {
   return (
     <div
       style={{
-        borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
+        borderTop: `1px solid ${isError ? "color-mix(in srgb, var(--err) 30%, transparent)" : "color-mix(in srgb, var(--ok) 15%, transparent)"}`,
+        background: isError ? "color-mix(in srgb, var(--err) 4%, transparent)" : "var(--bg-subtle)",
       }}
     >
       {images.length > 0 && (
@@ -1786,7 +1786,7 @@ function PairedResult({ text, images, isEmpty, isError }: {
           style={{
             margin: 0,
             padding: "8px 10px",
-            color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+            color: isError ? "var(--err)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
             fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
             lineHeight: 1.5,
             overflow: "auto",

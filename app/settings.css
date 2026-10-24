@@ -168,7 +168,7 @@
 }
 
 .config-sidebar-group-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 .config-sidebar-item {
@@ -284,7 +284,7 @@
 }
 
 .enabled-models-switch-error {
-  color: #ef4444;
+  color: var(--err);
   font-size: 11px;
 }
 
@@ -312,7 +312,7 @@
   padding: 7px 9px;
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 5px;
-  color: #ef4444;
+  color: var(--err);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -445,7 +445,7 @@
 }
 
 .agents-feature-copy > .agents-feature-reload-notice {
-  color: #d97706;
+  color: var(--warn);
 }
 
 .agents-feature-actions {
@@ -462,7 +462,7 @@
 }
 
 .config-sidebar-message.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 .config-sidebar-message.is-empty {
@@ -786,11 +786,11 @@
 }
 
 .skill-update-status.is-success {
-  color: #16a34a;
+  color: var(--ok);
 }
 
 .skill-update-status.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 .skill-description {
@@ -824,11 +824,11 @@
 }
 
 .config-footer-status-summary.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 .config-footer-status-summary.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 .config-footer-status-details summary {
@@ -903,7 +903,7 @@
 .config-button-danger {
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.06);
-  color: #ef4444;
+  color: var(--err);
 }
 
 .config-button-ghost {
@@ -940,8 +940,8 @@
 }
 
 .config-button-primary.is-success {
-  border-color: #16a34a;
-  background: #16a34a;
+  border-color: var(--ok);
+  background: var(--ok);
   animation: saved-pop 0.45s ease;
 }
 
@@ -1452,7 +1452,7 @@
 
 .settings-general-error {
   margin: 8px 0 0;
-  color: #ef4444;
+  color: var(--err);
   font-size: 11px;
 }
 
@@ -2082,13 +2082,13 @@
 }
 
 .web-theme-editor-check.is-good {
-  border-color: color-mix(in srgb, #16a34a 45%, transparent);
-  color: color-mix(in srgb, #16a34a 85%, var(--text));
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  color: color-mix(in srgb, var(--ok) 85%, var(--text));
 }
 
 .web-theme-editor-check.is-low {
-  border-color: color-mix(in srgb, #d97706 45%, transparent);
-  color: color-mix(in srgb, #d97706 85%, var(--text));
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  color: color-mix(in srgb, var(--warn) 85%, var(--text));
 }
 
 .web-theme-editor-check.is-bad {
@@ -2385,7 +2385,7 @@
   outline-offset: 2px;
 }
 .usage-stats-unknown {
-  color: #d97706;
+  color: var(--warn);
 }
 .usage-stats-hint {
   color: var(--text-muted);
@@ -2467,7 +2467,7 @@
   outline-offset: 1px;
 }
 .usage-stats-balance-negative {
-  color: #e5484d;
+  color: var(--err);
   font-weight: 600;
 }
 .usage-stats-balance-bar {
@@ -2483,9 +2483,9 @@
   border-radius: 3px;
   transition: width 0.2s ease;
 }
-.usage-stats-balance-bar-fill.is-ok { background: #30a46c; }
-.usage-stats-balance-bar-fill.is-warn { background: #f5a524; }
-.usage-stats-balance-bar-fill.is-low { background: #e5484d; }
+.usage-stats-balance-bar-fill.is-ok { background: var(--ok); }
+.usage-stats-balance-bar-fill.is-warn { background: var(--warn); }
+.usage-stats-balance-bar-fill.is-low { background: var(--err); }
 .usage-stats-balance-actions {
   display: flex;
   gap: 6px;
@@ -2523,7 +2523,7 @@
 }
 .usage-stats-balance-saved {
   font-size: 11px;
-  color: #30a46c;
+  color: var(--ok);
   white-space: nowrap;
 }
 .usage-stats-balance-table tr.is-dormant td {
@@ -2834,7 +2834,7 @@
   flex-basis: 0;
   min-height: 1.5px;
 }
-.usage-stats-hour-seg.is-peak { background: #e5484d; }
+.usage-stats-hour-seg.is-peak { background: var(--err); }
 .usage-stats-hour-seg.is-off { background: #46a758; }
 .usage-stats-hour-seg.is-plain { background: #9ca3af; opacity: 0.7; }
 .usage-stats-hour-label {
@@ -2853,7 +2853,7 @@
   color: var(--text-muted);
 }
 .usage-stats-hour-legend .usage-stats-legend-dot.is-peak {
-  background: #e5484d;
+  background: var(--err);
 }
 .usage-stats-hour-legend .usage-stats-legend-dot.is-off {
   background: #46a758;
@@ -2906,7 +2906,7 @@
 
 
 .config-detail-grid-value.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 
@@ -3047,7 +3047,7 @@
 }
 
 .config-add-source-error {
-  color: #ef4444;
+  color: var(--err);
   font-size: 12px;
   white-space: pre-wrap;
 }
@@ -3084,12 +3084,12 @@
 
 
 .mcp-sidebar-badge.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 
 .mcp-sidebar-badge.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 
@@ -3145,7 +3145,7 @@
 
 
 .mcp-config-line.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 .mcp-config-line.is-dim {
@@ -3154,7 +3154,7 @@
 
 
 .mcp-config-line.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 
@@ -3175,12 +3175,12 @@
 
 
 .mcp-config-state.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 
 .mcp-config-state.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 
@@ -3354,12 +3354,12 @@ select.mcp-add-input {
 
 
 .mcp-add-note.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 
 .mcp-add-note.is-error {
-  color: #ef4444;
+  color: var(--err);
 }
 
 
@@ -3469,7 +3469,7 @@ select.mcp-add-input {
   max-height: 30vh;
   padding: 0 18px 10px;
   overflow: auto;
-  color: #ef4444;
+  color: var(--err);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -3550,7 +3550,7 @@ select.mcp-add-input {
 }
 
 .project-trust-mcp-line.is-warning {
-  color: #d97706;
+  color: var(--warn);
 }
 
 .project-trust-mcp-line.is-dim {

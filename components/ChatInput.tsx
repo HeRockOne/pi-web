@@ -1832,10 +1832,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             style={{
               marginBottom: 8,
               padding: "7px 10px",
-              background: "rgba(239,68,68,0.07)",
-              border: "1px solid rgba(239,68,68,0.3)",
+              background: "color-mix(in srgb, var(--err) 7%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--err) 30%, transparent)",
               borderRadius: 6,
-              color: "#ef4444",
+              color: "var(--err)",
               fontFamily: "var(--font-mono)",
               fontSize: 12,
               lineHeight: 1.5,
@@ -2425,16 +2425,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 padding: "7px 12px",
                 minHeight: 33,
-                background: isStreaming ? "rgba(239,68,68,0.08)" : (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
-                border: isStreaming ? "1px solid rgba(239,68,68,0.3)" : "none",
+                background: isStreaming ? "color-mix(in srgb, var(--err) 8%, transparent)" : (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
+                border: isStreaming ? "1px solid color-mix(in srgb, var(--err) 30%, transparent)" : "none",
                 borderRadius: 8,
-                color: isStreaming ? "#ef4444" : (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
+                color: isStreaming ? "var(--err)" : (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
                 cursor: !isStreaming && !value.trim() && !attachedImages.length ? "not-allowed" : "pointer",
                 boxShadow: !isStreaming && (value.trim() || attachedImages.length) ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
                 transition: "background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s",
               }}
-              onMouseEnter={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-              onMouseLeave={(e) => { if (isStreaming) e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+              onMouseEnter={(e) => { if (isStreaming) e.currentTarget.style.background = "color-mix(in srgb, var(--err) 16%, transparent)"; }}
+              onMouseLeave={(e) => { if (isStreaming) e.currentTarget.style.background = "color-mix(in srgb, var(--err) 8%, transparent)"; }}
               aria-label={isStreaming ? t("chat.stop") : t("chat.send")}
               title={isStreaming ? t("chat.stopAgent") : `${t("chat.send")} (${isMobile ? "Ctrl/Cmd+" : ""}Shift+Enter)`}
             >
@@ -2771,22 +2771,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: isMobile ? "0 6px" : "0 8px",
                     width: isMobile ? "auto" : undefined,
                     height: 28,
-                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
+                    background: isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "none",
                     border: "none",
                     borderRadius: 7,
-                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
+                    color: isCompacting ? "var(--err)" : "var(--text-muted)",
                     cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
                     fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
                     transition: "background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={(e) => {
                     if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--err) 16%, transparent)" : "var(--bg-hover)";
+                    e.currentTarget.style.color = isCompacting ? "var(--err)" : "var(--text)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "none";
+                    e.currentTarget.style.color = isCompacting ? "var(--err)" : "var(--text-muted)";
                   }}
                    title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                    aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
