@@ -1638,7 +1638,7 @@ export function AppShell() {
           background: mobileBanner ? "color-mix(in srgb, #d97706 8%, var(--bg-panel))" : "none",
           border: "none",
           borderBottom: mobileBanner ? "1px solid var(--border)" : "none",
-          color: "#d97706",
+          color: "var(--warn)",
           cursor: "pointer",
           flexShrink: 0,
           fontSize: 11,
@@ -1980,7 +1980,7 @@ export function AppShell() {
     let mobileContextText: string | null = null;
     if (contextUsage?.contextWindow) {
       const percent = contextUsage.percent;
-      if (percent !== null && percent > 90) contextColor = "#ef4444";
+      if (percent !== null && percent > 90) contextColor = "var(--err)";
       else if (percent !== null && percent > 70) contextColor = "rgba(234,179,8,0.95)";
       desktopContextText = contextUsage.tokens !== null
         ? `${formatTokens(contextUsage.tokens)}/${formatTokens(contextUsage.contextWindow)}`

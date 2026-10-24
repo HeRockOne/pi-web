@@ -53,3 +53,4 @@ tmp-*.html
 
 # codegraph local index
 /.codegraph/
+.playwright-mcp/

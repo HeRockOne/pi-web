@@ -1449,8 +1449,10 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
         )}
       </div>
 
-      {/* ── Expanded detail panel: input args, nested calls, paired result ── */}
-      {expanded && (
+      {/* ── Expanded detail panel: input args, nested calls, paired result.
+          A running edit-tool call has nothing to show yet — render no panel
+          rather than an empty bordered box. ── */}
+      {expanded && ((isStreamingInput || !isEditTool) || codemode || (result && !codemodeRunning)) && (
         <div
           style={{
             margin: "2px 0 2px 4px",

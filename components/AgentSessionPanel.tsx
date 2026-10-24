@@ -31,9 +31,9 @@ function formatRelativeTime(value: string, locale: string): string {
 
 function statusColor(status: SubagentSessionStatus): string {
   if (status === "running" || status === "starting") return "var(--accent)";
-  if (status === "completed") return "#16a34a";
+  if (status === "completed") return "var(--ok)";
   if (status === "failed") return "#dc2626";
-  if (status === "aborted") return "#d97706";
+  if (status === "aborted") return "var(--warn)";
   return "var(--text-dim)";
 }
 
