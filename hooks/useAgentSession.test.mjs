@@ -126,7 +126,7 @@ test("fresh sessions use the preference while persisted and live sessions restor
     source.indexOf("  const promoteNewSession"),
   );
   const changeSource = source.slice(
-    source.indexOf("  const handleToolPresetChange = useCallback"),
+    source.indexOf("  const applyToolSelection = useCallback"),
     source.indexOf("  const scrollUserMsgToTop"),
   );
 

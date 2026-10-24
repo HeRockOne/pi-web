@@ -26,7 +26,7 @@ import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useChatAppearance } from "@/hooks/useChatAppearance";
-import type { ToolPreset } from "@/lib/tool-presets";
+import type { ToolEntry, ToolPreset } from "@/lib/tool-presets";
 import { formatTokens } from "@/lib/usage-stats-format";
 import { ModelSelector, type ModelSelectorOption } from "./ModelSelector";
 import { MorphIcon } from "morphicons/react";
@@ -75,6 +75,8 @@ interface Props {
   compactResult?: CompactResultInfo | null;
   toolPreset?: ToolPreset;
   onToolPresetChange?: (preset: ToolPreset) => void;
+  systemToolToggles?: ToolEntry[];
+  onSystemToolToggle?: (name: string, enabled: boolean) => void;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
@@ -507,6 +509,7 @@ export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange, modelSwitching,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
+  systemToolToggles, onSystemToolToggle,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
@@ -2683,6 +2686,37 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
+                    {systemToolToggles && systemToolToggles.length > 0 && onSystemToolToggle && (
+                      <>
+                        <div style={{ height: 1, margin: "4px 8px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
+                        {systemToolToggles.map((tool) => (
+                          <button
+                            key={tool.name}
+                            onClick={() => onSystemToolToggle(tool.name, !tool.active)}
+                            title={tool.description}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", padding: "7px 12px",
+                              borderRadius: 10,
+                              background: tool.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none",
+                              border: "none",
+                              color: tool.active ? "var(--accent)" : "var(--text-muted)",
+                              cursor: "pointer", fontSize: 12, textAlign: "left",
+                              fontWeight: tool.active ? 500 : 400,
+                              whiteSpace: "nowrap",
+                            }}
+                            onMouseEnter={(e) => { if (!tool.active) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onMouseLeave={(e) => { if (!tool.active) e.currentTarget.style.background = "none"; }}
+                          >
+                            {tool.active
+                              ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                              : <span style={{ width: 10, flexShrink: 0 }} />}
+                            <span style={{ flex: 1 }}>{tool.name}</span>
+                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{t("chat.systemTool")}</span>
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

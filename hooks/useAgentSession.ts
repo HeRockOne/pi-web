@@ -16,7 +16,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
 import { clearDraft, rekeyDraft, restoreDraftSubmission } from "@/lib/draft-store";
 import { getPreferredToolPreset, setPreferredToolPreset } from "@/lib/tool-preset-preference";
-import { getPresetFromToolNames, getToolNamesForPreset, type ToolEntry, type ToolPreset } from "@/lib/tool-presets";
+import { getPresetFromToolNames, getSystemToolToggles, getToolNamesForPreset, mergeToolSelection, type ToolEntry, type ToolPreset } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { AskAnswer } from "@/lib/ask-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
@@ -314,6 +314,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
   const [toolPreset, setToolPreset] = useState<ToolPreset>("default");
+  // codemode / tool_search switches shown next to the presets; the ref keeps
+  // the async callbacks free of stale-closure deps.
+  const [systemToolToggles, setSystemToolToggles] = useState<ToolEntry[]>([]);
+  const systemToolTogglesRef = useRef<ToolEntry[]>([]);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -617,6 +621,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!tools || !sessionHookMountedRef.current || sessionIdRef.current !== sid) return null;
       const { getPresetFromTools } = await import("@/lib/tool-presets");
       setToolPresetState(getPresetFromTools(tools));
+      const toggles = getSystemToolToggles(tools);
+      systemToolTogglesRef.current = toggles;
+      setSystemToolToggles(toggles);
       onSystemToolsChange?.(tools);
       return tools;
     } catch (e) {
@@ -661,7 +668,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const selectedModel = newSessionModelOverrideRef.current;
       const selectedThinkingLevel = thinkingLevelOverrideRef.current;
       if (selectedModel) setPendingModel(selectedModel);
-      const toolNames = getToolNamesForPreset(toolPreset);
+      const toolNames = mergeToolSelection(getToolNamesForPreset(toolPreset), systemToolTogglesRef.current);
       const res = await fetch("/api/agent/new", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1915,10 +1922,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [isNew]);
 
-  const handleToolPresetChange = useCallback(async (preset: ToolPreset) => {
-    const toolNames = getToolNamesForPreset(preset);
-    setPreferredToolPreset(preset);
-    setToolPresetState(preset);
+  const applyToolSelection = useCallback(async (toolNames: string[]) => {
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
@@ -1942,8 +1946,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     } catch (e) {
       console.error("Failed to set tools:", e);
+      const current = sessionIdRef.current;
+      if (current) await loadTools(current);
     }
-  }, [cancelEventStreamGrace, closeEvents, loadTools, setToolPresetState, syncLiveModel]);
+  }, [cancelEventStreamGrace, closeEvents, loadTools, syncLiveModel]);
+
+  const handleToolPresetChange = useCallback(async (preset: ToolPreset) => {
+    setPreferredToolPreset(preset);
+    setToolPresetState(preset);
+    await applyToolSelection(mergeToolSelection(getToolNamesForPreset(preset), systemToolTogglesRef.current));
+  }, [applyToolSelection, setToolPresetState]);
+
+  const handleSystemToolToggle = useCallback(async (name: string, enabled: boolean) => {
+    const toggles = systemToolTogglesRef.current.map((tool) => tool.name === name ? { ...tool, active: enabled } : tool);
+    systemToolTogglesRef.current = toggles;
+    setSystemToolToggles(toggles);
+    await applyToolSelection(mergeToolSelection(getToolNamesForPreset(toolPreset), toggles));
+  }, [applyToolSelection, toolPreset]);
 
   const scrollToMessage = useCallback((element: HTMLElement, viewportOffset = 16) => {
     const container = scrollContainerRef.current;
@@ -2188,7 +2207,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, thinkingLevels, historyCursor, hasEarlierMessages, streamState,
-    agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, systemToolToggles, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -2206,7 +2225,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleRecallQueue,
     handleBuiltinSlashCommand,
     setNoticePaused: setPausedNoticeId,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages, loadContext,
+    handleToolPresetChange, handleSystemToolToggle, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages, loadContext,
     scrollToBottom, scrollUserMsgToTop, scrollToMessage,
     dispatch, setAgentRunning, setForkingEntryId,
     bashRunning, pendingBash,

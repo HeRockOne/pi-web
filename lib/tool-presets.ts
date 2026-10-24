@@ -53,3 +53,26 @@ export function getToolNamesForPreset(preset: ToolPreset): string[] {
   if (preset === "full") return [...PRESET_FULL];
   return [...PRESET_DEFAULT];
 }
+
+// Session-level extension tools pi registers inactive (`defaultActive: false`):
+// the presets only cover the coding tools, so these get their own switches in
+// the tool dropdown and ride along with every preset selection.
+export const SYSTEM_TOOL_TOGGLE_NAMES = ["codemode", "tool_search"] as const;
+
+const SYSTEM_TOOL_TOGGLE_SET = new Set<string>(SYSTEM_TOOL_TOGGLE_NAMES);
+
+export function isSystemToolToggle(name: string): boolean {
+  return SYSTEM_TOOL_TOGGLE_SET.has(name);
+}
+
+export function getSystemToolToggles(tools: ToolEntry[]): ToolEntry[] {
+  return tools.filter((tool) => SYSTEM_TOOL_TOGGLE_SET.has(tool.name));
+}
+
+export function mergeToolSelection(
+  presetToolNames: readonly string[],
+  toggles: readonly ToolEntry[],
+): string[] {
+  const enabled = toggles.filter((tool) => tool.active).map((tool) => tool.name);
+  return [...new Set([...presetToolNames, ...enabled])];
+}

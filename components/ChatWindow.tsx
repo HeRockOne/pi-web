@@ -304,8 +304,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop, scrollToBottom,
-    loadContext, activeLeafId, scrollToMessage,
+    handleToolPresetChange, handleSystemToolToggle, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop, scrollToBottom,
+    loadContext, activeLeafId, scrollToMessage, systemToolToggles,
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
@@ -930,6 +930,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
       compactResult={compactResult}
       toolPreset={toolPreset}
       onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+      systemToolToggles={systemToolToggles}
+      onSystemToolToggle={session || isNew ? handleSystemToolToggle : undefined}
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}

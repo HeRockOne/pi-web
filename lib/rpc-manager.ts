@@ -221,12 +221,17 @@ export function resolveActiveToolNames(
     requested.filter((name) => codingToolNames.has(name)),
     session.settingsManager.getDefaultTools(),
   );
-  const carriedToolNames = carry.filter((name) => {
+  const isSelectable = (name: string) => {
     const tool = registered.get(name);
     return tool !== undefined && !codingToolNames.has(name) && tool.exposure !== "hidden";
-  });
+  };
+  // Explicitly requested non-coding tools (the codemode / tool_search switches)
+  // activate even when currently inactive, while the carry keeps everything
+  // else that is already active, e.g. tools pi's extensions turned on.
+  const requestedToolNames = requested.filter(isSelectable);
+  const carriedToolNames = carry.filter(isSelectable);
 
-  return [...new Set([...selectedToolNames, ...carriedToolNames])];
+  return [...new Set([...selectedToolNames, ...requestedToolNames, ...carriedToolNames])];
 }
 
 // ============================================================================
