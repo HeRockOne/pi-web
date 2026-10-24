@@ -927,5 +927,12 @@ export const zhCNLocale: LocalePlugin = {
     "usageStats.balanceTrend.empty": "暂无可绘制的余额数据",
     "usageStats.rank.cost": "费用",
     "usageStats.table.empty": "暂无数据",
+    "mcp.field.env": "环境变量 {name}",
+    "mcp.field.header": "请求头 {name}",
+    "mcp.field.oauthClientSecret": "oauth.clientSecret",
+    "mcp.server.sendsVariables": "每次连接都会把运行 Pi Web 的计算机上的环境变量发送给此服务器：",
+    "mcp.server.passesVariables": "会把运行 Pi Web 的计算机上的环境变量传给它启动的命令：",
+    "mcp.server.overridesGlobal": "此项目受信任时，只更改你的同名全局服务器的 {keys}。",
+    "mcp.server.overridesGlobalNothing": "指向你的同名全局服务器，但没有更改 enabled、exposure 或 toolExposure。",
   },
 };

@@ -928,5 +928,12 @@ export const enLocale: LocalePlugin = {
     "usageStats.balanceTrend.empty": "No balance data to chart",
     "usageStats.rank.cost": "Cost",
     "usageStats.table.empty": "No data",
+    "mcp.field.env": "env {name}",
+    "mcp.field.header": "header {name}",
+    "mcp.field.oauthClientSecret": "oauth.clientSecret",
+    "mcp.server.sendsVariables": "Sends environment variables of the computer running Pi Web to this server on every connection:",
+    "mcp.server.passesVariables": "Passes environment variables of the computer running Pi Web to the command it starts:",
+    "mcp.server.overridesGlobal": "Changes only {keys} of your global server of the same name while this project is trusted.",
+    "mcp.server.overridesGlobalNothing": "Names your global server of the same name, but changes none of enabled, exposure and toolExposure.",
   },
 };
