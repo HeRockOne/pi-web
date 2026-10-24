@@ -2687,3 +2687,360 @@
 .usage-stats-hour-legend .usage-stats-legend-dot.is-plain {
   background: var(--text-muted);
 }
+
+
+/* --- Settings › MCP (components/McpConfig.tsx) --- */
+
+
+.config-sidebar-group-label-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.config-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(96px, 130px) minmax(0, 1fr);
+  gap: 9px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+
+.config-detail-grid-label {
+  color: var(--text-dim);
+}
+
+
+.config-detail-grid-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+
+.config-detail-grid-value.is-muted {
+  color: var(--text-muted);
+}
+
+
+.config-detail-grid-value.is-dim {
+  color: var(--text-dim);
+}
+
+
+.config-detail-grid-value.is-error {
+  color: #ef4444;
+}
+
+
+.config-detail-grid-value.is-mono {
+  font-family: var(--font-mono);
+}
+
+.mcp-sidebar-badge {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.mcp-sidebar-badge.is-warning {
+  color: #d97706;
+}
+
+
+.mcp-sidebar-badge.is-error {
+  color: #ef4444;
+}
+
+
+.mcp-sidebar-group-empty {
+  padding: 1px 8px 5px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mcp-config-notices {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+
+@media (max-width: 640px) {
+  .mcp-config-notices {
+    max-height: 30vh;
+    max-height: 30dvh;
+  }
+
+  /* Short of height, the 190px sidebar gives way to a few rows before the detail pane is clipped. */
+  .mcp-config-notices + .config-split-view > .config-sidebar {
+    flex-shrink: 1;
+    min-height: 96px;
+  }
+
+  .mcp-config-notices + .config-split-view > .config-detail {
+    min-height: 120px;
+  }
+}
+
+
+.mcp-config-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+
+.mcp-config-line {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+
+.mcp-config-line.is-warning {
+  color: #d97706;
+}
+
+.mcp-config-line.is-dim {
+  color: var(--text-dim);
+}
+
+
+.mcp-config-line.is-error {
+  color: #ef4444;
+}
+
+
+.mcp-config-state {
+  color: var(--text);
+  font-weight: 600;
+}
+
+
+.mcp-config-state.is-on {
+  color: var(--accent);
+}
+
+
+.mcp-config-state.is-off {
+  color: var(--text-dim);
+}
+
+
+.mcp-config-state.is-warning {
+  color: #d97706;
+}
+
+
+.mcp-config-state.is-error {
+  color: #ef4444;
+}
+
+
+.mcp-config-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+   the pane, whether in a chip or a row of its own (.mcp-config-code). */
+
+.mcp-config-chip {
+  max-width: 100%;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mcp-test-output {
+  max-width: 100%;
+  max-height: 160px;
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+
+.config-detail-grid-value.mcp-config-code {
+  font-size: 11px;
+}
+
+.mcp-test-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+
+.mcp-test-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+
+.mcp-test-tool-tag {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.mcp-sign-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mcp-codemode-budget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+
+/* Two classes: it reuses .mcp-add-input, which comes later and takes the pane's width. */
+
+.mcp-add-input.mcp-codemode-budget-input {
+  width: 96px;
+  flex-shrink: 0;
+}
+
+.mcp-exposure-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+
+/* Its options are words, not literal text: the interface font, not .mcp-add-input's mono. */
+
+.mcp-add-input.mcp-exposure-select {
+  width: auto;
+  max-width: 100%;
+  font-family: inherit;
+}
+
+.mcp-add-input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+
+select.mcp-add-input {
+  appearance: none;
+  padding-right: 30px;
+  background-image:
+    linear-gradient(45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%),
+    linear-gradient(-45deg, transparent 40%, var(--text-dim) 40%, var(--text-dim) 60%, transparent 60%);
+  background-size: 5px 5px;
+  background-position: right 15px center, right 10px center;
+  background-repeat: no-repeat;
+}
+
+
+.mcp-add-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+
+.mcp-add-toggle input {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+
+.mcp-add-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+
+.mcp-add-note {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+
+.mcp-add-note.is-warning {
+  color: #d97706;
+}
+
+
+.mcp-add-note.is-error {
+  color: #ef4444;
+}
+
+
+.mcp-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+
+.mcp-add-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}

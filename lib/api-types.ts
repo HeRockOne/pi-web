@@ -425,3 +425,392 @@ export interface McpSessionStatus {
 
 /** A server's last known connection state: the newest of a test (`origin: "test"`) and an open session's report. */
 export type McpServerStatus = ({ origin: "test" } & McpTestResult) | McpSessionStatus;
+
+// --- Code mode settings (ADR 0006), shared by the tools settings and Settings › MCP ---
+
+/** Code mode's one choice (ADR 0006): Automatic writes nothing, Always on adds `+codemode` to the global defaultTools. */
+export type McpCodemodePreference = "automatic" | "always";
+
+/** One settings layer's `codemode.inlineBudget`, as the codemode extension reads it. */
+export interface CodemodeInlineBudgetSetting {
+  /** The budget sessions use; absent when unset or ignored, which gives them pi's default. */
+  value?: number;
+  /** A value pi ignores (not a finite number of 0 or more), as shortened JSON. */
+  invalid?: string;
+}
+
+/**
+ * pi's `codemode.mode`: how the codemode tool presents the other tools while
+ * it is active. "on" (pi's default) keeps them declared; "only" hides the
+ * active `direct` ones (built-in, extension and direct MCP tools) from the
+ * model and lists them in the codemode description, so scripts call them.
+ */
+export type CodemodeMode = "on" | "only";
+
+/** One settings layer's `codemode.mode`, as the codemode extension reads it. */
+export interface CodemodeModeSetting {
+  /** The mode sessions get: "only" when set to exactly that, else "on". */
+  value: CodemodeMode;
+  /** A value that is neither mode, which pi reads as "on", as shortened JSON. */
+  invalid?: string;
+}
+
+export interface ToolSettingsResponse {
+  isWindows: boolean;
+  powerShellEnabled: boolean;
+  /** "always" when the global defaultTools starts sessions with codemode active (ADR 0006). */
+  codemode: McpCodemodePreference;
+  /** The global `codemode.mode`. */
+  codemodeMode: CodemodeModeSetting;
+  /** The global `codemode.inlineBudget`. */
+  codemodeInlineBudget: CodemodeInlineBudgetSetting;
+}
+
+// --- GET /api/mcp ---
+
+export type McpUnavailableReason = "operator-disabled" | "internals-unavailable" | "builtin-disabled";
+
+export type McpAvailability =
+  | { available: true }
+  | {
+      available: false;
+      reason: McpUnavailableReason;
+      error: string;
+      /** internals-unavailable: what failed to load. */
+      detail?: string;
+      /** builtin-disabled: the settings file whose `extensions` entry turns it off. */
+      settingsPath?: string;
+    };
+
+export type CodemodeSandboxStatus =
+  /** No normal session has started since the server did, so the self-test has not run. */
+  | { state: "not-checked" }
+  | { state: "available" }
+  | { state: "unavailable"; error: string };
+
+export interface McpCodemodeInfo {
+  /** Absent when the global settings file cannot be read; see `preferenceError`. */
+  preference?: McpCodemodePreference;
+  preferenceError?: string;
+  sandbox: CodemodeSandboxStatus;
+  /** `-builtin:codemode` (or a pattern matching it) in the global or a trusted project's `extensions`. */
+  builtinDisabled: boolean;
+  builtinSettingsPath?: string;
+  /**
+   * The global settings file, when its `extensions` alone turn Code mode off,
+   * whatever a project says. Always on writes the global `defaultTools`, which
+   * every project's sessions read, so it is weighed against this rather than
+   * `builtinDisabled`, which a trusted project's own list can change either way.
+   */
+  globalBuiltinSettingsPath?: string;
+  /**
+   * A trusted project whose `.pi/settings.json` `defaultTools` decides Code
+   * mode for its sessions whatever the global choice (a plain list, or a
+   * `+codemode` / `-codemode` modifier): `preference` is what its sessions get.
+   * Only read with a cwd whose project settings sessions load.
+   */
+  projectOverride?: McpCodemodeProjectOverride;
+  /**
+   * `codemode.mode`: whether active built-in and extension tools stay
+   * declared while Code mode is on, or are reached only from scripts. Absent
+   * when the global settings file cannot be read; see `modeError`.
+   */
+  mode?: McpCodemodeMode;
+  modeError?: string;
+  /**
+   * `codemode.inlineBudget`: the estimated tokens (characters / 4) the
+   * codemode tool's description may spend on tool declarations. Absent when
+   * the global settings file cannot be read; see `inlineBudgetError`.
+   */
+  inlineBudget?: McpCodemodeInlineBudget;
+  inlineBudgetError?: string;
+}
+
+export interface McpCodemodeMode extends CodemodeModeSetting {
+  /** The global settings file the mode is read from and saved to. */
+  settingsPath: string;
+  /**
+   * A trusted project whose `.pi/settings.json` sets the mode its sessions get
+   * whatever the global value: its `codemode.mode`, or a `codemode` that is
+   * not an object, which leaves them "on".
+   */
+  projectOverride?: CodemodeModeSetting & { settingsPath: string };
+}
+
+export interface McpCodemodeInlineBudget extends CodemodeInlineBudgetSetting {
+  /** The global settings file the value is read from and saved to. */
+  settingsPath: string;
+  /** pi's default, which sessions use while nothing usable is set. */
+  default: number;
+  /** The largest budget `PUT /api/tools/settings` saves. */
+  max: number;
+  /**
+   * A trusted project whose `.pi/settings.json` sets the budget its sessions
+   * get whatever the global value: its `codemode.inlineBudget`, or a
+   * `codemode` that is not an object, which leaves them the default.
+   */
+  projectOverride?: CodemodeInlineBudgetSetting & { settingsPath: string };
+}
+
+export interface McpCodemodeProjectOverride {
+  /** The project's `.pi/settings.json`. */
+  settingsPath: string;
+  /** "always" when its sessions start with `codemode` active, "automatic" when they start without it. */
+  preference: McpCodemodePreference;
+}
+
+export interface McpProjectInfo {
+  cwd: string;
+  /** Absent when `trust.json` cannot be read; the project then counts as untrusted. */
+  trust?: ProjectTrustStatus;
+  trustError?: string;
+}
+
+export interface McpResponse {
+  mcp: McpAvailability;
+  codemode: McpCodemodeInfo;
+  /**
+   * Present when `-builtin:tool-search` (or a pattern matching it), in the
+   * global or a trusted project's `extensions`, turns tool search off, so
+   * `deferred` tools are reached only from Code mode scripts.
+   */
+  toolSearchDisabled?: { settingsPath?: string };
+  /** The global file, then the project file when a cwd was given. */
+  files: McpConfigFileInfo[];
+  /** Global entries, then project entries, each in file order. */
+  servers: McpServerInfo[];
+  project?: McpProjectInfo;
+  /**
+   * A session whose `/mcp` command belongs to another extension, so Pi Web's
+   * MCP host is inactive for it. Recorded by sessions' status writers (the
+   * later MCP slice wires the writer); the overview only reports what it holds.
+   */
+  hostInactive?: McpHostInactiveInfo;
+}
+
+/**
+ * Why a route refused a request: `/api/mcp`, `/api/mcp/test` or
+ * `/api/tools/settings`. Each code is described by its condition, not by the
+ * route that added it first, since several routes share most of them; the
+ * status a route answers with is noted where routes differ.
+ */
+export type McpRefusalReason =
+  /** `cwd` is empty or not an absolute path. */
+  | "cwd-invalid"
+  /** `cwd` is outside the folders Pi Web may read, has a `..` segment, or does not exist. */
+  | "cwd-denied"
+  /** `cwd` is not a directory (anymore). */
+  | "cwd-not-directory"
+  /** A mutating request that did not come from Pi Web's own page (origin or host check). */
+  | "request-denied"
+  /** A mutating request whose body is not sent as JSON. */
+  | "content-type"
+  /** `trust.json` cannot be read, or is locked by another process: 500 from `GET /api/project-trust`, 409 from writes, add, Test and sign-in. */
+  | "trust-unreadable"
+  /** The project has no resources that need trust (anymore), so there is nothing to trust (`/api/project-trust`). */
+  | "trust-not-required"
+  /** A session in the folder is running, and trusting would rebuild it mid-run (`/api/project-trust`). */
+  | "session-busy"
+  /** The body is not a request the route can act on. */
+  | "invalid-request"
+  /** MCP is off on this server (`PI_WEB_DISABLE_MCP`, or the SDK's MCP modules cannot load), so Pi Web neither writes `mcp.json` nor connects a server. */
+  | "mcp-off"
+  /** A project entry, and no decision trusts the project, so its `.pi/mcp.json` is neither written nor connected. */
+  | "project-untrusted"
+  /** The file to write is not JSON; it was left as it is (`path`). */
+  | "unparsable"
+  /** The file to write is not an object with an `mcpServers` object; left as it is (`path`). */
+  | "invalid-shape"
+  /** The file does not define the server (anymore) (`path`, `name`). */
+  | "server-missing"
+  /** The entry is not a JSON object, so it cannot be switched on or off, only removed (`path`, `name`). */
+  | "entry-not-object"
+  /** The entry references `PI_WEB_PASSWORD`, so Pi Web does not turn it on, add, test or sign in to it (`name`). */
+  | "web-password"
+  /** The SDK's validator refuses the entry (`name`; `error` is the validator's message, which names fields, never values). */
+  | "server-invalid"
+  /** The undo token is unknown, used, or past its 60 seconds. */
+  | "undo-unavailable"
+  /** Undo would put back a name the file defines again since the removal (`name`). */
+  | "undo-name-taken"
+  /** The file already defines a server of that name (`name`; `path` when the writer found it under the lock; `suggestedName` on add). */
+  | "name-taken"
+  /** A project file that is a symbolic link to nothing (`path`). */
+  | "link-dangling"
+  /** A project file whose real path is outside the folders Pi Web may read (`path`). */
+  | "link-outside"
+  /** The path is not a regular file (`path`). */
+  | "not-a-file"
+  /** A project file larger than 1 MiB (`path`). */
+  | "too-large"
+  /** A project file that declares more than 200 servers, which Pi Web neither lists nor acts on (`path`). */
+  | "too-many-servers"
+  /** Another process held the file's lock for longer than the writer waits (`path`). */
+  | "locked"
+  /** Sign-in or sign-out of a server that does not use OAuth: only an HTTP server without an `Authorization` header does (`name`). */
+  | "sign-in-not-oauth"
+  /** No sign-in has that id: it ended over a minute ago, or Pi Web restarted (`/api/mcp/sign-in/[flowId]`). */
+  | "sign-in-unknown"
+  /** The sign-in is not waiting for a redirected address: not yet, or not anymore. */
+  | "sign-in-not-waiting"
+  /** The pasted text is not a URL. The sign-in keeps waiting. */
+  | "redirect-invalid"
+  /** The pasted URL's `state` is not this sign-in's: it belongs to another one. The sign-in keeps waiting. */
+  | "redirect-state-mismatch"
+  /** The pasted URL carries no authorization `code`. The sign-in keeps waiting. */
+  | "redirect-no-code"
+  /** The pasted URL is the authorization server's refusal (`error`); `error` holds its description. The sign-in keeps waiting. */
+  | "redirect-denied"
+  /** `add`: nothing in the pasted text could be read as a server (`notes`). */
+  | "import-failed"
+  /** `add`: a value the paste left to fill in is missing or invalid (`notes`). */
+  | "fields-incomplete"
+  /** `add`: the name is not one pi accepts (letters, digits, `_` and `-`) (`name`). */
+  | "name-invalid"
+  /** `add`: the server holds a literal secret (`fields`), so it is saved only in the global `mcp.json`. */
+  | "secret-global-only"
+  /** `add`: the server sends variables of the Pi Web host to a remote party (`names`); the request must confirm them. */
+  | "host-env-confirm"
+  /** `add` with `trustFolder`: the folder is no longer fresh (a decision, or resources that need one), so it was not trusted (`trust`). */
+  | "folder-not-fresh"
+  /** `add` with `trustFolder`: trusting the folder would trust more than it (`breadth`), so Pi Web does not do it by itself. */
+  | "trust-too-broad"
+  /** Reading failed unexpectedly; `error` says how. */
+  | "internal";
+
+export interface McpErrorResponse {
+  error: string;
+  reason: McpRefusalReason;
+  /** The configured path of the file a write refusal is about. */
+  path?: string;
+  /** The server a refusal is about. */
+  name?: string;
+  /** `name-taken` on add: a name the file does not define yet. */
+  suggestedName?: string;
+  /** `import-failed`, `fields-incomplete`: why, as the importer's notes (`lib/mcp-import.ts`). */
+  notes?: unknown[];
+  /** `host-env-confirm`: the host variables the server would be sent. */
+  names?: string[];
+  /** `secret-global-only`: where the literal secrets are (`env.API_KEY`, `headers.Authorization`, `url`). */
+  fields?: string[];
+  /** `folder-not-fresh`, and a write that failed after trusting: the folder's trust now, when it could be read. */
+  trust?: ProjectTrustStatus;
+  /** `trust-too-broad`: how broad the folder the add step refused is. */
+  breadth?: FreshFolderTrustBreadth;
+  /** A write that would have needed trust found the folder trusted already. */
+  trustKept?: true;
+}
+
+/** What `POST /api/mcp` can do to a server of either file (ADR 0006). */
+export type McpServerAction = "enable" | "disable" | "remove" | "undo" | "set-enabled" | "sign-out" | "add";
+
+export interface McpServerRef {
+  scope: McpScope;
+  name: string;
+}
+
+/**
+ * The browser's handle on a removal it may undo: the token, never the entry,
+ * which stays on the server and may hold literal secrets.
+ */
+export interface McpUndoInfo extends McpServerRef {
+  token: string;
+  /** The configured path it was removed from. */
+  path: string;
+  /** How long the undo stays possible from when the response was sent, in milliseconds. */
+  expiresInMs: number;
+}
+
+/** One server of a bulk `set-enabled`: no `reason` means it now says what was asked. */
+export interface McpActionItemResult extends McpServerRef {
+  error?: string;
+  reason?: McpRefusalReason;
+}
+
+/** `POST /api/mcp`: the overview read after the change, as GET returns it, plus what the action adds. */
+export interface McpActionResponse extends McpResponse {
+  /** `remove`: how to undo it. */
+  undo?: McpUndoInfo;
+  /** `undo`: the server put back. */
+  restored?: McpServerRef;
+  /** `set-enabled`: one result per server asked for, in request order. */
+  results?: McpActionItemResult[];
+  /** `sign-out`: the server signed out of, and whether `mcp-auth.json` held anything for its URL. */
+  signedOut?: McpServerRef & { removed: boolean };
+  /** `add`: the server written, and the configured path of its file. */
+  added?: McpServerRef & { path: string };
+  /** `add` to a project: the folder's trust after the write (it requires trust once `.pi/mcp.json` exists), for the page's trust status. */
+  trust?: ProjectTrustStatus;
+  /** `add`: the write trusted a fresh folder in the same step (a later MCP slice ports that step). */
+  trustedFolder?: true;
+}
+
+/**
+ * Where a Settings sign-in stands (`lib/mcp-sign-in.ts`, the later MCP phase-2
+ * slices), as `pi mcp login` runs it: `connecting`, `starting`, `authorize`,
+ * `finishing`, then `done` | `failed` | `cancelled` | `expired`.
+ */
+export type McpSignInPhase = "connecting" | "starting" | "authorize" | "finishing" | "done" | "failed" | "cancelled" | "expired";
+
+/** Why a sign-in ended `failed`. */
+export type McpSignInFailure =
+  | "connect-failed"
+  | "queue-timed-out"
+  | "sign-in-failed"
+  | "internal";
+
+/** `/api/mcp/sign-in`: one sign-in, as the browser polls it. */
+export interface McpSignInFlowInfo extends McpServerRef {
+  flowId: string;
+  /** The `configKey` of the entry the sign-in read; another entry of the same URL joins it. */
+  configKey: string;
+  phase: McpSignInPhase;
+  /** `authorize`: the sign-in page to open. */
+  authorizationUrl?: string;
+  /** `authorize`: where the browser is sent back, Pi Web's loopback listener. */
+  redirectUrl?: string;
+  /** How long the sign-in still waits, in milliseconds; 0 once it ended. */
+  expiresInMs: number;
+  /** `done`: the first connection worked, so no sign-in was needed. */
+  alreadySignedIn?: true;
+  /** `done`: the SDK renewed the tokens with the stored refresh token. */
+  refreshed?: true;
+  /** `done`: what connecting with the new tokens found; `connect-failed`: what the first connection found. */
+  result?: McpTestResult;
+  failure?: McpSignInFailure;
+  /** `failed`: the SDK's words, masked; at most 2,000 characters. */
+  error?: string;
+  /** In `POST /api/mcp/sign-in`'s answer only: the start joined this sign-in, already under way for the same URL. */
+  joined?: true;
+}
+
+/** `POST /api/mcp/test`: which entry was tested, as the file held it, and what the test found. */
+export interface McpTestResponse extends McpServerRef {
+  /** The `configKey` of the entry the test read; the result belongs to that entry only. */
+  configKey: string;
+  result: McpTestResult;
+}
+
+/**
+ * How broad a folder considered for trusting in the same step as a write is
+ * (the later MCP slice that ports the add step): trust granted here would
+ * reach everything under it.
+ */
+export interface FreshFolderTrustBreadth {
+  kind: "home" | "root" | "contains-home" | "contains-agent-dir" | "contains-folder" | "contains-project" | "too-many-folders";
+  path: string;
+}
+
+/**
+ * An open session whose MCP host hands no server to the SDK, because the
+ * session's `/mcp` command comes from another extension than Pi's built-in
+ * MCP extension (which may then connect them its own way). Only a session can
+ * tell: it takes loading the extensions.
+ */
+export interface McpHostInactiveInfo {
+  /** The extension the `/mcp` command comes from. */
+  owner: string;
+  /** The session's folder. */
+  cwd: string;
+  updatedAt: number;
+}

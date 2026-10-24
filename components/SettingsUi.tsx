@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useId, useRef } from "react";
-import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, HTMLAttributes, ReactNode, Ref } from "react";
 
 type ConfigButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type ConfigButtonSize = "small" | "default";
@@ -82,8 +82,13 @@ export function ConfigSidebarList({ children }: { children: ReactNode }) {
   return <div className="config-sidebar-list">{children}</div>;
 }
 
-export function ConfigSidebarGroupLabel({ children }: { children: ReactNode }) {
-  return <div className="config-sidebar-group-label">{children}</div>;
+export function ConfigSidebarGroupLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="config-sidebar-group-label">
+      <span className="config-sidebar-group-label-text">{children}</span>
+      {aside}
+    </div>
+  );
 }
 
 export function ConfigSidebarGroupSwitch({
@@ -138,7 +143,7 @@ export function ConfigSidebarItem({
   className,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
       type="button"
@@ -694,7 +699,7 @@ export function ConfigButton({
   className,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ConfigButtonVariant; size?: ConfigButtonSize }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ConfigButtonVariant; size?: ConfigButtonSize; ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
       type="button"
@@ -731,7 +736,7 @@ export function ConfigSwitch({ checked, disabled = false, loading = false, label
   );
 }
 
-export function ConfigListAction({ active = false, children, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+export function ConfigListAction({ active = false, children, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; ref?: Ref<HTMLButtonElement> }) {
   return (
     <div className="config-list-action">
       <button

@@ -3254,6 +3254,11 @@ export function AppShell() {
           setModelsRefreshKey((key) => key + 1);
         }}
         onSessionReloaded={() => setSessionKey((key) => key + 1)}
+        projectTrust={projectTrust}
+        onOpenTrustDialog={() => {
+          setProjectTrustError(null);
+          setProjectTrustDialogOpen(true);
+        }}
       />
     )}
     {projectTrustDialogOpen && projectTrustCwd && (
