@@ -1966,7 +1966,8 @@ export function AppShell() {
     const tokens = sessionStats?.tokens;
     const cost = sessionStats?.cost ?? 0;
     const costText = formatCostCompact(cost);
-    // Avg cache hit rate = cache reads / all input-class tokens (same formula as the stats panel).
+    // Cache hit rate = cache reads / all input-class tokens: the tokens weight each request, so
+    // a long cached conversation is not dragged down by short ones (same formula as the stats panel).
     // Capsule shows 1 decimal to stay compact; tooltip and the expanded panel keep 4.
     const hitDenominator = tokens ? tokens.cacheRead + tokens.cacheWrite + tokens.input : 0;
     const cacheHitRate = tokens && tokens.cacheRead + tokens.cacheWrite > 0 && hitDenominator > 0
@@ -2869,7 +2870,6 @@ export function AppShell() {
                     ];
                     const ctx = contextUsage ?? sessionStats.contextUsage;
                     const extraTokenRows = [
-                       ...(sessionStats.model ? [[translate("session.activeModel"), sessionStats.provider ? `${sessionStats.provider}/${sessionStats.model}` : sessionStats.model]] : []),
                        ...(sessionStats.cost > 0 ? [[translate("session.cost"), formatCost(sessionStats.cost)]] : []),
                        ...(providerBalance !== null ? [[translate("session.balance"), formatCostCompact(providerBalance) ?? formatCost(providerBalance)]] : []),
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatTokens(ctx.tokens) : "?"} / ${formatTokens(ctx.contextWindow)}${ctx.percent !== null ? ` (${ctx.percent.toFixed(1)}%)` : ""}`]] : []),
