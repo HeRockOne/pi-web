@@ -1,31 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Noto_Sans_Mono, Noto_Sans_SC } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./settings.css";
-
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-  display: "swap",
-});
-
-// CJK workhorse for the (mostly Chinese) UI — system YaHei/PingFang fallbacks
-// are what made the interface feel dated. preload must stay off for CJK in
-// next/font. Font fetch requires the proxy env (see .env.development).
-const notoSansSC = Noto_Sans_SC({
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-noto-sans",
-  display: "swap",
-  preload: false,
-});
-
-const notoSansMono = Noto_Sans_Mono({
-  subsets: ["latin", "cyrillic"],
-  variable: "--font-noto-mono",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Pi Web",
@@ -75,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" translate="no" className={`${geistSans.variable} ${notoSansSC.variable} ${notoSansMono.variable} notranslate`} suppressHydrationWarning>
+    <html lang="en" translate="no" className="notranslate" suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
         <script

@@ -1,5 +1,11 @@
 @import "@xterm/xterm/css/xterm.css";
 @import "tailwindcss";
+/* Self-hosted fonts (fontsource variable builds). next/font/google needed a
+   build-time Google Fonts fetch that Turbopack's fetcher cannot do on every
+   network; these ship in node_modules and bundle as local static assets. */
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/noto-sans-sc/wght.css";
+@import "@fontsource-variable/noto-sans-mono/wght.css";
 
 @theme {
   --color-bg: var(--bg);
@@ -20,6 +26,12 @@
 }
 
 :root {
+  /* Self-hosted font families (fontsource variable builds imported above).
+     Names mirror what next/font used to expose so var() consumers are unchanged. */
+  --font-geist-sans: 'Geist Variable';
+  --font-noto-sans: 'Noto Sans SC Variable';
+  --font-noto-mono: 'Noto Sans Mono Variable';
+
   /* Default palette = the built-in "codex" theme (lib/web-theme-types.ts).
      useWebTheme skips injecting CSS when that theme is active. */
   --bg: #ffffff;
