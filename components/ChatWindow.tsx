@@ -106,6 +106,8 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 }
 
 const CHAT_MINIMAP_WIDTH = 36;
+/** Phones get a tighter gutter so the column keeps most of its width. */
+const CHAT_COLUMN_PADDING_MOBILE = 12;
 const CHAT_COLUMN_PADDING = 16;
 /** Messages of the streaming turn kept on screen; earlier ones fold away. */
 const LIVE_TAIL_VISIBLE = 12;
@@ -1095,7 +1097,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
           className="scrollbar-subtle min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-gutter:stable]"
           style={{ visibility: pendingScrollRestore ? "hidden" : undefined }}
         >
-          <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
+          <div style={{ minWidth: 0, padding: `0 ${isMobile ? CHAT_COLUMN_PADDING_MOBILE : CHAT_COLUMN_PADDING}px` }}>
             <div ref={messageContentRef} onPointerUp={captureQuotedSelection} style={{ width: "100%", minWidth: 0, maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
             {(() => {
               let lastUserIdx = -1;

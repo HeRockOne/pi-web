@@ -21,6 +21,7 @@ import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { MorphChevron } from "./Icons";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
 import type {
   AgentMessage,
@@ -510,6 +511,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   const canFork = !!entryId && !!onFork;
   const copyTarget = commandText ?? content;
   const editTarget = commandText ? replaceUserMessageText(message, commandText) : message;
+  const isMobile = useIsMobile();
 
   const imageBlocksNode = imageBlocks.length > 0 && (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
@@ -552,7 +554,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: isMobile ? "94%" : "85%" }}>
         <div
           style={{
             flex: 1,
@@ -1521,9 +1523,13 @@ function PairedDiffResult({ diff }: {
 
 function SplitPatchView({ text }: { text: string }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const files = useMemo(() => parseUnifiedPatch(text), [text]);
   if (!files) return <PatchTextView text={text} />;
   const showFileHeaders = files.length > 1;
+  // Phones stack the before/after columns into one narrow column instead of
+  // squeezing two half-width diff panes side by side.
+  const gridColumns = isMobile ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(0, 1fr)";
 
   return (
     <div style={{ maxHeight: 560, overflowY: "auto", overflowX: "hidden", background: "var(--bg)" }}>
@@ -1542,7 +1548,7 @@ function SplitPatchView({ text }: { text: string }) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                gridTemplateColumns: gridColumns,
                 position: "sticky",
                 top: 0,
                 zIndex: 1,
@@ -1550,12 +1556,16 @@ function SplitPatchView({ text }: { text: string }) {
                 borderBottom: "1px solid var(--border)",
               }}
             >
-               <SplitDiffHeader title={file.oldPath || t("i18n.before")} side="left" />
-               <SplitDiffHeader title={file.newPath || t("i18n.after")} side="right" />
+               {isMobile
+                 ? <SplitDiffHeader title={file.newPath || file.oldPath || t("i18n.after")} side="right" />
+                 : <>
+                     <SplitDiffHeader title={file.oldPath || t("i18n.before")} side="left" />
+                     <SplitDiffHeader title={file.newPath || t("i18n.after")} side="right" />
+                   </>}
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: gridColumns }}>
             {file.rows.map((row, rowIndex) => {
               if (row.type === "hunk") {
                 return null;
