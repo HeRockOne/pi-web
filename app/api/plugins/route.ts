@@ -10,6 +10,7 @@ import {
   type ResolvedResource,
 } from "@earendil-works/pi-coding-agent";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { invalidateSkillsCache } from "@/lib/skills-service";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getProjectTrustStatus } from "@/lib/project-trust";
 import { isPluginSourceCheckable } from "@/lib/plugin-updates";
@@ -413,6 +414,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Unsupported action: ${body.action}` }, { status: 400 });
     }
 
+    // Package mutations change which skills exist; the loader snapshot cached
+    // for GET /api/skills is stale the moment this succeeds.
+    invalidateSkillsCache();
     return NextResponse.json(await readPlugins(body.cwd));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });

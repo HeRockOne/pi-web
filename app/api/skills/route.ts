@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { loadSkillsWithInstallInfo } from "@/lib/skills-service";
+import { invalidateSkillsCache, loadSkillsWithInstallInfo } from "@/lib/skills-service";
 import { setDisableModelInvocation } from "@/lib/skill-frontmatter";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 
@@ -64,6 +64,8 @@ export async function PATCH(req: Request) {
     for (const [filePath, content] of contents) {
       writeFileSync(filePath, setDisableModelInvocation(content, disableModelInvocation), "utf8");
     }
+    // The loader snapshot cached for GET is now stale — drop it.
+    invalidateSkillsCache();
     return NextResponse.json({ success: true, updated: contents.size });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
