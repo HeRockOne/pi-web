@@ -58,7 +58,8 @@ beforeEach(async () => {
   delete process.env.PI_WEB_DISABLE_MCP;
   clearMcpStatuses();
   await writeFile(globalPath, `${JSON.stringify({ mcpServers: globalServers }, null, 2)}\n`);
-  await writeFile(projectPath, `${JSON.stringify({ mcpServers: { repo: fixture({ TOKEN: `!touch ${marker} && echo ok` }) } }, null, 2)}\n`);
+  // Quoted, so a shell on Windows does not eat the backslashes of the temporary path.
+  await writeFile(projectPath, `${JSON.stringify({ mcpServers: { repo: fixture({ TOKEN: `!touch "${marker}" && echo ok` }) } }, null, 2)}\n`);
   await rm(marker, { force: true });
   store.set(cwd, null);
 });
