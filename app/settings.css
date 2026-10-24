@@ -2861,6 +2861,7 @@
   min-width: 0;
 }
 
+/* Literal text (names, a URL or command line, a path) is one mono size across
    the pane, whether in a chip or a row of its own (.mcp-config-code). */
 
 .mcp-config-chip {
