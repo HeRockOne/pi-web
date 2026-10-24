@@ -391,7 +391,7 @@ export const zhTWLocale: LocalePlugin = {
     "chat.toolCall": "次工具呼叫",
     "chat.toolCalls": "次工具呼叫",
     "chat.turnDuration": "耗時 {time}",
-    "chat.turnUsage": "本則回覆的用量",
+    "chat.turnUsage": "本輪用量",
     "chat.collapseProcess": "收起處理詳細資料",
     "chat.expandProcess": "展開處理詳細資料",
     "chat.filesWritten": "已變更的檔案",

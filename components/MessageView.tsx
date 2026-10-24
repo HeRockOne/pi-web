@@ -8,6 +8,7 @@ import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
 import { formatPercent, formatTokensExact } from "@/lib/usage-stats-format";
 import { formatTurnDuration } from "@/lib/turn-duration";
+import { totalTokens, usageTotals, type TurnUsage } from "@/lib/turn-usage";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -217,6 +218,12 @@ interface Props {
    * final answer carries it: the number describes the whole turn, not one step.
    */
   turnDurationMs?: number;
+  /**
+   * What the whole turn consumed, from lib/turn-usage — every response in it
+   * summed. Like turnDurationMs, only the final answer carries it; the per-message
+   * `message.usage` is the fallback for calls without a turn context.
+   */
+  turnUsage?: TurnUsage;
 }
 
 
@@ -226,22 +233,27 @@ function formatSeconds(seconds: number): string {
 }
 
 /**
- * What one assistant response consumed, as pi reports it: the uncached input,
- * the output, the prompt cache traffic and the cost. Ported from upstream
+ * What a turn consumed, as pi reports it: the uncached input, the output, the
+ * prompt cache traffic and the cost. Ported from upstream
  * (components/MessageView.tsx formatUsage) — the labels stay compact because
  * the line is a footnote under the answer.
  */
-function formatUsage(
-  usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } },
-  locale?: string,
-): string {
+function formatUsage(usage: TurnUsage, locale?: string): string {
   const parts: string[] = [];
   if (usage.input) parts.push(`${formatTokensExact(usage.input, locale)} in`);
   if (usage.output) parts.push(`${formatTokensExact(usage.output, locale)} out`);
   if (usage.cacheRead) parts.push(`${formatTokensExact(usage.cacheRead, locale)} cache R`);
   if (usage.cacheWrite) parts.push(`${formatTokensExact(usage.cacheWrite, locale)} cache W`);
-  if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
+  if (usage.costTotal) parts.push(`$${usage.costTotal.toFixed(4)}`);
   return parts.join(" · ");
+}
+
+/** Turn totals are rebuilt on every render, so memo compares them field by field. */
+function sameTurnUsage(a?: TurnUsage, b?: TurnUsage): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.input === b.input && a.output === b.output && a.cacheRead === b.cacheRead
+    && a.cacheWrite === b.cacheWrite && a.costTotal === b.costTotal;
 }
 
 export function getModelDisplayName(
@@ -309,12 +321,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes, turnDurationMs }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles, runActive, toolStartTimes, turnDurationMs, turnUsage }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} turnDurationMs={turnDurationMs} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} runActive={runActive} toolStartTimes={toolStartTimes} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} turnDurationMs={turnDurationMs} turnUsage={turnUsage} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -348,6 +360,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.prevTimestamp === next.prevTimestamp
     && prev.writtenFiles === next.writtenFiles
     && prev.turnDurationMs === next.turnDurationMs
+    && sameTurnUsage(prev.turnUsage, next.turnUsage)
     && prev.sessionId === next.sessionId;
 });
 
@@ -649,6 +662,7 @@ function AssistantMessageView({
   runActive,
   toolStartTimes,
   turnDurationMs,
+  turnUsage,
 }: {
   message: AssistantMessage;
   /** Streamed model output still growing — the streaming-phase live tick. */
@@ -668,8 +682,15 @@ function AssistantMessageView({
   searchBlock?: AssistantContentBlock;
   writtenFiles?: WrittenFile[];
   turnDurationMs?: number;
+  turnUsage?: TurnUsage;
 }) {
   const { t, locale } = useI18n();
+  // The footnote describes the turn, not the last response: every response in it is
+  // summed by lib/turn-usage, and a message rendered without a turn context falls
+  // back to its own usage.
+  const turnTotals = turnUsage ?? (message.usage ? usageTotals(message.usage) : undefined);
+  const usageLine = turnTotals ? formatUsage(turnTotals, locale) : "";
+  const usageTitle = turnTotals ? `${t("chat.turnUsage")} ${formatTokensExact(totalTokens(turnTotals), locale)} tok` : undefined;
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blockItems = useMemo(() => getDisplayableAssistantBlocks(message, { isStreaming })
     .map((block, originalIndex) => ({ block, originalIndex })), [message, isStreaming]);
@@ -936,12 +957,12 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {!isStreaming && message.usage && formatUsage(message.usage, locale) !== "" && (
+        {!isStreaming && usageLine !== "" && (
           <span
-            title={t("chat.turnUsage")}
+            title={usageTitle}
             style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
           >
-            {formatUsage(message.usage, locale)}
+            {usageLine}
           </span>
         )}
         {!isStreaming && turnDurationMs !== undefined && (

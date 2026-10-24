@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { TurnUsage } from "@/lib/turn-usage";
 import type { AskAnswer } from "@/lib/ask-types";
 import {
   EMPTY_ASK_DRAFT,
@@ -24,6 +25,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, isMessageGroupAnchor, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { getTurnDurationMs } from "@/lib/turn-duration";
+import { getTurnUsage } from "@/lib/turn-usage";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -1080,7 +1082,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
               };
 
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnDurationMs?: number } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnDurationMs?: number; turnUsage?: TurnUsage } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const prevAssistantEntryId =
                   msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
@@ -1126,6 +1128,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
                     writtenFiles={options.writtenFiles}
                     turnDurationMs={options.turnDurationMs}
+                    turnUsage={options.turnUsage}
                   />
                 );
                 if (!isVisible || currentRefIdx === undefined) return view;
@@ -1239,10 +1242,14 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   // a message without an entry id (the optimistic bubble) has no
                   // start time pi recorded, so it gets no duration.
                   const turnDurationMs = entryIds[userIdx] ? getTurnDurationMs(messages, userIdx, endIdx) : undefined;
+                  // The footnote is the round's invoice: every response in the turn
+                  // summed, not just the final answer's own usage.
+                  const turnUsage = entryIds[userIdx] ? getTurnUsage(messages, userIdx, endIdx) : undefined;
                   rendered.push(renderMessage(finalAssistantIdx, {
                     messageOverride: finalAnswerMessage,
                     writtenFiles,
                     turnDurationMs,
+                    turnUsage,
                   }));
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {

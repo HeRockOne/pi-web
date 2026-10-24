@@ -323,3 +323,31 @@ test("footnotes a finished answer with its tokens, cost and turn duration", () =
   assert.doesNotMatch(streaming, /1,200 in/);
   assert.doesNotMatch(streaming, /took 2m 5s/);
 });
+
+test("footnotes a turn with every response in it, not just the last one", () => {
+  const message = {
+    role: "assistant",
+    content: [{ type: "text", text: "done" }],
+    model: "deepseek-v4.1-flash",
+    provider: "opencode",
+    usage: {
+      input: 250,
+      output: 9,
+      cacheRead: 7000,
+      cacheWrite: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.0031 },
+    },
+  };
+  const turnUsage = { input: 1200, output: 70, cacheRead: 60000, cacheWrite: 5, costTotal: 0.04 };
+
+  const html = renderMessage(message, { turnUsage, turnDurationMs: 65000 });
+  assert.match(html, /1,200 in/);
+  assert.match(html, /70 out/);
+  assert.match(html, /60,000 cache R/);
+  assert.match(html, /5 cache W/);
+  assert.match(html, /\$0\.0400/);
+  // The turn's numbers replace the single response's, and the title carries the total.
+  assert.doesNotMatch(html, /250 in|9 out|7,000 cache R|\$0\.0031/);
+  assert.match(html, /Tokens this turn used 61,275 tok/);
+  assert.match(html, /took 1m 5s/);
+});
