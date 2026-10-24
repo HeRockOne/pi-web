@@ -6,7 +6,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
-import { formatPercent, formatTokens, formatTokensExact } from "@/lib/usage-stats-format";
+import { formatCost, formatPercent, formatTokens, formatTokensExact } from "@/lib/usage-stats-format";
 import { formatTurnDuration } from "@/lib/turn-duration";
 import { promptTokens, totalTokens, type TurnUsage } from "@/lib/turn-usage";
 import { useI18n } from "@/hooks/useI18n";
@@ -257,8 +257,8 @@ function DatabaseIcon({ size = 11 }: { size?: number }) {
 /**
  * What the whole turn consumed: a chip under the answer's footnote row that opens
  * the breakdown card (provider, cache hit rate, uncached input, cache read,
- * output). Only the turn's final answer gets one — intermediate responses report
- * their own share, which is not what a round cost.
+ * output, cost). Only the turn's final answer gets one — intermediate responses
+ * report their own share, which is not what a round cost.
  */
 function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provider: string; model: string }) {
   const { t, locale } = useI18n();
@@ -275,6 +275,8 @@ function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provi
     { label: t("chat.turnUsageInput"), value: `${formatTokensExact(usage.input, locale)} tok` },
     { label: t("chat.turnUsageCacheRead"), value: `${formatTokensExact(usage.cacheRead, locale)} tok` },
     { label: t("chat.turnUsageOutput"), value: `${formatTokensExact(usage.output, locale)} tok` },
+    // What the whole turn was billed: the sum of every response's cost in it.
+    { label: t("session.cost"), value: formatCost(usage.costTotal) },
   ];
 
   return (
