@@ -6,9 +6,9 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { ThinkingIcon } from "./ThinkingIcon";
 import { copyText } from "@/lib/clipboard";
-import { formatPercent, formatTokensExact } from "@/lib/usage-stats-format";
+import { formatPercent, formatTokens, formatTokensExact } from "@/lib/usage-stats-format";
 import { formatTurnDuration } from "@/lib/turn-duration";
-import { totalTokens, usageTotals, type TurnUsage } from "@/lib/turn-usage";
+import { promptTokens, totalTokens, type TurnUsage } from "@/lib/turn-usage";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, getThinkingPreview } from "@/lib/message-display";
@@ -232,20 +232,122 @@ function formatSeconds(seconds: number): string {
   return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
 }
 
+/** A cylinder, the way the usage card marks a stored quantity. */
+function DatabaseIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ flex: "0 0 auto" }}
+    >
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </svg>
+  );
+}
+
 /**
- * What a turn consumed, as pi reports it: the uncached input, the output, the
- * prompt cache traffic and the cost. Ported from upstream
- * (components/MessageView.tsx formatUsage) — the labels stay compact because
- * the line is a footnote under the answer.
+ * What the whole turn consumed: a chip under the answer's footnote row that opens
+ * the breakdown card (provider, cache hit rate, uncached input, cache read,
+ * output). Only the turn's final answer gets one — intermediate responses report
+ * their own share, which is not what a round cost.
  */
-function formatUsage(usage: TurnUsage, locale?: string): string {
-  const parts: string[] = [];
-  if (usage.input) parts.push(`${formatTokensExact(usage.input, locale)} in`);
-  if (usage.output) parts.push(`${formatTokensExact(usage.output, locale)} out`);
-  if (usage.cacheRead) parts.push(`${formatTokensExact(usage.cacheRead, locale)} cache R`);
-  if (usage.cacheWrite) parts.push(`${formatTokensExact(usage.cacheWrite, locale)} cache W`);
-  if (usage.costTotal) parts.push(`$${usage.costTotal.toFixed(4)}`);
-  return parts.join(" · ");
+function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provider: string; model: string }) {
+  const { t, locale } = useI18n();
+  // Hovering previews the card; a click pins it open so a touch screen (which has
+  // no hover) can reach it too. Leaving the chip always closes it.
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const open = hovered || pinned;
+  const prompt = promptTokens(usage);
+  const hitRate = prompt > 0 ? usage.cacheRead / prompt : null;
+  const rows: { label: string; value: string }[] = [
+    { label: t("chat.turnUsageProvider"), value: `${provider}/${model}` },
+    { label: t("chat.turnUsageCacheHit"), value: hitRate === null ? "—" : formatPercent(hitRate, 1) },
+    { label: t("chat.turnUsageInput"), value: `${formatTokensExact(usage.input, locale)} tok` },
+    { label: t("chat.turnUsageCacheRead"), value: `${formatTokensExact(usage.cacheRead, locale)} tok` },
+    { label: t("chat.turnUsageOutput"), value: `${formatTokensExact(usage.output, locale)} tok` },
+  ];
+
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", flex: "0 0 auto" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPinned(false);
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setPinned(true)}
+        title={t("chat.turnUsage")}
+        aria-label={t("chat.turnUsage")}
+        aria-expanded={open}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "1px 7px",
+          borderRadius: 999,
+          border: "1px solid var(--border)",
+          background: "transparent",
+          color: "var(--text-dim)",
+          fontSize: 11,
+          fontVariantNumeric: "tabular-nums",
+          whiteSpace: "nowrap",
+          cursor: "default",
+        }}
+      >
+        <DatabaseIcon />
+        {t("chat.turnUsageShort")} {formatTokens(totalTokens(usage), locale)} tok
+      </button>
+      {open && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: 0,
+            zIndex: 60,
+            minWidth: 252,
+            padding: "10px 12px",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            background: "var(--bg-panel)",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
+            color: "var(--text)",
+            fontSize: 12,
+            cursor: "default",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingBottom: 8 }}>
+            <DatabaseIcon size={13} />
+            <span style={{ flex: 1, color: "var(--text-dim)", whiteSpace: "nowrap" }}>{t("chat.turnUsage")}</span>
+            <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {formatTokensExact(totalTokens(usage), locale)} tok
+            </span>
+          </div>
+          <div style={{ height: 1, background: "var(--border)", margin: "0 -12px 8px" }} />
+          {rows.map((row) => (
+            <div key={row.label} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "2px 0" }}>
+              <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  );
 }
 
 /** Turn totals are rebuilt on every render, so memo compares them field by field. */
@@ -684,13 +786,7 @@ function AssistantMessageView({
   turnDurationMs?: number;
   turnUsage?: TurnUsage;
 }) {
-  const { t, locale } = useI18n();
-  // The footnote describes the turn, not the last response: every response in it is
-  // summed by lib/turn-usage, and a message rendered without a turn context falls
-  // back to its own usage.
-  const turnTotals = turnUsage ?? (message.usage ? usageTotals(message.usage) : undefined);
-  const usageLine = turnTotals ? formatUsage(turnTotals, locale) : "";
-  const usageTitle = turnTotals ? `${t("chat.turnUsage")} ${formatTokensExact(totalTokens(turnTotals), locale)} tok` : undefined;
+  const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blockItems = useMemo(() => getDisplayableAssistantBlocks(message, { isStreaming })
     .map((block, originalIndex) => ({ block, originalIndex })), [message, isStreaming]);
@@ -957,13 +1053,8 @@ function AssistantMessageView({
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
-        {!isStreaming && usageLine !== "" && (
-          <span
-            title={usageTitle}
-            style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
-          >
-            {usageLine}
-          </span>
+        {!isStreaming && turnUsage && (
+          <TurnUsageFootnote usage={turnUsage} provider={message.provider} model={message.model} />
         )}
         {!isStreaming && turnDurationMs !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
@@ -971,6 +1062,8 @@ function AssistantMessageView({
           </span>
         )}
         {message.usage && !isStreaming && (() => {
+          // This is one request's own hit rate: the share of this response's prompt
+          // that came from cache. The turn's token-weighted rate lives in the card.
           const hitTotal = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
           if (!(message.usage.cacheRead > 0) || hitTotal <= 0) return null;
           const rate = message.usage.cacheRead / hitTotal;

@@ -295,36 +295,7 @@ test("renders custom-message images as buttons that open a larger preview", () =
   assert.match(html, /<img[^>]+src="data:image\/png;base64,YWJj"/);
 });
 
-test("footnotes a finished answer with its tokens, cost and turn duration", () => {
-  const message = {
-    role: "assistant",
-    content: [{ type: "text", text: "done" }],
-    model: "deepseek-v4.1-flash",
-    provider: "opencode",
-    usage: {
-      input: 1200,
-      output: 34,
-      cacheRead: 50000,
-      cacheWrite: 7,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.0123 },
-    },
-  };
-
-  const html = renderMessage(message, { turnDurationMs: 125000 });
-  assert.match(html, /1,200 in/);
-  assert.match(html, /34 out/);
-  assert.match(html, /50,000 cache R/);
-  assert.match(html, /7 cache W/);
-  assert.match(html, /\$0\.0123/);
-  assert.match(html, /took 2m 5s/);
-
-  // While the answer streams there is no finished turn to footnote.
-  const streaming = renderMessage(message, { isStreaming: true, turnDurationMs: 125000 });
-  assert.doesNotMatch(streaming, /1,200 in/);
-  assert.doesNotMatch(streaming, /took 2m 5s/);
-});
-
-test("footnotes a turn with every response in it, not just the last one", () => {
+test("footnotes a finished answer with the turn's usage chip and its duration", () => {
   const message = {
     role: "assistant",
     content: [{ type: "text", text: "done" }],
@@ -338,16 +309,41 @@ test("footnotes a turn with every response in it, not just the last one", () => 
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.0031 },
     },
   };
+  // 1,200 + 70 + 60,000 + 5 = 61,275 tok for the whole turn.
   const turnUsage = { input: 1200, output: 70, cacheRead: 60000, cacheWrite: 5, costTotal: 0.04 };
 
-  const html = renderMessage(message, { turnUsage, turnDurationMs: 65000 });
-  assert.match(html, /1,200 in/);
-  assert.match(html, /70 out/);
-  assert.match(html, /60,000 cache R/);
-  assert.match(html, /5 cache W/);
-  assert.match(html, /\$0\.0400/);
-  // The turn's numbers replace the single response's, and the title carries the total.
-  assert.doesNotMatch(html, /250 in|9 out|7,000 cache R|\$0\.0031/);
-  assert.match(html, /Tokens this turn used 61,275 tok/);
+  const html = renderMessage(message, { turnUsage, turnDurationMs: 125000 });
+  assert.match(html, /Usage 61\.3K tok/);
+  assert.match(html, /took 2m 5s/);
+  // The chip is the turn's total; the breakdown lives in the card it opens.
+  assert.doesNotMatch(html, /250 in|9 out|7,000 cache R/);
+  // The dot stays this response's own hit rate (7,000/7,250 = 96.6%); the turn's
+  // token-weighted rate (60,000/61,205 = 98.0%) is what the card shows.
+  assert.match(html, /96\.6%/);
+  assert.doesNotMatch(html, /98\.0%/);
+
+  // While the answer streams there is no finished turn to footnote.
+  const streaming = renderMessage(message, { isStreaming: true, turnUsage, turnDurationMs: 125000 });
+  assert.doesNotMatch(streaming, /Usage 61\.3K tok/);
+  assert.doesNotMatch(streaming, /took 2m 5s/);
+});
+
+test("an intermediate response inside a turn gets no usage chip", () => {
+  const message = {
+    role: "assistant",
+    content: [{ type: "text", text: "working" }],
+    model: "deepseek-v4.1-flash",
+    provider: "opencode",
+    usage: {
+      input: 250,
+      output: 9,
+      cacheRead: 7000,
+      cacheWrite: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.0031 },
+    },
+  };
+
+  const html = renderMessage(message, { turnDurationMs: 65000 });
+  assert.doesNotMatch(html, /Usage [\d.]+[KMB]? tok/);
   assert.match(html, /took 1m 5s/);
 });
