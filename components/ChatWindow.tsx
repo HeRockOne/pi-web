@@ -157,7 +157,7 @@ function NewSessionUpdateLink({
         minWidth: 0,
         padding: "0 4px",
         background: "transparent",
-        borderRadius: 5,
+        borderRadius: "var(--radius-control, 6px)",
         color: "var(--accent)",
         fontSize: 12,
         fontWeight: 600,
@@ -1535,7 +1535,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
             overflowY: "auto",
             padding: quoteInputOpen ? 12 : 3,
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-control, 6px)",
             background: "var(--bg)",
             boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
           }}
@@ -1804,7 +1804,7 @@ function ExtensionDialog({
             width: "100%",
             padding: "10px 12px",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card-block, 8px)",
             background: "var(--bg)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
             color: "var(--text)",
@@ -1839,7 +1839,7 @@ function ExtensionDialog({
           display: "flex",
           flexDirection: "column",
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-card-block, 8px)",
           background: "var(--bg)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
           overflow: "hidden",
@@ -1866,7 +1866,7 @@ function ExtensionDialog({
               placeItems: "center",
               width: 28,
               height: 28,
-              borderRadius: 6,
+              borderRadius: "var(--radius-control, 6px)",
               border: "1px solid var(--border)",
               background: "var(--bg-panel)",
               color: "var(--text-muted)",
@@ -1911,7 +1911,7 @@ function ExtensionDialog({
                   style={{
                     width: "100%",
                     padding: "9px 10px",
-                    borderRadius: 7,
+                    borderRadius: "var(--radius-control, 6px)",
                     border: "1px solid var(--border)",
                     background: "var(--bg-panel)",
                     color: "var(--text)",
@@ -1942,7 +1942,7 @@ function ExtensionDialog({
               style={{
                 width: "100%",
                 padding: "9px 10px",
-                borderRadius: 7,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text)",
@@ -1963,7 +1963,7 @@ function ExtensionDialog({
                 width: "100%",
                 minHeight: 220,
                 padding: 10,
-                borderRadius: 7,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text)",
@@ -1983,7 +1983,7 @@ function ExtensionDialog({
             onClick={() => onRespond(request, { cancelled: true })}
             style={{
               padding: "6px 10px",
-              borderRadius: 6,
+              borderRadius: "var(--radius-control, 6px)",
               border: "1px solid var(--border)",
               background: "var(--bg)",
               color: "var(--text-muted)",
@@ -1997,7 +1997,7 @@ function ExtensionDialog({
               onClick={submitValue}
               style={{
                 padding: "6px 10px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
                 color: "#fff",
@@ -2011,7 +2011,7 @@ function ExtensionDialog({
               onClick={submitValue}
               style={{
                 padding: "6px 10px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
                 color: "#fff",
@@ -2155,7 +2155,7 @@ function AskDialog({
             width: "100%",
             padding: "10px 12px",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card-block, 8px)",
             background: "var(--bg)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
             color: "var(--text)",
@@ -2185,7 +2185,7 @@ function AskDialog({
             display: "flex",
             flexDirection: "column",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card-block, 8px)",
             background: "var(--bg)",
             boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
             overflow: "hidden",
@@ -2211,7 +2211,7 @@ function AskDialog({
                 placeItems: "center",
                 width: 28,
                 height: 28,
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text-muted)",
@@ -2238,7 +2238,7 @@ function AskDialog({
                     style={{
                       width: "100%",
                       padding: "9px 10px",
-                      borderRadius: 7,
+                      borderRadius: "var(--radius-control, 6px)",
                       border: selected ? "1px solid var(--accent)" : "1px solid var(--border)",
                       background: selected ? "var(--accent-soft, var(--bg-panel))" : "var(--bg-panel)",
                       color: "var(--text)",
@@ -2258,7 +2258,7 @@ function AskDialog({
                       <span style={{ flex: 1, minWidth: 0 }}>
                         {option.label}
                         {option.description && (
-                          <span style={{ display: "block", marginTop: 2, fontSize: 11.5, color: "var(--text-dim)", lineHeight: 1.5 }}>{option.description}</span>
+                          <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{option.description}</span>
                         )}
                       </span>
                     </span>
@@ -2279,10 +2279,10 @@ function AskDialog({
                           alignItems: "center",
                           gap: 8,
                           padding: "7px 9px",
-                          borderRadius: 7,
+                          borderRadius: "var(--radius-control, 6px)",
                           border: "1px solid var(--accent)",
                           background: "var(--bg-panel)",
-                          fontSize: 12.5,
+                          fontSize: 12,
                           color: "var(--text)",
                         }}
                       >
@@ -2325,7 +2325,7 @@ function AskDialog({
                       flex: 1,
                       minWidth: 0,
                       padding: "9px 10px",
-                      borderRadius: 7,
+                      borderRadius: "var(--radius-control, 6px)",
                       border: "1px solid var(--border)",
                       background: "var(--bg-panel)",
                       color: "var(--text)",
@@ -2339,7 +2339,7 @@ function AskDialog({
                     disabled={!noteDraft.trim()}
                     style={{
                       padding: "6px 10px",
-                      borderRadius: 6,
+                      borderRadius: "var(--radius-control, 6px)",
                       border: "1px solid var(--border)",
                       background: "var(--bg)",
                       color: noteDraft.trim() ? "var(--text)" : "var(--text-muted)",
@@ -2360,7 +2360,7 @@ function AskDialog({
                 onClick={goPrev}
                 style={{
                   padding: "6px 10px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-control, 6px)",
                   border: "1px solid var(--border)",
                   background: "var(--bg)",
                   color: "var(--text)",
@@ -2375,7 +2375,7 @@ function AskDialog({
                 onClick={() => setDrafts((current) => clearAskDraft(current, index))}
                 style={{
                   padding: "6px 10px",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-control, 6px)",
                   border: "1px solid var(--border)",
                   background: "var(--bg)",
                   color: "var(--text-muted)",
@@ -2391,7 +2391,7 @@ function AskDialog({
               onClick={() => onRespond(request, { cancelled: true })}
               style={{
                 padding: "6px 10px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg)",
                 color: "var(--text-muted)",
@@ -2404,7 +2404,7 @@ function AskDialog({
               onClick={goNext}
               style={{
                 padding: "6px 10px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
                 color: "#fff",
@@ -2467,7 +2467,7 @@ function ExtensionCustomPanel({
             width: "100%",
             padding: "10px 12px",
             border: "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card-block, 8px)",
             background: "var(--bg)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
             color: "var(--text)",
@@ -2504,7 +2504,7 @@ function ExtensionCustomPanel({
           display: "flex",
           flexDirection: "column",
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-card-block, 8px)",
           background: "var(--bg)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
           overflow: "hidden",
@@ -2573,7 +2573,7 @@ function ExtensionCustomPanel({
                 placeItems: "center",
                 width: 28,
                 height: 28,
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text-muted)",
@@ -2587,7 +2587,7 @@ function ExtensionCustomPanel({
               onClick={() => onInput(request, "\x03")}
               style={{
                 padding: "5px 9px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 border: "1px solid var(--border)",
                 background: "var(--bg-panel)",
                 color: "var(--text-muted)",

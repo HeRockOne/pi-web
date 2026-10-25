@@ -60,7 +60,7 @@ const inputStyle: CSSProperties = {
   height: 34,
   padding: "0 9px",
   border: "1px solid var(--border)",
-  borderRadius: 5,
+  borderRadius: "var(--radius-control, 6px)",
   background: "var(--bg)",
   color: "var(--text)",
   fontSize: 12,
@@ -511,7 +511,7 @@ export function AgentsConfig({
 
                   {creating && (
                     <Field label={t("agents.saveScope")}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, padding: 3, border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-panel)" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, padding: 3, border: "1px solid var(--border)", borderRadius: "var(--radius-control, 6px)", background: "var(--bg-panel)" }}>
                         {(["global", "project"] as const).map((scope) => (
                           <button
                             key={scope}
@@ -578,7 +578,7 @@ export function AgentsConfig({
                           variant="field"
                           placement="auto"
                         />
-                        {modelsError && <span style={{ color: "var(--err)", fontSize: 10 }}>{modelsError}</span>}
+                        {modelsError && <span style={{ color: "var(--err)", fontSize: 11 }}>{modelsError}</span>}
                       </div>
                     </Field>
                     <Field label={t("agents.thinking")}>

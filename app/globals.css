@@ -83,8 +83,10 @@
   --leading-tight: 1.35;
   --leading-normal: 1.6;
 
-  /* Radius scale: 6 control / 10 card / 14 overlay. */
+  /* Radius scale: 6 control / 8 block / 10 card / 14 overlay.
+     Every radius in the app resolves through one of these four tokens. */
   --radius-control: 6px;
+  --radius-card-block: 8px;
   --radius-card: 10px;
   --radius-overlay: 14px;
   --radius-pill: 999px;
@@ -293,7 +295,7 @@ button,
   flex-shrink: 0;
   padding: 0 8px;
   border: 1px solid #343a46;
-  border-radius: 5px;
+  border-radius: var(--radius-control, 6px);
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
@@ -732,7 +734,7 @@ pre, code {
 }
 .markdown-body blockquote {
   border-left: 3px solid color-mix(in srgb, var(--border) 75%, var(--text-muted));
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-control, 6px) var(--radius-control, 6px) 0;
   margin: 6px 0;
   padding: 6px 11px;
   background: var(--bg-subtle);
@@ -1020,7 +1022,7 @@ pre, code {
   height: 36px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control, 6px);
   background: var(--bg-panel);
   color: var(--text-muted);
   box-shadow: var(--shadow-sm);
@@ -1178,7 +1180,7 @@ pre, code {
   }
 
   .mermaid-zoom-title {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .mermaid-zoom-viewport {

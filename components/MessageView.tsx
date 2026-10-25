@@ -123,7 +123,7 @@ function SafeMarkdownBody({ children, className, ...props }: React.ComponentProp
           margin: "4px 0",
           padding: "7px 10px",
           border: "1px solid var(--border)",
-          borderRadius: 6,
+          borderRadius: "var(--radius-control, 6px)",
           background: "var(--bg-panel)",
           color: "var(--text-muted)",
           cursor: "pointer",
@@ -350,7 +350,7 @@ function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provi
             overflowY: "auto",
             padding: "10px 12px",
             border: "1px solid var(--border)",
-            borderRadius: 10,
+            borderRadius: "var(--radius-card, 10px)",
             background: "var(--bg-panel)",
             boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
             color: "var(--text)",
@@ -558,7 +558,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             <img
               src={src}
               alt=""
-              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: "var(--radius-control, 6px)", objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
             />
           </ImagePreview>
         );
@@ -587,7 +587,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             minWidth: 0,
             background: "var(--user-bg)",
             border: "1px solid color-mix(in srgb, var(--accent) 22%, transparent)",
-            borderRadius: 12,
+            borderRadius: "var(--radius-card, 10px)",
             boxShadow: "var(--shadow-sm)",
             padding: "8px 12px",
             fontSize: "calc(14px + var(--chat-font-size-offset, 0px))",
@@ -686,7 +686,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 display: "flex", alignItems: "center", gap: 4,
                 padding: "3px 8px", height: 22,
                 background: "none", border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-control, 6px)",
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 400,
@@ -724,7 +724,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     display: "flex", alignItems: "center", gap: 4,
                     padding: "3px 8px", height: 22,
                     background: "none", border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-control, 6px)",
                     color: "var(--text-dim)",
                     cursor: "pointer",
                     fontSize: 11, fontWeight: 400,
@@ -750,7 +750,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     display: "flex", alignItems: "center", gap: 4,
                     padding: "3px 8px", height: 22,
                     background: "none", border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-control, 6px)",
                     color: forking ? "var(--accent)" : "var(--text-dim)",
                     cursor: forking ? "not-allowed" : "pointer",
                     fontSize: 11, fontWeight: 400,
@@ -771,7 +771,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               )}
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
+          {time && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{time}</span>}
         </div>
       )}
     </div>
@@ -1026,7 +1026,7 @@ function AssistantMessageView({
       {isStreaming && (
       <div
         style={{
-          fontSize: 11.5,
+          fontSize: 12,
           color: "var(--text-dim)",
           marginBottom: 6,
           display: "flex",
@@ -1096,7 +1096,7 @@ function AssistantMessageView({
             marginTop: blocks.length > 0 ? 8 : 0,
             padding: "7px 10px",
             border: "1px solid color-mix(in srgb, var(--err) 30%, transparent)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-control, 6px)",
             background: "color-mix(in srgb, var(--err) 7%, transparent)",
             color: "var(--err)",
             fontFamily: "var(--font-mono)",
@@ -1133,7 +1133,7 @@ function AssistantMessageView({
               display: "flex", alignItems: "center", gap: 4,
               padding: "3px 8px", height: 22,
               background: "none", border: "none",
-              borderRadius: 5,
+              borderRadius: "var(--radius-control, 6px)",
               color: copied ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
               fontSize: 11, fontWeight: 400,
@@ -1159,7 +1159,7 @@ function AssistantMessageView({
           </button>
         )}
         {time && !isStreaming && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
+          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
         )}
       </div>
     </div>
@@ -1250,7 +1250,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0, flexWrap: "wrap",
-      borderRadius: 7,
+      borderRadius: "var(--radius-control, 6px)",
       padding: "4px 8px",
       fontFamily: "var(--font-mono)",
       fontSize: "calc(11px + var(--chat-font-size-offset, 0px))",
@@ -1415,7 +1415,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             padding: "4px 8px",
             background: expanded ? "var(--bg-subtle)" : "transparent",
             border: "none",
-            borderRadius: 7,
+            borderRadius: "var(--radius-control, 6px)",
             color: "var(--text-muted)",
             cursor: "pointer",
             fontSize: 12,
@@ -1461,7 +1461,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
           style={{
             margin: "2px 0 2px 4px",
             border: isError ? "1px solid color-mix(in srgb, var(--err) 35%, transparent)" : "1px solid var(--border)",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card-block, 8px)",
             overflow: "hidden",
             background: "var(--bg)",
           }}
@@ -1787,7 +1787,7 @@ function PairedResult({ text, images, isEmpty, isError }: {
                     display: "block",
                     maxWidth: "min(100%, 720px)",
                     maxHeight: 520,
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-control, 6px)",
                     objectFit: "contain",
                     border: "1px solid var(--border)",
                   }}
@@ -1832,7 +1832,7 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
       <div
         style={{
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-card-block, 8px)",
           overflow: "hidden",
           background: "var(--bg)",
         }}
@@ -1851,7 +1851,7 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
             compaction
           </span>
-          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
+          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 11 }}>{time}</span>}
         </div>
 
         <div style={{ padding: "11px 13px 12px" }}>
@@ -1929,7 +1929,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
       <div
         style={{
           border: "1px solid var(--border)",
-          borderRadius: 8,
+          borderRadius: "var(--radius-card-block, 8px)",
           overflow: "hidden",
           background: isHiddenDisplay ? "var(--bg-subtle)" : "var(--bg)",
           opacity: isHiddenDisplay && !contentExpanded ? 0.82 : 1,
@@ -1951,7 +1951,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             {title}
           </span>
            {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("i18n.hiddenExtensionMessage")}</span>}
-          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
+          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 11 }}>{time}</span>}
         </div>
 
         {contentExpanded ? (
@@ -1967,7 +1967,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                       <img
                         src={src}
                         alt=""
-                        style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+                        style={{ maxWidth: 240, maxHeight: 240, borderRadius: "var(--radius-control, 6px)", objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
                       />
                     </ImagePreview>
                   );

@@ -347,7 +347,7 @@ function AddSkillPanel({
               fontSize: 12,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-control, 6px)",
               color: "var(--text)",
               outline: "none",
             }}
@@ -366,7 +366,7 @@ function AddSkillPanel({
           <div
             style={{
               display: "flex",
-              borderRadius: 5,
+              borderRadius: "var(--radius-control, 6px)",
               border: "1px solid var(--border)",
               overflow: "hidden",
               fontSize: 12,

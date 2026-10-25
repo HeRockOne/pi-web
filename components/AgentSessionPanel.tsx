@@ -178,7 +178,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
         borderLeft: "1px solid var(--border)",
         borderRight: "1px solid var(--border)",
         borderBottom: "1px solid var(--border)",
-        borderRadius: "0 0 6px 6px",
+        borderRadius: "0 0 var(--radius-control, 6px) var(--radius-control, 6px)",
         boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
         overflow: "hidden",
       }}
@@ -205,7 +205,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
               aria-label={t("agentSwitcher.search")}
               style={{
                 width: "100%", height: 32, padding: "0 10px",
-                border: "1px solid var(--border)", borderRadius: 6,
+                border: "1px solid var(--border)", borderRadius: "var(--radius-control, 6px)",
                 background: "var(--bg)", color: "var(--text)", fontSize: 12, outline: "none",
               }}
             />

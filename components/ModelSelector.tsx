@@ -113,7 +113,7 @@ export function ModelSelector({
         padding: "0 9px",
         overflow: "hidden",
         border: "1px solid var(--border)",
-        borderRadius: 5,
+        borderRadius: "var(--radius-control, 6px)",
         background: locked ? "var(--bg-panel)" : "var(--bg)",
         color: locked ? "var(--text-dim)" : "var(--text)",
         cursor: locked ? "default" : "pointer",
@@ -131,7 +131,7 @@ export function ModelSelector({
         padding: isMobile ? "0 8px" : "0 10px",
         overflow: "hidden",
         border: "none",
-        borderRadius: 7,
+        borderRadius: "var(--radius-control, 6px)",
         background: open ? "var(--bg-hover)" : "none",
         color: "var(--text-muted)",
         cursor: locked ? "not-allowed" : "pointer",
@@ -243,7 +243,7 @@ export function ModelSelector({
               maxHeight,
               overflow: "hidden",
               border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
-              borderRadius: 12,
+              borderRadius: "var(--radius-card, 10px)",
               background: "var(--surface-2)",
               boxShadow: "var(--shadow-lg)",
             }}
@@ -264,7 +264,7 @@ export function ModelSelector({
                     minWidth: isMobile ? 0 : 220,
                     padding: "5px 8px",
                     border: "1px solid var(--border)",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-control, 6px)",
                     outline: "none",
                     background: "var(--bg)",
                     color: "var(--text)",
@@ -289,7 +289,7 @@ export function ModelSelector({
               ) : modelsByProvider.map((group, index) => (
                 <div key={group.provider}>
                   {modelsByProvider.length > 1 && (
-                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: 10, fontWeight: 600, letterSpacing: 0, textTransform: "uppercase" }}>
+                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: 11, fontWeight: 600, letterSpacing: 0, textTransform: "uppercase" }}>
                       {group.provider}
                     </div>
                   )}
@@ -318,7 +318,7 @@ function ModelOptionButton({ active, label, onClick }: { active: boolean; label:
       role="option"
       aria-selected={active}
       onClick={onClick}
-      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 12px", border: "none", borderRadius: 10, background: active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none", color: active ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontSize: 12, fontWeight: active ? 500 : 400, textAlign: "left", whiteSpace: "nowrap" }}
+      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 12px", border: "none", borderRadius: "var(--radius-card, 10px)", background: active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "none", color: active ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontSize: 12, fontWeight: active ? 500 : 400, textAlign: "left", whiteSpace: "nowrap" }}
       onMouseEnter={(event) => { if (!active) event.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(event) => { if (!active) event.currentTarget.style.background = "none"; }}
     >

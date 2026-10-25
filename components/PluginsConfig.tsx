@@ -144,7 +144,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
         >
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               color: "var(--text-dim)",
               textTransform: "uppercase",
@@ -171,7 +171,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: "var(--text-dim)",
                     fontFamily: "var(--font-mono)",
                     overflow: "hidden",
@@ -196,7 +196,7 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: 11,
         padding: "1px 5px",
         borderRadius: 3,
         flexShrink: 0,
@@ -224,7 +224,7 @@ function SegmentedScope({
       style={{
         display: "inline-flex",
         border: "1px solid var(--border)",
-        borderRadius: 7,
+        borderRadius: "var(--radius-control, 6px)",
         overflow: "hidden",
         height: 30,
       }}
@@ -343,7 +343,7 @@ function AddPluginPanel({
             height: 36,
             padding: "0 11px",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-control, 6px)",
             background: "var(--bg-panel)",
             color: "var(--text)",
             fontFamily: "var(--font-mono)",
@@ -388,7 +388,7 @@ function AddPluginPanel({
                 textAlign: "left",
                 padding: "6px 9px",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-control, 6px)",
                 background: "var(--bg-panel)",
                 color: "var(--text-dim)",
                 cursor: "pointer",
@@ -462,7 +462,7 @@ function PackageDetail({
           {pkg.disabled ? (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 padding: "1px 5px",
                 borderRadius: 3,
                 background: "rgba(120,120,120,0.12)",
@@ -474,7 +474,7 @@ function PackageDetail({
           ) : pkg.filtered && (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 padding: "1px 5px",
                 borderRadius: 3,
                 background: "rgba(245,158,11,0.12)",

@@ -1580,7 +1580,7 @@ export function AppShell() {
           style={{
             position: "absolute", top: 2, right: 2,
             minWidth: 13, height: 13, padding: "0 3px", display: "grid", placeItems: "center",
-            borderRadius: 7, background: "var(--accent)", color: "var(--bg-panel)",
+            borderRadius: "var(--radius-control, 6px)", background: "var(--accent)", color: "var(--bg-panel)",
             fontSize: 9, lineHeight: 1, fontVariantNumeric: "tabular-nums",
           }}
         >
@@ -1838,8 +1838,8 @@ export function AppShell() {
               aria-hidden="true"
               style={{
                 minWidth: 15, height: 15, padding: "0 4px", display: "grid", placeItems: "center",
-                borderRadius: 7, background: "var(--bg-selected)", color: "var(--accent)",
-                fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums",
+                borderRadius: "var(--radius-control, 6px)", background: "var(--bg-selected)", color: "var(--accent)",
+                fontSize: 11, lineHeight: 1, fontVariantNumeric: "tabular-nums",
                 ...(mobile ? { position: "absolute", top: 2, right: 2, minWidth: 13, height: 13, padding: "0 3px", fontSize: 9 } : {}),
               }}
             >
@@ -2044,7 +2044,7 @@ export function AppShell() {
           border: mobile
             ? "none"
             : `1px solid ${activeTopPanel === "session" ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)"}`,
-          fontSize: 11.5, color: "var(--text-muted)",
+          fontSize: 12, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
           transition: "color var(--motion-feedback), background var(--motion-feedback)",
@@ -2450,7 +2450,7 @@ export function AppShell() {
                     padding: 4,
                     background: "var(--bg-panel)",
                     border: "1px solid var(--border)",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-card-block, 8px)",
                     boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
                   }}
                 >
@@ -2491,8 +2491,8 @@ export function AppShell() {
                         aria-hidden="true"
                         style={{
                           minWidth: 15, height: 15, padding: "0 4px", display: "grid", placeItems: "center",
-                          borderRadius: 7, background: "var(--accent)", color: "var(--bg-panel)",
-                          fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums", flexShrink: 0,
+                          borderRadius: "var(--radius-control, 6px)", background: "var(--accent)", color: "var(--bg-panel)",
+                          fontSize: 11, lineHeight: 1, fontVariantNumeric: "tabular-nums", flexShrink: 0,
                         }}
                       >
                         {value}
@@ -2620,7 +2620,7 @@ export function AppShell() {
                       style={{
                         display: "flex", alignItems: "center",
                         width: "100%", height: 34, padding: "0 10px",
-                        border: "none", borderRadius: 10,
+                        border: "none", borderRadius: "var(--radius-card, 10px)",
                         background: locale === plugin.id ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
                         transition: "background var(--motion-feedback)",
@@ -2653,7 +2653,7 @@ export function AppShell() {
         style={{
           display: "flex", alignItems: "center", gap: 8,
           width: "100%", height: 34, padding: "0 10px",
-          border: "none", borderRadius: 10,
+          border: "none", borderRadius: "var(--radius-card, 10px)",
           background: opts.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
           color: opts.disabled ? "var(--text-dim)" : opts.active ? "var(--accent)" : "var(--text)",
           cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
@@ -2755,7 +2755,7 @@ export function AppShell() {
                           width: "100%", height: 32, padding: "0 10px",
                           borderRadius: "var(--radius-control, 6px)",
                           background: active ? "var(--bg-selected)" : "transparent",
-                          color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5,
+                          color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
                           transition: "background var(--motion-feedback)",
                         }}
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -2778,7 +2778,7 @@ export function AppShell() {
                         >
                           {session.name || session.firstMessage || session.id}
                         </span>
-                        <span style={{ fontSize: 10.5, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
+                        <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontFamily: "var(--font-mono)" }}>
                           {project}
                         </span>
                       </div>

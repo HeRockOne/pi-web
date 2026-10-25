@@ -81,7 +81,7 @@ export function CodemodeCallList({ calls, omitted, isError }: {
         background: "var(--bg-subtle)",
         padding: "6px 10px",
         fontFamily: "var(--font-mono)",
-        fontSize: "calc(11.5px + var(--chat-font-size-offset, 0px))",
+        fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
         lineHeight: 1.5,
         display: "flex",
         flexDirection: "column",

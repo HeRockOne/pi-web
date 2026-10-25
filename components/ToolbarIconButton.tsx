@@ -47,7 +47,7 @@ export function ToolbarIconButton({
         border: "none",
         color,
         cursor: disabled ? "default" : "pointer",
-        borderRadius: 5,
+        borderRadius: "var(--radius-control, 6px)",
         flexShrink: 0,
         opacity: disabled ? 0.6 : 1,
         transition: "color 0.3s, background 0.3s",

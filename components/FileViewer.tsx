@@ -1692,7 +1692,7 @@ function TextFileViewer({
         {editing ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             {editError && (
-              <div style={{ padding: "6px 14px", fontSize: 12.5, color: "var(--text-error)", borderBottom: "1px solid var(--border)", background: "var(--bg)", whiteSpace: "pre-wrap" }} role="alert">
+              <div style={{ padding: "6px 14px", fontSize: 12, color: "var(--text-error)", borderBottom: "1px solid var(--border)", background: "var(--bg)", whiteSpace: "pre-wrap" }} role="alert">
                 {t("files.editFailed", { error: editError })}
               </div>
             )}
@@ -1723,7 +1723,7 @@ function TextFileViewer({
               background: "var(--bg)",
               color: "var(--text)",
               fontFamily: "var(--font-mono)",
-              fontSize: 12.5,
+              fontSize: 12,
               lineHeight: 1.6,
               padding: "10px 14px",
               whiteSpace: "pre",

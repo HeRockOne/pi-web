@@ -67,7 +67,7 @@ test("all four settings sections use the shared list-detail layout", () => {
 test("all subpanel sidebars share one typography scale", () => {
   const sources = Object.fromEntries(configSources);
   assert.match(cssSource, /\.config-sidebar-text \{[\s\S]*?font-family: inherit[\s\S]*?font-size: 12px/);
-  assert.match(cssSource, /\.config-sidebar-group-label \{[\s\S]*?font-family: inherit[\s\S]*?font-size: 10px/);
+  assert.match(cssSource, /\.config-sidebar-group-label \{[\s\S]*?font-family: inherit[\s\S]*?font-size: 11px/);
   for (const source of Object.values(sources)) {
     assert.match(source, /<ConfigSidebarText/);
   }

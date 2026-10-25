@@ -422,7 +422,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
       <span
         style={{
           flexShrink: 0,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: "var(--font-mono)",
           padding: "1px 7px",
           borderRadius: 999,
@@ -451,7 +451,7 @@ function ModelNoticeBanner({ tone, title, body, onClose }: { tone: "error" | "wa
         padding: "7px 10px",
         overflowY: "auto",
         border: `1px solid rgba(${color},0.3)`,
-        borderRadius: 6,
+        borderRadius: "var(--radius-control, 6px)",
         background: `rgba(${color},0.07)`,
         color: `rgb(${color})`,
         fontSize: 11,
@@ -544,7 +544,7 @@ function controlRowStyle(active: boolean): React.CSSProperties {
     width: "100%",
     padding: "5px 8px",
     border: "none",
-    borderRadius: 7,
+    borderRadius: "var(--radius-control, 6px)",
     background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "none",
     color: active ? "var(--accent)" : "var(--text-muted)",
     cursor: "pointer",
@@ -569,7 +569,7 @@ function controlToggleRowStyle(on: boolean): React.CSSProperties {
     width: "100%",
     padding: "5px 8px 5px 25px",
     border: "none",
-    borderRadius: 7,
+    borderRadius: "var(--radius-control, 6px)",
     background: "none",
     color: on ? "var(--text)" : "var(--text-muted)",
     cursor: "pointer",
@@ -591,7 +591,7 @@ function controlActionRowStyle(): React.CSSProperties {
     width: "100%",
     padding: "5px 8px 5px 25px",
     border: "none",
-    borderRadius: 7,
+    borderRadius: "var(--radius-control, 6px)",
     background: "none",
     color: "var(--text-muted)",
     cursor: "pointer",
@@ -608,7 +608,7 @@ function controlActionRowStyle(): React.CSSProperties {
 function controlSectionLabelStyle(): React.CSSProperties {
   return {
     padding: "0 8px",
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: 600,
     letterSpacing: "0.6px",
     color: "var(--text-muted)",
@@ -1856,7 +1856,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{
             marginBottom: 8,
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-control, 6px)",
             background: "var(--bg-panel)",
             padding: "5px 0",
           }}>
@@ -1868,7 +1868,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               padding: "2px 8px 4px 10px",
             }}>
               <span style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontFamily: "var(--font-mono)",
                 color: "var(--text-dim)",
                 textTransform: "uppercase",
@@ -1889,7 +1889,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: "var(--text)",
                     background: "transparent",
                     border: "1px solid var(--border)",
-                    borderRadius: 7,
+                    borderRadius: "var(--radius-control, 6px)",
                     cursor: "pointer",
                     transition: "background var(--motion-feedback), border-color var(--motion-feedback)",
                     whiteSpace: "nowrap",
@@ -1924,7 +1924,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{
             marginBottom: 8, padding: "5px 10px",
             background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)",
-            borderRadius: 6, fontSize: 12, color: "rgba(180,130,0,0.9)",
+            borderRadius: "var(--radius-control, 6px)", fontSize: 12, color: "rgba(180,130,0,0.9)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -1938,7 +1938,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{
             marginBottom: 8, padding: "5px 10px",
             background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.24)",
-            borderRadius: 6, fontSize: 12, color: "rgba(5,150,105,0.95)",
+            borderRadius: "var(--radius-control, 6px)", fontSize: 12, color: "rgba(5,150,105,0.95)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -1955,7 +1955,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               padding: "7px 10px",
               background: "color-mix(in srgb, var(--err) 7%, transparent)",
               border: "1px solid color-mix(in srgb, var(--err) 30%, transparent)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-control, 6px)",
               color: "var(--err)",
               fontFamily: "var(--font-mono)",
               fontSize: 12,
@@ -1977,7 +1977,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <img
                     src={img.previewUrl}
                     alt=""
-                    style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
+                    style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "var(--radius-control, 6px)", border: "1px solid var(--border)", display: "block" }}
                   />
                 </ImagePreview>
                 <button
@@ -2069,12 +2069,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         gap: 8,
                         padding: "7px 8px",
                         border: "none",
-                        borderRadius: 6,
+                        borderRadius: "var(--radius-control, 6px)",
                         background: active ? "var(--bg-selected)" : "none",
                         color: "var(--text)",
                         cursor: "pointer",
                         textAlign: "left",
-                        fontSize: 12.5,
+                        fontSize: 12,
                         lineHeight: 1.45,
                       }}
                     >
@@ -2148,7 +2148,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           padding: "4px 0 6px",
                           background: "var(--bg)",
                           color: "var(--text-dim)",
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: 600,
                           textTransform: "uppercase",
                         }}
@@ -2188,7 +2188,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 justifyContent: "center",
                                 padding: "9px 10px",
                                 border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                                borderRadius: 7,
+                                borderRadius: "var(--radius-control, 6px)",
                                 background: active ? "var(--bg-selected)" : "var(--bg-panel)",
                                 color: "var(--text)",
                                 cursor: "pointer",
@@ -2313,12 +2313,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             gap: 8,
                             padding: "6px 8px",
                             border: "none",
-                            borderRadius: 6,
+                            borderRadius: "var(--radius-control, 6px)",
                             background: active ? "var(--bg-selected)" : "none",
                             color: "var(--text)",
                             cursor: "pointer",
                             textAlign: "left",
-                            fontSize: 12.5,
+                            fontSize: 12,
                             fontFamily: "var(--font-mono)",
                           }}
                         >
@@ -2395,12 +2395,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           gap: 8,
                           padding: "6px 8px",
                           border: "none",
-                          borderRadius: 6,
+                          borderRadius: "var(--radius-control, 6px)",
                           background: active ? "var(--bg-selected)" : "none",
                           color: "var(--text)",
                           cursor: "pointer",
                           textAlign: "left",
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontFamily: "var(--font-mono)",
                         }}
                       >
@@ -2500,7 +2500,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: "7px 9px",
                     background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
                     border: "1px solid rgba(234,179,8,0.35)",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-card-block, 8px)",
                     color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
@@ -2525,7 +2525,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: "7px 9px",
                     background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
                     border: "1px solid rgba(129,140,248,0.35)",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-card-block, 8px)",
                     color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
@@ -2552,7 +2552,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 minHeight: 33,
                 background: isStreaming ? "color-mix(in srgb, var(--err) 8%, transparent)" : (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: isStreaming ? "1px solid color-mix(in srgb, var(--err) 30%, transparent)" : "none",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card-block, 8px)",
                 color: isStreaming ? "var(--err)" : (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
                 cursor: !isStreaming && !value.trim() && !attachedImages.length ? "not-allowed" : "pointer",
                 boxShadow: !isStreaming && (value.trim() || attachedImages.length) ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
@@ -2591,7 +2591,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, padding: 0,
                     background: "none", border: "none",
-                    borderRadius: 7,
+                    borderRadius: "var(--radius-control, 6px)",
                     color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                     cursor: "pointer",
                     transition: "background var(--motion-feedback), color var(--motion-feedback)",
@@ -2644,7 +2644,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         padding: "0 8px",
                         background: thinkingMenuOpen ? "var(--bg-hover)" : "none",
                         border: "none",
-                        borderRadius: 7,
+                        borderRadius: "var(--radius-control, 6px)",
                         color: thinkingMenuOpen ? "var(--text)" : "var(--text-muted)",
                         cursor: "pointer",
                         fontSize: 11,
@@ -2680,7 +2680,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           padding: 4,
                           background: "var(--surface-2)",
                           border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                          borderRadius: 10,
+                          borderRadius: "var(--radius-card, 10px)",
                           boxShadow: "var(--shadow-lg)",
                         }}
                       >
@@ -2713,7 +2713,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 )}
                               </span>
                               <span style={{ flexShrink: 0 }}>{chipLabel}</span>
-                              <span title={desc} style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 10.5 }}>
+                              <span title={desc} style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 11 }}>
                                 {desc}
                               </span>
                             </button>
@@ -2742,7 +2742,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: 0,
                     background: controlsMenuOpen ? "var(--bg-hover)" : "none",
                     border: "none",
-                    borderRadius: 7,
+                    borderRadius: "var(--radius-control, 6px)",
                     color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer",
                     transition: "background var(--motion-feedback), color var(--motion-feedback)",
@@ -2780,7 +2780,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       padding: 5,
                       background: "var(--surface-2)",
                       border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                      borderRadius: 10,
+                      borderRadius: "var(--radius-card, 10px)",
                       boxShadow: "var(--shadow-lg)",
                     }}
                   >
@@ -2816,7 +2816,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   )}
                                 </span>
                                 <span style={{ flexShrink: 0 }}>{lvl}</span>
-                                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 10.5 }}>
+                                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 11 }}>
                                   {desc}
                                 </span>
                               </button>
