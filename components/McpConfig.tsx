@@ -88,7 +88,6 @@ import {
   mcpCodemodeProjectOverrideNotice,
   mcpExposureReachNotice,
   mcpCodemodeRowState,
-  mcpCodemodeTone,
   mcpEffectiveAutoEnableCodemode,
   mcpEmptyDetailKey,
   mcpFileProblems,
@@ -108,6 +107,8 @@ import {
   mcpServerRowState,
   mcpSessionStateView,
   mcpSessionSummaryKey,
+  mcpCodemodeBadgeTone,
+  mcpCodemodeDot,
   mcpStatusDot,
   mcpStatusRowState,
   mcpStatusTimeText,
@@ -1282,9 +1283,9 @@ function McpCodemodeRow({
       aria-label={t("mcp.codemode.rowLabel", { state: stateText })}
       onClick={() => onSelect(MCP_CODEMODE_SELECTION)}
     >
-      <ConfigStatusDot {...mcpStatusDot(mcpCodemodeTone(state))} />
+      <ConfigStatusDot {...mcpCodemodeDot(state)} />
       <ConfigSidebarText className="is-grow">{t("mcp.codemode.title")}</ConfigSidebarText>
-      <span className={`mcp-sidebar-badge is-${mcpCodemodeTone(state)}`}>{stateText}</span>
+      <span className={`mcp-sidebar-badge is-${mcpCodemodeBadgeTone(state)}`}>{stateText}</span>
     </ConfigSidebarItem>
   );
 }

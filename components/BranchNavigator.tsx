@@ -196,7 +196,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
           background: isActive ? "var(--accent)" : isOnPath ? "var(--text-muted)" : "var(--border)",
           border: isActive ? "none" : "1px solid var(--text-dim)",
           marginRight: 6,
-          transition: "background 0.12s",
+          transition: "background var(--motion-feedback)",
         }} />
 
         {/* Role badge */}
@@ -328,7 +328,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             color: open ? "var(--text)" : "var(--text-muted)",
             fontSize: 11,
             whiteSpace: "nowrap",
-            transition: "color 0.1s, background 0.1s",
+            transition: "color var(--motion-feedback), background var(--motion-feedback)",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}

@@ -633,7 +633,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    style={{ flexShrink: 0, opacity: 0.75, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+                    style={{ flexShrink: 0, opacity: 0.75, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--motion-move)" }}
                     aria-hidden="true"
                   >
                     <polyline points="6 9 12 15 18 9" />
@@ -677,7 +677,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             display: "flex", gap: 3,
             opacity: hovered ? 1 : 0,
             pointerEvents: hovered ? "auto" : "none",
-            transition: "opacity 0.12s",
+            transition: "opacity var(--motion-feedback)",
           }}>
             <button
               onClick={copyContent}
@@ -691,7 +691,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 400,
                 whiteSpace: "nowrap",
-                transition: "color 0.12s",
+                transition: "color var(--motion-feedback)",
               }}
               onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -714,7 +714,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               display: "flex", gap: 3,
               opacity: (hovered || forking) ? 1 : 0,
               pointerEvents: (hovered || forking) ? "auto" : "none",
-              transition: "opacity 0.12s",
+              transition: "opacity var(--motion-feedback)",
             }}>
               {canNavigate && (
                 <button
@@ -729,7 +729,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--motion-feedback)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -755,7 +755,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: forking ? "not-allowed" : "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--motion-feedback)",
                   }}
                   onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -1140,7 +1140,7 @@ function AssistantMessageView({
               whiteSpace: "nowrap",
               opacity: hovered ? 1 : 0,
               pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
+              transition: "opacity var(--motion-feedback), color var(--motion-feedback)",
             }}
             onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -1420,7 +1420,7 @@ function ToolCallBlock({ block, result, duration, onOpenSession }: { block: Tool
             cursor: "pointer",
             fontSize: 12,
             textAlign: "left",
-            transition: "background 0.12s",
+            transition: "background var(--motion-feedback)",
           }}
         >
           <ToolCallStatusDot pending={!result} isError={isError} />
@@ -1691,7 +1691,7 @@ function PatchTextView({ text }: { text: string }) {
           kind === "hunk" ? "rgba(96,165,250,0.12)" :
           "transparent";
         const color =
-          kind === "added" ? "#22c55e" :
+          kind === "added" ? "var(--ok)" :
           kind === "removed" ? "var(--err)" :
           kind === "hunk" ? "var(--accent)" :
           "var(--text)";
@@ -1703,7 +1703,7 @@ function PatchTextView({ text }: { text: string }) {
               display: "flex",
               background: bg,
               borderLeft: kind === "added"
-                ? "3px solid #22c55e"
+                ? "3px solid var(--ok)"
                 : kind === "removed"
                 ? "3px solid var(--err)"
                 : kind === "hunk"

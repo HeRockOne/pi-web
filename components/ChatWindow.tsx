@@ -163,7 +163,7 @@ function NewSessionUpdateLink({
         fontWeight: 600,
         lineHeight: 1.2,
         textDecoration: "none",
-        transition: "background 0.12s",
+        transition: "background var(--motion-feedback)",
         whiteSpace: "nowrap",
       }}
     >
@@ -301,7 +301,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
         }}
         title={expanded ? t("chat.collapseProcess") : t("chat.expandProcess")}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform var(--motion-move)" }}>
           <polyline points="4 2.5 7.5 6 4 9.5" />
         </svg>
         {live && (
@@ -1645,7 +1645,7 @@ function NoticeShelf({ notices, floating = false, onPauseChange }: { notices: No
           : notice.type === "warning"
             ? "var(--warn)"
             : notice.type === "success"
-              ? "#10b981"
+              ? "var(--ok)"
               : "var(--accent)";
         return (
           <div

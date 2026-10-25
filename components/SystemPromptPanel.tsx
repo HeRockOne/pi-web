@@ -346,7 +346,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           font: inherit;
           text-align: left;
           cursor: pointer;
-          transition: background 0.1s;
+          transition: background var(--motion-feedback);
         }
         .system-prompt-composition-head:hover {
           background: var(--bg-hover);
@@ -409,7 +409,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           font-size: inherit;
           cursor: pointer;
           text-align: left;
-          transition: background 0.1s;
+          transition: background var(--motion-feedback);
         }
         .system-prompt-composition-row:hover {
           background: var(--bg-hover);
@@ -471,7 +471,7 @@ export function SystemPromptPanel({ loading, prompt, tools, translate }: Props) 
           width: 8px;
           font-size: 8px;
           color: var(--text-dim);
-          transition: transform 0.12s;
+          transition: transform var(--motion-move);
         }
         .system-prompt-composition-chevron.open {
           transform: rotate(90deg);

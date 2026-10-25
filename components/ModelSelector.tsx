@@ -137,7 +137,7 @@ export function ModelSelector({
         cursor: locked ? "not-allowed" : "pointer",
         fontSize: 12,
         opacity: locked ? 0.5 : 1,
-        transition: "background 0.12s, color 0.12s",
+        transition: "background var(--motion-feedback), color var(--motion-feedback)",
       };
 
   const choose = (option: ModelSelectorOption) => {

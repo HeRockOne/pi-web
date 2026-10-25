@@ -578,7 +578,7 @@ function controlToggleRowStyle(on: boolean): React.CSSProperties {
     lineHeight: 1.4,
     textAlign: "left",
     whiteSpace: "nowrap",
-    transition: "color 0.12s",
+    transition: "color var(--motion-feedback)",
   };
 }
 
@@ -600,7 +600,7 @@ function controlActionRowStyle(): React.CSSProperties {
     lineHeight: 1.4,
     textAlign: "left",
     whiteSpace: "nowrap",
-    transition: "background 0.12s, color 0.12s",
+    transition: "background var(--motion-feedback), color var(--motion-feedback)",
   };
 }
 
@@ -637,7 +637,7 @@ function ControlSwitch({ on }: { on: boolean }) {
         flexShrink: 0,
         borderRadius: 999,
         background: on ? "var(--accent)" : "color-mix(in srgb, var(--text) 16%, transparent)",
-        transition: "background 0.15s ease",
+        transition: "background var(--motion-feedback) ease",
       }}
     >
       <span
@@ -650,7 +650,7 @@ function ControlSwitch({ on }: { on: boolean }) {
           borderRadius: "50%",
           background: "var(--bg)",
           boxShadow: "0 1px 2px color-mix(in srgb, var(--text) 40%, transparent)",
-          transition: "left 0.15s ease",
+          transition: "left var(--motion-feedback) ease",
         }}
       />
     </span>
@@ -1819,7 +1819,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         padding: compact ? 0 : "0 16px 8px",
         paddingRight: compact ? 0 : isMobile ? 16 : 52, // desktop: 16px base + 36px for ChatMinimap alignment
         opacity: builtinCommandPending ? 0.5 : 1,
-        transition: "opacity 0.15s",
+        transition: "opacity var(--motion-feedback)",
       }}
     >
       {/* Hidden file input */}
@@ -1891,7 +1891,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     border: "1px solid var(--border)",
                     borderRadius: 7,
                     cursor: "pointer",
-                    transition: "background 0.12s, border-color 0.12s",
+                    transition: "background var(--motion-feedback), border-color var(--motion-feedback)",
                     whiteSpace: "nowrap",
                   }}
                   onMouseEnter={(e) => {
@@ -2432,7 +2432,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               borderRadius: compact ? 0 : "var(--radius-overlay, 14px)",
               padding: compact ? 0 : "12px 12px 0 15px",
               boxShadow: compact ? "none" : "var(--shadow-sm)",
-              transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+              transition: "border-color var(--motion-feedback), background var(--motion-feedback), box-shadow var(--motion-feedback)",
             } as React.CSSProperties}
           >
           <div style={(compact ? { display: "contents" } : { display: "flex", alignItems: "center", gap: 8, minWidth: 0 }) as React.CSSProperties}>
@@ -2504,7 +2504,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
+                    transition: "background var(--motion-feedback)",
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2529,7 +2529,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
+                    transition: "background var(--motion-feedback)",
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2556,7 +2556,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 color: isStreaming ? "var(--err)" : (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
                 cursor: !isStreaming && !value.trim() && !attachedImages.length ? "not-allowed" : "pointer",
                 boxShadow: !isStreaming && (value.trim() || attachedImages.length) ? "0 1px 3px color-mix(in srgb, var(--accent) 25%, transparent)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s",
+                transition: "background var(--motion-feedback), box-shadow var(--motion-feedback), border-color var(--motion-feedback), color var(--motion-feedback)",
               }}
               onMouseEnter={(e) => { if (isStreaming) e.currentTarget.style.background = "color-mix(in srgb, var(--err) 16%, transparent)"; }}
               onMouseLeave={(e) => { if (isStreaming) e.currentTarget.style.background = "color-mix(in srgb, var(--err) 8%, transparent)"; }}
@@ -2594,7 +2594,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 7,
                     color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                     cursor: "pointer",
-                    transition: "background 0.12s, color 0.12s",
+                    transition: "background var(--motion-feedback), color var(--motion-feedback)",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--bg-hover)";
@@ -2648,7 +2648,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         color: thinkingMenuOpen ? "var(--text)" : "var(--text-muted)",
                         cursor: "pointer",
                         fontSize: 11,
-                        transition: "background 0.12s, color 0.12s",
+                        transition: "background var(--motion-feedback), color var(--motion-feedback)",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = "var(--bg-hover)";
@@ -2745,7 +2745,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     borderRadius: 7,
                     color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer",
-                    transition: "background 0.12s, color 0.12s",
+                    transition: "background var(--motion-feedback), color var(--motion-feedback)",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--bg-hover)";

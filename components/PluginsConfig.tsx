@@ -97,8 +97,8 @@ function findInstalledPackage(
 }
 
 function statusColor(status: PluginPackageInfo["status"]): string {
-  if (status === "loaded") return "var(--accent)";
-  if (status === "installed") return "#f59e0b";
+  if (status === "loaded") return "var(--ok)";
+  if (status === "installed") return "var(--warn)";
   if (status === "disabled") return "var(--text-dim)";
   return "var(--err)";
 }
@@ -648,7 +648,7 @@ function StandaloneExtensionDetail({ extension }: { extension: PluginStandaloneE
         }}
       >
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.status")}</div>
-        <div style={{ color: extension.enabled ? "var(--accent)" : "var(--text-dim)" }}>{status}</div>
+        <div style={{ color: extension.enabled ? "var(--ok)" : "var(--text-dim)" }}>{status}</div>
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.installedPath")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(extension.path)}

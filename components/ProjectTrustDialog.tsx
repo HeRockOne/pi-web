@@ -230,7 +230,7 @@ export function ProjectTrustDialogView({
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#f59e0b"
+            stroke="var(--warn)"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"

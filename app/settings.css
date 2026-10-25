@@ -189,7 +189,7 @@
   font-size: 12px;
   font-weight: 400;
   text-align: left;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: background-color var(--motion-feedback) ease, color var(--motion-feedback) ease;
 }
 
 .config-sidebar-item:not(:disabled):hover,
@@ -872,7 +872,7 @@
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+  transition: background-color var(--motion-feedback) ease, border-color var(--motion-feedback) ease, color var(--motion-feedback) ease, box-shadow var(--motion-feedback) ease;
 }
 
 .config-button-default {
@@ -965,7 +965,7 @@
   border-radius: 9px;
   background: var(--bg-selected);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--motion-feedback), border-color var(--motion-feedback);
 }
 
 .config-switch[aria-checked="true"] {
@@ -1005,7 +1005,7 @@
   height: 12px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: transform 0.15s, background 0.15s;
+  transition: transform var(--motion-move), background var(--motion-move);
 }
 
 .config-switch[aria-checked="true"] .config-switch-knob {
@@ -1149,7 +1149,7 @@
   font-size: 12px;
   font-weight: 400;
   white-space: nowrap;
-  transition: color 0.15s ease;
+  transition: color var(--motion-feedback) ease;
 }
 
 .settings-section-tab::after {
@@ -1163,7 +1163,7 @@
   content: "";
   opacity: 0;
   transform: translateX(-50%) scaleX(0.5);
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--motion-move) ease, transform var(--motion-move) ease;
 }
 
 .settings-section-tab[aria-current="page"] {
@@ -2126,7 +2126,7 @@
   content: "▸";
   color: var(--text-dim);
   font-size: 10px;
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-move) ease;
 }
 
 .web-theme-editor-advanced[open] > summary::before {
@@ -2375,7 +2375,7 @@
   display: inline-block;
   width: 14px;
   color: var(--text-dim);
-  transition: transform 0.15s ease;
+  transition: transform var(--motion-move) ease;
 }
 .usage-stats-details[open] > .usage-stats-details-summary::before {
   transform: rotate(90deg);
@@ -2481,7 +2481,7 @@
 .usage-stats-balance-bar-fill {
   height: 100%;
   border-radius: 3px;
-  transition: width 0.2s ease;
+  transition: width var(--motion-move) ease;
 }
 .usage-stats-balance-bar-fill.is-ok { background: var(--ok); }
 .usage-stats-balance-bar-fill.is-warn { background: var(--warn); }
@@ -2504,7 +2504,7 @@
   cursor: pointer;
   font-size: 11px;
   white-space: nowrap;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--motion-feedback), color var(--motion-feedback), border-color var(--motion-feedback);
 }
 .usage-stats-balance-btn:hover {
   background: var(--bg-hover);
@@ -3083,6 +3083,11 @@
 }
 
 
+.mcp-sidebar-badge.is-on {
+  color: var(--ok);
+}
+
+
 .mcp-sidebar-badge.is-warning {
   color: var(--warn);
 }
@@ -3165,7 +3170,7 @@
 
 
 .mcp-config-state.is-on {
-  color: var(--accent);
+  color: var(--ok);
 }
 
 

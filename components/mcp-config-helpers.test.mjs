@@ -29,6 +29,8 @@ const {
   mcpCodemodeReachNotice,
   mcpExposureReachNotice,
   mcpCodemodeRowState,
+  mcpCodemodeBadgeTone,
+  mcpCodemodeDot,
   mcpCodemodeTone,
   mcpEffectiveAutoEnableCodemode,
   mcpEffectiveCodemodePreference,
@@ -204,10 +206,12 @@ test("each state has a color, a full label and, when it is not plain on, visible
   assert.equal(mcpRowStateTone("web-password"), "error");
   assert.equal(mcpRowStateTone("not-trusted"), "warning");
   for (const state of ["disabled", "replaced", "mcp-off"]) assert.equal(mcpRowStateTone(state), "off", state);
-  assert.deepEqual(mcpStatusDot("on"), { active: true });
+  // A live server is green: the default theme's accent is monochrome, so an
+  // accent dot cannot tell "connected" from "this row exists".
+  assert.deepEqual(mcpStatusDot("on"), { color: "var(--ok)" });
   assert.deepEqual(mcpStatusDot("off"), { active: false });
-  assert.deepEqual(mcpStatusDot("error"), { color: "#ef4444" });
-  assert.deepEqual(mcpStatusDot("warning"), { color: "#f59e0b" });
+  assert.deepEqual(mcpStatusDot("error"), { color: "var(--err)" });
+  assert.deepEqual(mcpStatusDot("warning"), { color: "var(--warn)" });
   // A tested server: connected reads like on, needing a sign-in like a warning, a failure like an error.
   assert.equal(mcpRowStateTone("connected"), "on");
   assert.equal(mcpRowStateTone("needs-auth"), "warning");
@@ -512,6 +516,14 @@ test("the Code mode row says whether a session can offer it, and the preference 
   assert.equal(mcpCodemodeTone("unavailable"), "error");
   assert.equal(mcpCodemodeTone("unknown"), "off");
   assert.equal(mcpCodemodeTone("always"), "on");
+  // The code-mode row is a mode, not a connection: its dot stays neutral and
+  // its badge never reads as a green success, so green keeps meaning
+  // "this server answered".
+  assert.deepEqual(mcpCodemodeDot("always"), { active: true });
+  assert.deepEqual(mcpCodemodeDot("unknown"), { active: false });
+  assert.deepEqual(mcpCodemodeDot("unavailable"), { color: "var(--err)" });
+  assert.equal(mcpCodemodeBadgeTone("always"), "off");
+  assert.equal(mcpCodemodeBadgeTone("unavailable"), "error");
 });
 
 function fakeFetch(responses) {

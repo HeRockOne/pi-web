@@ -723,7 +723,7 @@ function ThinkingLevelMapEditor({
           border: "none",
           cursor: "pointer",
           fontWeight: 400,
-          transition: "background 0.1s, color 0.1s",
+          transition: "background var(--motion-feedback), color var(--motion-feedback)",
           whiteSpace: "nowrap",
           background: "var(--bg-panel)",
           color: "var(--text-dim)",
@@ -779,7 +779,7 @@ function ThinkingLevelMapEditor({
               </button>
             </div>
 
-            <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color 0.1s" }}>
+            <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color var(--motion-feedback)" }}>
               <button
                 onClick={() => setLevel(level, strVal || level)}
                 style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
@@ -801,7 +801,7 @@ function ThinkingLevelMapEditor({
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   padding: "4px 7px",
-                  transition: "background 0.1s, color 0.1s",
+                  transition: "background var(--motion-feedback), color var(--motion-feedback)",
                 }}
               />
             </div>
@@ -1478,7 +1478,7 @@ function ModelDetail({
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
-            style={{ color: "var(--text-dim)", transform: advancedOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}
+            style={{ color: "var(--text-dim)", transform: advancedOpen ? "rotate(180deg)" : "none", transition: "transform var(--motion-move) ease" }}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -1987,7 +1987,7 @@ function AddProviderPicker({
     cursor: "pointer",
     minWidth: 0,
     textAlign: "left",
-    transition: "border-color 0.12s, background 0.12s",
+    transition: "border-color var(--motion-feedback), background var(--motion-feedback)",
     width: "100%",
   };
 

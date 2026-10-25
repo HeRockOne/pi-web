@@ -1370,7 +1370,7 @@ export function AppShell() {
                     borderRadius: "var(--radius-control, 6px)",
                     color: "var(--text)", cursor: disabled ? "default" : "pointer",
                     fontSize: 12, textAlign: "left", opacity: disabled ? 0.35 : 1,
-                    transition: "background 0.12s",
+                    transition: "background var(--motion-feedback)",
                   }}
                   onMouseEnter={(event) => { if (!disabled) event.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
@@ -1391,7 +1391,7 @@ export function AppShell() {
                 background: "none", border: "none",
                 borderRadius: "var(--radius-control, 6px)",
                 color: "var(--text)", cursor: "pointer",
-                fontSize: 12, textAlign: "left", transition: "background 0.12s",
+                fontSize: 12, textAlign: "left", transition: "background var(--motion-feedback)",
               }}
               onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
@@ -1414,7 +1414,7 @@ export function AppShell() {
                 background: "none", border: "none",
                 borderRadius: "var(--radius-control, 6px)",
                 color: "var(--text)", cursor: "pointer",
-                fontSize: 12, textAlign: "left", transition: "background 0.12s",
+                fontSize: 12, textAlign: "left", transition: "background var(--motion-feedback)",
               }}
               onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(event) => { event.currentTarget.style.background = "none"; }}
@@ -1438,7 +1438,7 @@ export function AppShell() {
               border: "none",
               borderRadius: "var(--radius-control, 6px)",
               color: "var(--text-muted)", cursor: "pointer",
-              fontSize: 12, transition: "background 0.12s, color 0.12s",
+              fontSize: 12, transition: "background var(--motion-feedback), color var(--motion-feedback)",
             }}
             onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; event.currentTarget.style.color = "var(--text)"; }}
             onMouseLeave={(event) => {
@@ -1451,7 +1451,7 @@ export function AppShell() {
             <svg
               width="12" height="12" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ marginLeft: "auto", opacity: 0.7, transform: sidebarFooterOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+              style={{ marginLeft: "auto", opacity: 0.7, transform: sidebarFooterOpen ? "rotate(180deg)" : "none", transition: "transform var(--motion-move)" }}
             >
               <polyline points="6 15 12 9 18 15" />
             </svg>
@@ -1475,7 +1475,7 @@ export function AppShell() {
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
         background: "none", border: "none", borderRadius: 999,
-        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
@@ -1519,7 +1519,7 @@ export function AppShell() {
         background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
         border: "none", borderRadius: 999,
         color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+        cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => {
@@ -1564,7 +1564,7 @@ export function AppShell() {
         background: "none", border: "none",
         color: activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", flexShrink: 0, position: "relative",
-        transition: "color 0.1s",
+        transition: "color var(--motion-feedback)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "sessions" ? "var(--text)" : "var(--text-muted)"; }}
@@ -1607,7 +1607,7 @@ export function AppShell() {
         background: activeTopPanel === "more" ? "var(--bg-selected)" : "none",
         border: "none", borderRadius: 999,
         color: activeTopPanel === "more" ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
+        cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback), background var(--motion-feedback)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => { event.currentTarget.style.color = activeTopPanel === "more" ? "var(--text)" : "var(--text-muted)"; }}
@@ -1698,7 +1698,7 @@ export function AppShell() {
             flexShrink: 0,
             fontSize: 11,
             whiteSpace: "nowrap",
-            transition: "color 0.1s, background 0.1s, opacity 0.1s",
+            transition: "color var(--motion-feedback), background var(--motion-feedback), opacity var(--motion-feedback)",
           }}
           onMouseEnter={(event) => {
             if (!selectedSession) return;
@@ -1776,7 +1776,7 @@ export function AppShell() {
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
                 flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                transition: "color 0.1s, background 0.1s, opacity 0.1s",
+                transition: "color var(--motion-feedback), background var(--motion-feedback), opacity var(--motion-feedback)",
               }}
               onMouseEnter={(event) => {
                 if (disabled) return;
@@ -1826,7 +1826,7 @@ export function AppShell() {
               
               color: activeTopPanel === "agents" ? "var(--text)" : "var(--text-muted)",
               cursor: "pointer", flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-              transition: "color 0.1s, background 0.1s",
+              transition: "color var(--motion-feedback), background var(--motion-feedback)",
             }}
             data-mobile-toolbar-action={mobile ? "agents" : undefined}
           >
@@ -1902,7 +1902,7 @@ export function AppShell() {
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
-            fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
+            fontSize: 11, whiteSpace: "nowrap", transition: "color var(--motion-feedback), background var(--motion-feedback)",
           }}
           onMouseEnter={(event) => {
             if (mobile && !showChat) return;
@@ -1938,7 +1938,7 @@ export function AppShell() {
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "tools" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
-            fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
+            fontSize: 11, whiteSpace: "nowrap", transition: "color var(--motion-feedback), background var(--motion-feedback)",
           }}
           onMouseEnter={(event) => {
             if (mobile && !showChat) return;
@@ -2047,7 +2047,7 @@ export function AppShell() {
           fontSize: 11.5, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
-          transition: "color 0.1s, background 0.1s",
+          transition: "color var(--motion-feedback), background var(--motion-feedback)",
         }}
         onMouseEnter={(event) => {
           if (showChat && !covered) event.currentTarget.style.color = "var(--text)";
@@ -2170,7 +2170,7 @@ export function AppShell() {
           background: rightPanelOpen ? "var(--bg-selected)" : "none",
           border: "none",
           color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
+          cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback), background var(--motion-feedback)",
         }}
         onMouseEnter={(event) => { if (!covered) event.currentTarget.style.color = "var(--text)"; }}
         onMouseLeave={(event) => { event.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
@@ -2323,7 +2323,7 @@ export function AppShell() {
           background: "rgba(0,0,0,0.4)",
           opacity: sidebarOpen ? 1 : 0,
           pointerEvents: sidebarOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
+          transition: "opacity var(--motion-feedback) ease",
         }}
       />
 
@@ -2368,7 +2368,7 @@ export function AppShell() {
               display: "flex", alignItems: "center", justifyContent: "center",
               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "none", border: "none",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback)",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -2413,7 +2413,7 @@ export function AppShell() {
                     background: mobileToolbarMoreOpen ? "var(--bg-selected)" : "none",
                     border: "none",
                     color: mobileToolbarMoreOpen ? "var(--text)" : "var(--text-muted)",
-                    cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
+                    cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback), background var(--motion-feedback)",
                   }}
                 >
                   {mobileToolbarMoreOpen ? (
@@ -2473,7 +2473,7 @@ export function AppShell() {
                           border: "none", borderRadius: 4, background: "transparent",
                           color: opts.disabled ? "var(--text-dim)" : "var(--text)",
                           cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
-                          transition: "background 0.1s",
+                          transition: "background var(--motion-feedback)",
                         }}
                         onMouseEnter={(e) => { if (!opts.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -2623,7 +2623,7 @@ export function AppShell() {
                         border: "none", borderRadius: 10,
                         background: locale === plugin.id ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
-                        transition: "background 0.1s",
+                        transition: "background var(--motion-feedback)",
                       }}
                       onMouseEnter={(e) => {
                         if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
@@ -2657,7 +2657,7 @@ export function AppShell() {
           background: opts.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent",
           color: opts.disabled ? "var(--text-dim)" : opts.active ? "var(--accent)" : "var(--text)",
           cursor: opts.disabled ? "default" : "pointer", textAlign: "left", fontSize: 12,
-          transition: "background 0.1s",
+          transition: "background var(--motion-feedback)",
         }}
         onMouseEnter={(e) => { if (!opts.disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = opts.active ? "color-mix(in srgb, var(--accent) 13%, transparent)" : "transparent"; }}
@@ -2756,7 +2756,7 @@ export function AppShell() {
                           borderRadius: "var(--radius-control, 6px)",
                           background: active ? "var(--bg-selected)" : "transparent",
                           color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5,
-                          transition: "background 0.1s",
+                          transition: "background var(--motion-feedback)",
                         }}
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
@@ -2942,7 +2942,7 @@ export function AppShell() {
                             borderRadius: 4,
                             cursor: "pointer",
                             flex: "0 0 auto",
-                            transition: "color 0.12s, border-color 0.12s, background 0.12s",
+                            transition: "color var(--motion-feedback), border-color var(--motion-feedback), background var(--motion-feedback)",
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.color = "var(--accent)";
@@ -3185,7 +3185,7 @@ export function AppShell() {
               display: "flex", alignItems: "center", justifyContent: "center",
               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "var(--bg-selected)", border: "none", borderLeft: "1px solid var(--border)",
-              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color var(--motion-feedback)",
             }}
             onMouseEnter={(event) => { event.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text)"; }}

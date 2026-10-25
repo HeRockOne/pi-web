@@ -96,7 +96,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
-              transition: "background 0.15s, color 0.15s, box-shadow 0.15s",
+              transition: "background var(--motion-feedback), color var(--motion-feedback), box-shadow var(--motion-feedback)",
             }}
           >
             <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>
@@ -137,7 +137,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                   cursor: "pointer",
                   padding: 0,
                   flexShrink: 0,
-                  transition: "background 0.1s, color 0.1s",
+                  transition: "background var(--motion-feedback), color var(--motion-feedback)",
                 }}
                 title={t(tab.kind === "terminal" ? "terminal.close" : "i18n.close")}
                 aria-label={`${t(tab.kind === "terminal" ? "terminal.close" : "i18n.close")} ${tab.label}`}

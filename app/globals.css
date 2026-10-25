@@ -93,6 +93,14 @@
   --shadow-sm: 0 1px 2px var(--shadow-color);
   --shadow-md: 0 2px 8px -2px var(--shadow-color);
   --shadow-lg: 0 8px 28px -10px color-mix(in srgb, var(--accent) 8%, rgb(15 18 30 / 44%));
+
+  /* Motion: two durations, nothing else. `--motion-feedback` is every hover,
+     press and state change — color, border and opacity only, never a
+     transform, because a control that shifts under the cursor reads as lag.
+     `--motion-move` is reserved for surfaces that genuinely travel (drawers,
+     overlay panels, width changes) where the motion *is* the feedback. */
+  --motion-feedback: 150ms;
+  --motion-move: 200ms;
 }
 
 html.dark {
@@ -214,7 +222,7 @@ body {
    on individual buttons override this entirely. */
 button,
 [role="button"] {
-  transition: background-color 0.15s ease, border-color 0.15s ease,
+  transition: background-color var(--motion-feedback) ease, border-color var(--motion-feedback) ease,
     color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
@@ -512,7 +520,7 @@ button,
 
 button.extension-widget-trigger {
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--motion-feedback), color var(--motion-feedback);
 }
 
 button.extension-widget-trigger:hover,
@@ -1018,7 +1026,7 @@ pre, code {
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color 0.12s, color 0.12s;
+  transition: background-color var(--motion-feedback), color var(--motion-feedback);
 }
 
 .image-preview-close:hover {
@@ -1155,7 +1163,7 @@ pre, code {
   border-radius: var(--radius-card-block, 8px);
   background: var(--bg-panel);
   margin: 0 auto;
-  transition: width 0.15s ease;
+  transition: width var(--motion-move) ease;
 }
 .mermaid-zoom-canvas svg {
   display: block;
@@ -1507,7 +1515,7 @@ span.token.table {
   width: 2px;
   pointer-events: none;
   background: transparent;
-  transition: background 0.12s ease;
+  transition: background var(--motion-feedback) ease;
 }
 .panel-resize-handle:hover::after,
 .panel-resize-handle:focus-visible::after,
@@ -1531,7 +1539,7 @@ span.token.table {
     border: none;
     border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
     border-radius: 0;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width var(--motion-move) ease, min-width var(--motion-move) ease;
   }
   .sidebar-container.sidebar-open {
     width: var(--sidebar-width, 260px);
@@ -1562,7 +1570,7 @@ span.token.table {
     margin: 8px;
     border: 1px solid var(--border);
     border-radius: 14px;
-    transition: width 0.2s ease, min-width 0.2s ease, margin 0.2s ease;
+    transition: width var(--motion-move) ease, min-width var(--motion-move) ease, margin var(--motion-move) ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -1599,7 +1607,7 @@ span.token.table {
     background: rgba(0, 0, 0, 0.24);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--motion-feedback) ease;
   }
   .right-panel-overlay-backdrop.is-open {
     opacity: 1;
@@ -1615,7 +1623,7 @@ span.token.table {
     min-width: 300px;
     overflow: hidden;
     box-shadow: -12px 0 32px var(--shadow-color);
-    transition: transform 0.2s ease;
+    transition: transform var(--motion-move) ease;
   }
   .right-panel-container.right-panel-open {
     transform: translateX(0);
@@ -1643,7 +1651,7 @@ span.token.table {
     width: 280px;
     max-width: 85vw;
     height: var(--app-viewport-height, 100dvh);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    transition: transform var(--motion-move) ease, box-shadow var(--motion-move) ease;
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
@@ -1660,7 +1668,7 @@ span.token.table {
     height: var(--app-viewport-height, 100dvh);
     z-index: 250;
     overflow: hidden;
-    transition: transform 0.2s ease;
+    transition: transform var(--motion-move) ease;
   }
   .right-panel-container.right-panel-open {
     width: auto;

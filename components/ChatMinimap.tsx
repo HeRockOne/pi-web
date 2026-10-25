@@ -664,7 +664,7 @@ export function ChatMinimap({
                 background: isActive ? "color-mix(in srgb, var(--accent) 30%, transparent)" : "color-mix(in srgb, var(--text-dim) 18%, transparent)",
                 border: `1.5px solid ${isActive ? "var(--accent)" : "color-mix(in srgb, var(--text-dim) 55%, transparent)"}`,
                 boxShadow: isActive ? "0 0 0 2px var(--bg)" : "none",
-                transition: "transform 0.1s, background 0.1s",
+                transition: "transform var(--motion-move), background var(--motion-move)",
                 transform: isNearest ? "scale(1.25)" : "scale(1)",
               }}
             />

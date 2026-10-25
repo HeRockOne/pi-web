@@ -235,6 +235,17 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - The controls popover reuses that geometry (same anchor gap, radius, padding) and splits into titled sections: `Tool presets` (exclusive radio rows, `controlRowStyle`), `Extension tools` (on/off rows with `ControlSwitch`, `controlToggleRowStyle`), then `Compact context` / `Completion sound` below a divider. Two shapes carry the meaning — a check column means "pick one of these", a switch means "add or remove this" — so a user can no longer mistake three active presets for one preset plus two toggles. Every row's label lines up at the same x (rows that have no check column pad left to match it).
 - `TurnUsageFootnote`'s card opens upward by default but flips below the chip when the chip sits closer to the top of the scroll container than the card is tall — the first answer of a session is exactly that case, and an absolutely positioned card there was clipped by the scroller. It is measured in a `useLayoutEffect` on open, so the flip happens before paint.
 
+### Motion
+- Two durations, declared once in `app/globals.css`: `--motion-feedback` (150 ms) for every hover, press and state change, and `--motion-move` (200 ms) for surfaces that genuinely travel (drawers, overlay panels, width changes). The 0.1/0.12/0.14/0.15/0.2/0.25 s mix that the components used is gone.
+- Feedback transitions change color, border color or opacity only. Nothing translates or scales under the cursor — a control that shifts while you are aiming at it reads as lag.
+- Entrance animations (the session-info popover, the skeleton shimmer) keep their own keyframes; they are not interaction feedback and their timing is theirs.
+
+### Semantic status colors
+- `--ok` / `--err` / `--warn` exist for status only: a running, succeeded or failed tool, a notice, a diff, a deleted session. The hardcoded `#ef4444` / `#f59e0b` / `#22c55e` / `#10b981` that bypassed the theme are gone, so a colored theme retints them with everything else.
+- Green means "it answered": a connected MCP server gets a green dot and a green state word. The default theme's accent is monochrome (`#18181b` / `#ececed`), so an accent dot says "this row exists", not "this is live".
+- The code-mode row is a *mode*, not a connection, so its dot stays neutral (`mcpCodemodeDot`) and its badge never reads as a success. Two different green dots in one list would mean two different things.
+- Status words, dots and badges live in `mcp-config-helpers.ts` (`mcpStatusDot`, `mcpCodemodeDot`, `mcpCodemodeBadgeTone`) and the matching `.mcp-config-state` / `.mcp-sidebar-badge` classes in `app/settings.css`.
+
 ### Completion sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.
 - Browser autoplay policy means sound must be unlocked from a user gesture; `ChatInput` calls the unlock hook from interactive controls, and `ChatWindow` plays the tone from `onAgentEnd`.

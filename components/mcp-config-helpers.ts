@@ -214,11 +214,17 @@ export function mcpRowStateTone(state: McpServerRowState): McpStateTone {
   return "off";
 }
 
-/** `ConfigStatusDot` props for a tone: the accent for on, dim for off, else a warning or error color. */
+/**
+ * `ConfigStatusDot` props for a tone: success green when the server is up, dim
+ * when it is switched off, else the theme's warning or error color. A live
+ * connection has to be readable at a glance in a list of a dozen servers, and
+ * the accent is monochrome in the default theme — an accent dot there says
+ * "this row exists", not "this server answered".
+ */
 export function mcpStatusDot(tone: McpStateTone): { active?: boolean; color?: string } {
-  if (tone === "on") return { active: true };
+  if (tone === "on") return { color: "var(--ok)" };
   if (tone === "off") return { active: false };
-  return { color: tone === "error" ? "#ef4444" : "#f59e0b" };
+  return { color: tone === "error" ? "var(--err)" : "var(--warn)" };
 }
 
 /** When a status was written: a test's end, or a session's report, or its closing of that connection. */
@@ -731,6 +737,27 @@ export const MCP_CODEMODE_STATE_KEYS: Record<McpCodemodeRowState, string> = {
 export function mcpCodemodeTone(state: McpCodemodeRowState): McpStateTone {
   if (state === "unavailable") return "error";
   return state === "unknown" ? "off" : "on";
+}
+
+/**
+ * The code-mode row's dot. It is a *mode* (automatic / always on), not a
+ * connection, so it stays neutral: green is reserved for a server that
+ * actually answered, and two different green dots in one list would mean two
+ * different things.
+ */
+export function mcpCodemodeDot(state: McpCodemodeRowState): { active?: boolean; color?: string } {
+  const tone = mcpCodemodeTone(state);
+  if (tone === "on") return { active: true };
+  if (tone === "off") return { active: false };
+  return { color: "var(--err)" };
+}
+
+/**
+ * The code-mode row's badge tone. It never reads as "on": a mode that is
+ * merely available is not a green success, only a failure is worth a color.
+ */
+export function mcpCodemodeBadgeTone(state: McpCodemodeRowState): McpStateTone {
+  return state === "unavailable" ? "error" : "off";
 }
 
 // ---------------------------------------------------------------------------

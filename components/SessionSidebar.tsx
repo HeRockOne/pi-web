@@ -1243,7 +1243,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
-                                transition: "color 0.12s, background 0.12s",
+                                transition: "color var(--motion-feedback), background var(--motion-feedback)",
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--err)"; e.currentTarget.style.background = "color-mix(in srgb, var(--err) 8%, transparent)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
@@ -1728,12 +1728,12 @@ function SessionItem({
         margin: "0 6px",
         borderRadius: "var(--radius-control, 6px)",
         background: confirmDelete
-          ? "color-mix(in srgb, #ef4444 7%, transparent)"
+          ? "color-mix(in srgb, var(--err) 7%, transparent)"
           : isSelected
             ? "var(--bg-selected)"
             : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete ? "2px solid #ef4444" : "2px solid transparent",
-        transition: "background 0.12s ease, border-color 0.12s ease",
+        borderLeft: confirmDelete ? "2px solid var(--err)" : "2px solid transparent",
+        transition: "background var(--motion-feedback) ease, border-color var(--motion-feedback) ease",
         opacity: deleting ? 0.5 : 1,
         gap: 7,
         overflow: "hidden",
@@ -1935,7 +1935,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 6, color: "var(--text-dim)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  transition: "background var(--motion-feedback), color var(--motion-feedback), border-color var(--motion-feedback)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-selected)";
@@ -1961,7 +1961,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 6, color: "var(--text-dim)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  transition: "background var(--motion-feedback), color var(--motion-feedback), border-color var(--motion-feedback)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "color-mix(in srgb, var(--err) 8%, transparent)";
@@ -2037,7 +2037,7 @@ function ProjectFolderRow({
         borderRadius: "var(--radius-control, 6px)",
         background: hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: "2px solid transparent",
-        transition: "background 0.12s ease, border-color 0.12s ease",
+        transition: "background var(--motion-feedback) ease, border-color var(--motion-feedback) ease",
         gap: 6,
         overflow: "hidden",
       }}
