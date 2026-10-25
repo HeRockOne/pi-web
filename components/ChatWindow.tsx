@@ -1221,9 +1221,13 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 let endIdx = userIdx + 1;
                 while (endIdx < messages.length && !isMessageGroupAnchor(messages[endIdx])) endIdx += 1;
 
+                const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
 
-                if (finalAssistantIdx === -1) {
+                // Live check wins: mid-turn every response ends in toolUse, so
+                // findFinalAssistantIndex returns -1 and the flat fallback below
+                // would bypass the process card entirely.
+                if (finalAssistantIdx === -1 && !isLiveTail) {
                   for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
                     rendered.push(renderMessage(renderIdx));
                   }
@@ -1231,7 +1235,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   continue;
                 }
 
-                const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
                   rendered.push(renderMessage(userIdx));
                   // The streaming turn's settled steps fold into the process
