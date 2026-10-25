@@ -1099,28 +1099,6 @@ function AssistantMessageView({
             {t("chat.turnDuration", { time: formatTurnDuration(turnDurationMs) })}
           </span>
         )}
-        {message.usage && !isStreaming && (showTimestamp || turnUsage !== undefined || turnDurationMs !== undefined) && (() => {
-          // This is one request's own hit rate: the share of this response's prompt
-          // that came from cache. Only a turn's closer shows it — the final answer
-          // (turn usage/duration props) or a standalone last message. Process-group
-          // and live-tail intermediates carry none of those, so the dot no longer
-          // repeats under every tool row; the card holds the turn's weighted rate.
-          const hitTotal = message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
-          if (!(message.usage.cacheRead > 0) || hitTotal <= 0) return null;
-          const rate = message.usage.cacheRead / hitTotal;
-          // 缓存命中率是唯一保留在消息底部的内容：它是每条消息都会变的
-          // 质量指标，掉档时值得一眼看见。颜色分档由数值决定，不靠 emoji。
-          const tone = rate >= 0.9 ? "var(--ok)" : rate >= 0.7 ? "var(--warn)" : "var(--err)";
-          return (
-            <span
-              title={`${t("session.cacheHitRate")} ${formatPercent(rate)}`}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}
-            >
-              <span aria-hidden style={{ width: 6, height: 6, borderRadius: 3, background: tone, flex: "0 0 auto" }} />
-              {formatPercent(rate, 1)}
-            </span>
-          );
-        })()}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}

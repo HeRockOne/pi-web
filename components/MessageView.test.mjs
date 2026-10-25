@@ -318,10 +318,9 @@ test("footnotes a finished answer with the turn's usage chip and its duration", 
   assert.match(html, /took 2m 5s/);
   // The chip is the turn's total; the breakdown lives in the card it opens.
   assert.doesNotMatch(html, /250 in|9 out|7,000 cache R/);
-  // The dot stays this response's own hit rate (7,000/7,250 = 96.6%); the turn's
-  // token-weighted rate (60,000/61,205 = 98.0%) is what the card shows.
-  assert.match(html, /96\.6%/);
-  assert.doesNotMatch(html, /98\.0%/);
+  // Per-request hit rates moved to the process card header ("最近请求"); the
+  // answer footnote carries only the turn's token-weighted rate (in the card).
+  assert.doesNotMatch(html, /96\.6%/);
 
   // While the answer streams there is no finished turn to footnote.
   const streaming = renderMessage(message, { isStreaming: true, turnUsage, turnDurationMs: 125000 });
