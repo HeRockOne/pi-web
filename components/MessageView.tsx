@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useRef, useEffect, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
@@ -267,7 +267,27 @@ function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provi
   // no hover) can reach it too. Leaving the chip always closes it.
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
+  // The card normally opens upward, but the first answer of a session sits right
+  // under the top of the scroll container — there it would be clipped, so it
+  // flips below the chip instead.
+  const [placement, setPlacement] = useState<"above" | "below">("above");
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const open = hovered || pinned;
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement("above");
+      return;
+    }
+    const anchor = anchorRef.current;
+    const card = cardRef.current;
+    if (!anchor || !card) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    // 8px breathing room against the top of the viewport/scroll container.
+    if (anchorRect.top - card.offsetHeight - 6 < 8) setPlacement("below");
+  }, [open]);
+
   const prompt = promptTokens(usage);
   const hitRate = prompt > 0 ? usage.cacheRead / prompt : null;
   const rows: { label: string; value: string }[] = [
@@ -282,6 +302,7 @@ function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provi
 
   return (
     <span
+      ref={anchorRef}
       style={{ position: "relative", display: "inline-flex", flex: "0 0 auto" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
@@ -315,13 +336,18 @@ function TurnUsageFootnote({ usage, provider, model }: { usage: TurnUsage; provi
       </button>
       {open && (
         <div
+          ref={cardRef}
           role="tooltip"
           style={{
             position: "absolute",
-            bottom: "calc(100% + 6px)",
+            ...(placement === "above"
+              ? { bottom: "calc(100% + 6px)" }
+              : { top: "calc(100% + 6px)" }),
             left: 0,
             zIndex: 60,
             minWidth: 252,
+            maxHeight: "calc(100vh - 24px)",
+            overflowY: "auto",
             padding: "10px 12px",
             border: "1px solid var(--border)",
             borderRadius: 10,

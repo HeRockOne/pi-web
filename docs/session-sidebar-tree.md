@@ -114,6 +114,16 @@ type SidebarRow =
 - **项目文件夹行强化**：常显浅灰底 `rgba(127,127,127,0.07)`（不再是透明/弱化）、路径 mono 12px **600 加粗** `var(--text)`（原来 11.5 muted 倒挂弱于会话行）、图标 16px `var(--text)`；hover 变 `--bg-hover`、选中保留 accent 左条。
 
 
+#### 4c. 单行密度（用户反馈「信息密度太多」后改为）
+已实现 —— 目标形态是「文件夹名一行 + 会话标题一行、右侧相对时间」：
+
+- **`SESSION_LIST_ITEM_HEIGHT` 46 → 34**（导出，供测试按实际行高计算窗口）。
+- **会话行去掉第二行**：不再显示「N 条消息」；时间戳从副行挪到行尾右侧（`formatRelativeTime`），running / unread 指示器占用同一槽位（状态优先于时间），hover 时让位给重命名/删除按钮。
+- **worktree 分支**只保留一个小分支图标 + `title`，不再显示分支名文本。
+- **项目行去掉「N 个会话」副行**：单行 = 折叠箭头 + 文件夹图标 + 名称（12.5px / 600，`var(--text)`，不再是 mono）+ running/unread 指示器；`ProjectFolderRow` 的 `sessionCount` 参数删除。
+- **选中态**改为中性 pill（`var(--bg-selected)`，hover 为 `var(--bg-hover)`），去掉强调色左条与 accent 淡底 —— 与参考稿一致，选中靠底色 + 加粗识别。
+- i18n 的 `sidebar.messagesCount` / `sidebar.projectSessions` 文案保留但不再渲染（其他位置或将来可能复用）。
+
 ### 5. i18n（en.ts / zh-CN.ts / zh-TW.ts）
 
 - 新增 `sidebar.expandProject` / `sidebar.collapseProject`（项目行箭头 title）。

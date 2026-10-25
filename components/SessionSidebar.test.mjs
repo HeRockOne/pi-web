@@ -4,32 +4,35 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { jsx: { runtime: "automatic" }, tsconfigPaths: true });
-const { getSessionListIndices } = await jiti.import("./SessionSidebar.tsx");
+const { getSessionListIndices, SESSION_LIST_ITEM_HEIGHT: ROW } = await jiti.import("./SessionSidebar.tsx");
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
 const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
 
 test("scrolling keeps the focused session and the viewport mounted without expanding the whole window", () => {
+  // 335px viewport + 8 rows of overscan on each side.
+  const windowSize = Math.ceil(335 / ROW) + 16;
   for (const [scrollTop, focusedIndex] of [[0, 1999], [10000, 0]]) {
     const indices = getSessionListIndices(2000, scrollTop, 335, focusedIndex);
-    const firstVisible = Math.floor(scrollTop / 46);
-    const lastVisible = Math.ceil((scrollTop + 335) / 46) - 1;
+    const firstVisible = Math.floor(scrollTop / ROW);
+    const lastVisible = Math.ceil((scrollTop + 335) / ROW) - 1;
     for (let index = firstVisible; index <= lastVisible; index++) assert.ok(indices.includes(index));
     assert.ok(indices.includes(focusedIndex));
-    assert.equal(indices.length, 25);
+    assert.equal(indices.length, windowSize + 1);
     assert.equal(new Set(indices).size, indices.length);
     assert.deepEqual(indices, [...indices].sort((a, b) => a - b));
   }
-  assert.equal(getSessionListIndices(2000, 0, 335, 3).length, 24);
+  assert.equal(getSessionListIndices(2000, 0, 335, 3).length, windowSize);
   const blurred = getSessionListIndices(2000, 10000, 335);
-  assert.equal(blurred.length, 24);
+  assert.equal(blurred.length, windowSize);
   assert.ok(!blurred.includes(0));
 });
 
 test("session windows stay valid after a project shrinks and before the viewport is measured", () => {
   assert.deepEqual(getSessionListIndices(5, 80000, 335, 1999), [0, 1, 2, 3, 4]);
   assert.deepEqual(getSessionListIndices(0, 80000, 335, 1999), []);
-  assert.equal(getSessionListIndices(2000, 0, 0).length, 30);
+  // An unmeasured viewport falls back to 600px.
+  assert.equal(getSessionListIndices(2000, 0, 0).length, Math.ceil(600 / ROW) + 16);
 });
 
 test("only Shift+click bypasses session deletion confirmation", () => {
@@ -132,17 +135,25 @@ test("renders the session list as a project folder tree", () => {
   assert.doesNotMatch(source, /listSessionFamilies/);
   assert.doesNotMatch(source, /sessionFamilies/);
   // Tree guide lines + macOS-style inset pill rows (no tinted band; the
-  // selected session row is an accent-tinted pill)
+  // selected session row is a plain neutral pill, no accent bar)
   assert.match(source, /const rowPadding = depth === 0 \? 26 : 14 \+ depth \* 18;/);
   assert.match(source, /const lineX = \(layer: number\) => 14 \+ layer \* 18 \+ 8;/);
   assert.match(source, /\[\.\.\.guides, \.\.\.\(hasChildren && !collapsed \? tails : \[\]\)\]/);
-  assert.match(source, /color-mix\(in srgb, var\(--accent\) 13%, var\(--bg-panel\)\)/);
-  assert.match(source, /isSelected \? "2px solid var\(--accent\)"/);
-  // The project header never gets a selection band of its own — otherwise it
-  // competes with the selected session row. It is marked by the accent folder
-  // icon + accent mono path instead.
-  assert.match(source, /background: hovered \? "var\(--bg-hover\)" : "transparent"/);
-  assert.match(source, /fontWeight: selected \? 550 : 450, color: selected \? "var\(--accent\)" : "var\(--text\)"/);
+  assert.match(source, /isSelected\s*\?\s*"var\(--bg-selected\)"/);
   assert.doesNotMatch(source, /borderLeft: selected \? "2px solid var\(--accent\)"/);
   assert.doesNotMatch(source, /rgba\(127,127,127,0\.07\)/);
+  // The project header never gets a selection band of its own — otherwise it
+  // competes with the selected session row.
+  assert.match(source, /background: hovered \? "var\(--bg-hover\)" : "transparent"/);
+});
+
+test("sidebar rows stay single-line: no message counts, no session totals", () => {
+  // Row height is what the windowed list budgets per row; a second line per row
+  // forced 46px and doubled the visual noise for a number nobody reads.
+  assert.match(source, /export const SESSION_LIST_ITEM_HEIGHT = 34;/);
+  assert.doesNotMatch(source, /sidebar\.messagesCount/);
+  assert.doesNotMatch(source, /sidebar\.projectSessions/);
+  assert.doesNotMatch(sessionItemSource, /sessionCount/);
+  // The timestamp keeps its own trailing slot instead of sharing a meta line.
+  assert.match(sessionItemSource, /formatRelativeTime\(session\.modified, locale\)/);
 });

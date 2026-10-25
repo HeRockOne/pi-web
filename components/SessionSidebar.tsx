@@ -17,7 +17,9 @@ import { subscribeRunningState, type RunningSnapshot } from "@/lib/running-hub-c
 
 // Fixed row height for the session list. SessionItem renders at exactly this
 // height, so the list can be windowed (only the visible slice is mounted).
-const SESSION_LIST_ITEM_HEIGHT = 46;
+// One tight line per row: title (or folder path) + trailing state/time. No
+// second line for message counts — the count told nobody anything.
+export const SESSION_LIST_ITEM_HEIGHT = 34;
 
 // Tree collapse state persists across page reloads (project folders + session branches).
 const TREE_COLLAPSE_STORAGE_KEY = "pi-web:sidebar-tree-collapsed";
@@ -143,6 +145,16 @@ function saveUnreadSessionIds(ids: Set<string>): void {
 /** Substitute the home dir prefix with ~ (no path truncation — see PathLabel) */
 function displayCwd(cwd: string, homeDir?: string): string {
   return (homeDir && cwd.startsWith(homeDir)) ? "~" + cwd.slice(homeDir.length) : cwd;
+}
+
+/**
+ * Folder row label: just the leaf directory name, the way a file tree shows a
+ * folder. The full (home-shortened) path stays in the row's tooltip — a path
+ * squeezed into one 34px row only ever rendered as "…ds\Compressed\pi-web-main".
+ */
+function projectBasename(root: string): string {
+  const segments = root.split(/[\\/]+/).filter(Boolean);
+  return segments[segments.length - 1] ?? root;
 }
 
 /**
@@ -1448,8 +1460,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     style={{ position: "absolute", top: index * SESSION_LIST_ITEM_HEIGHT, left: 0, right: 0 }}
                   >
                     <ProjectFolderRow
-                      label={displayCwd(row.project.root, homeDir)}
-                      sessionCount={row.projectSessions.length}
+                      label={projectBasename(row.project.root)}
+                      title={displayCwd(row.project.root, homeDir)}
                       selected={row.project.key === selectedProject?.key}
                       running={(activity?.running ?? 0) > 0}
                       unread={(activity?.unread ?? 0) > 0}
@@ -1718,14 +1730,12 @@ function SessionItem({
         background: confirmDelete
           ? "color-mix(in srgb, #ef4444 7%, transparent)"
           : isSelected
-            ? "color-mix(in srgb, var(--accent) 13%, var(--bg-panel))"
+            ? "var(--bg-selected)"
             : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: confirmDelete
-          ? "2px solid #ef4444"
-          : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+        borderLeft: confirmDelete ? "2px solid #ef4444" : "2px solid transparent",
         transition: "background 0.12s ease, border-color 0.12s ease",
         opacity: deleting ? 0.5 : 1,
-        gap: 8,
+        gap: 7,
         overflow: "hidden",
       }}
     >
@@ -1841,25 +1851,52 @@ function SessionItem({
               <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
             </svg>
           ))}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
+          <span
+            title={title}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 13,
+              fontWeight: isSelected ? 550 : 400,
+              lineHeight: 1.4,
+              color: isSelected ? "var(--text)" : "var(--text-muted)",
+            }}
+          >
+            {title}
+          </span>
+
+          {session.isWorktree && session.branch && (
+            <span
+              title={`Worktree: ${session.cwd}`}
+              style={{ display: "flex", alignItems: "center", flexShrink: 0, color: "var(--text-dim)" }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="6" y1="3" x2="6" y2="15" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            </span>
+          )}
+
+          {/* Single trailing slot: state wins over the timestamp, and hover
+              actions take the whole slot so nothing gets squeezed. */}
+          {!hovered && (
+            <span
               style={{
+                flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
-                gap: 5,
-                minWidth: 0,
-                fontSize: 13,
-                fontWeight: isSelected ? 500 : 400,
-                lineHeight: 1.4,
-                color: "var(--text)",
+                gap: 4,
+                color: "var(--text-dim)",
+                fontSize: 11,
+                fontVariantNumeric: "tabular-nums",
+                whiteSpace: "nowrap",
               }}
-              title={title}
             >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                {title}
-              </span>
-            </div>
-            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden" }}>
               {isRunning ? (
                 <RunningSessionIndicator />
               ) : isUnread ? (
@@ -1867,23 +1904,8 @@ function SessionItem({
               ) : (
                 <span title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
               )}
-              <span>{t("sidebar.messagesCount", { count: session.messageCount })}</span>
-              {session.isWorktree && session.branch && (
-                <span
-                  title={`Worktree: ${session.cwd}`}
-                  style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", minWidth: 0, overflow: "hidden" }}
-                >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.branch}</span>
-                </span>
-              )}
-            </div>
-          </div>
+            </span>
+          )}
 
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
@@ -1969,7 +1991,7 @@ function SessionItem({
 
 function ProjectFolderRow({
   label,
-  sessionCount,
+  title,
   selected,
   running,
   unread,
@@ -1979,8 +2001,10 @@ function ProjectFolderRow({
   onClick,
   onNewSession,
 }: {
+  /** Leaf folder name shown in the row. */
   label: string;
-  sessionCount: number;
+  /** Full (home-shortened) path, used for tooltips only. */
+  title: string;
   selected: boolean;
   running: boolean;
   unread: boolean;
@@ -1995,6 +2019,7 @@ function ProjectFolderRow({
   return (
     <div
       onClick={onClick}
+      title={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -2004,10 +2029,10 @@ function ProjectFolderRow({
         paddingLeft: 8,
         paddingRight: 8,
         cursor: "pointer",
-        // macOS-style section headers: no tinted band at all — the accent
-        // folder icon + mono path mark the current project, so the selection
-        // highlight stays exclusively on the session row below it. Hover is an
-        // inset pill like session rows.
+        // macOS-style section headers: no tinted band at all — the folder icon
+        // marks the current project, so the selection highlight stays
+        // exclusively on the session row below it. Hover is an inset pill like
+        // session rows.
         margin: "0 6px",
         borderRadius: "var(--radius-control, 6px)",
         background: hovered ? "var(--bg-hover)" : "transparent",
@@ -2036,22 +2061,28 @@ function ProjectFolderRow({
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-muted)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <PathLabel
-          text={label}
-          style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: selected ? 550 : 450, color: selected ? "var(--accent)" : "var(--text)" }}
-        />
-        <div style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, color: "var(--text-dim)", fontSize: 10.5, letterSpacing: "0.01em", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden" }}>
-          {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
-          <span>{t("sidebar.projectSessions", { count: sessionCount })}</span>
-        </div>
-      </div>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: 12.5,
+          fontWeight: 600,
+          lineHeight: 1.35,
+          color: "var(--text)",
+        }}
+      >
+        {label}
+      </span>
+      {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
       {/* New-session action — shown on hover, mirroring session row actions */}
       {hovered && onNewSession && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onNewSession(); }}
-          title={t("sidebar.newSessionTitle", { path: label })}
+          title={t("sidebar.newSessionTitle", { path: title })}
           aria-label={t("i18n.newSession")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 4,

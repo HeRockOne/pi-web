@@ -229,6 +229,12 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - API-key routes store and remove keys through `AuthStorage`. Status endpoints must never return the raw key.
 - The model test route is `app/api/models-config/test/route.ts`; `app/api/models/test/` is not a real route.
 
+### Composer bar grouping
+- Left/right split is semantic: the attach button is the only *action* and stays on the left; everything that describes how the next message will be handled (model selector → reasoning effort → the controls popover) is one cluster on the right, pushed there by a flexible spacer. The old `attach | divider | model … spacer … reason` layout put the two model settings at opposite ends of the bar.
+- Reasoning effort opens as a plain right-aligned drop-down list (`controlRowStyle`), not a wrapping chip grid: one row per level, label left, meaning right. Chips read as a matrix of equals and changed width with the level names.
+- The controls popover reuses that geometry (same anchor gap, radius, padding) and splits into titled sections: `Tool presets` (exclusive radio rows, `controlRowStyle`), `Extension tools` (on/off rows with `ControlSwitch`, `controlToggleRowStyle`), then `Compact context` / `Completion sound` below a divider. Two shapes carry the meaning — a check column means "pick one of these", a switch means "add or remove this" — so a user can no longer mistake three active presets for one preset plus two toggles. Every row's label lines up at the same x (rows that have no check column pad left to match it).
+- `TurnUsageFootnote`'s card opens upward by default but flips below the chip when the chip sits closer to the top of the scroll container than the card is tall — the first answer of a session is exactly that case, and an absolutely positioned card there was clipped by the scroller. It is measured in a `useLayoutEffect` on open, so the flip happens before paint.
+
 ### Completion sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.
 - Browser autoplay policy means sound must be unlocked from a user gesture; `ChatInput` calls the unlock hook from interactive controls, and `ChatWindow` plays the tone from `onAgentEnd`.

@@ -532,32 +532,129 @@ export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
   );
 }
 
-/** Chip for a controls popover: pill with a filled accent when active. */
-function controlChipStyle(active: boolean): React.CSSProperties {
+/**
+ * Row for a drop-down list of mutually exclusive levels: check slot on the
+ * left, the level itself, then what it means pushed to the right.
+ */
+function controlRowStyle(active: boolean): React.CSSProperties {
   return {
-    padding: "4px 11px",
-    borderRadius: 999,
-    border: `1px solid ${active ? "var(--accent)" : "color-mix(in srgb, var(--border) 85%, transparent)"}`,
-    background: active ? "var(--accent)" : "transparent",
-    color: active ? "var(--bg)" : "var(--text-muted)",
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    width: "100%",
+    padding: "5px 8px",
+    border: "none",
+    borderRadius: 7,
+    background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "none",
+    color: active ? "var(--accent)" : "var(--text-muted)",
+    cursor: "pointer",
     fontSize: 12,
     fontWeight: active ? 500 : 400,
-    cursor: "pointer",
+    lineHeight: 1.4,
+    textAlign: "left",
     whiteSpace: "nowrap",
-    transition: "background 0.12s, color 0.12s, border-color 0.12s",
+  };
+}
+
+/**
+ * Row that toggles one feature on or off: label on the left, a mini switch
+ * pushed right. Deliberately a different shape from `controlRowStyle` — a
+ * toggle reads as "add/remove this", a check row reads as "pick one".
+ */
+function controlToggleRowStyle(on: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "5px 8px 5px 25px",
+    border: "none",
+    borderRadius: 7,
+    background: "none",
+    color: on ? "var(--text)" : "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: on ? 500 : 400,
+    lineHeight: 1.4,
+    textAlign: "left",
+    whiteSpace: "nowrap",
+    transition: "color 0.12s",
+  };
+}
+
+/** Row that runs a one-shot action (compact context) — no state to show. */
+function controlActionRowStyle(): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    width: "100%",
+    padding: "5px 8px 5px 25px",
+    border: "none",
+    borderRadius: 7,
+    background: "none",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 400,
+    lineHeight: 1.4,
+    textAlign: "left",
+    whiteSpace: "nowrap",
+    transition: "background 0.12s, color 0.12s",
   };
 }
 
 /** Small caps-style label above a controls-popover section. */
 function controlSectionLabelStyle(): React.CSSProperties {
   return {
+    padding: "0 8px",
     fontSize: 10.5,
-    fontWeight: 500,
-    letterSpacing: "0.5px",
-    color: "var(--text-dim)",
-    marginBottom: 8,
+    fontWeight: 600,
+    letterSpacing: "0.6px",
+    color: "var(--text-muted)",
+    marginBottom: 2,
     whiteSpace: "nowrap",
   };
+}
+
+/** Divider that opens a following section inside a controls popover. */
+function controlSectionDividerStyle(): React.CSSProperties {
+  return {
+    margin: "5px 0",
+    borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
+  };
+}
+
+/** Track + thumb for the on/off rows. Purely visual; the row owns the state. */
+function ControlSwitch({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        width: 26,
+        height: 15,
+        flexShrink: 0,
+        borderRadius: 999,
+        background: on ? "var(--accent)" : "color-mix(in srgb, var(--text) 16%, transparent)",
+        transition: "background 0.15s ease",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 2,
+          left: on ? 13 : 2,
+          width: 11,
+          height: 11,
+          borderRadius: "50%",
+          background: "var(--bg)",
+          boxShadow: "0 1px 2px color-mix(in srgb, var(--text) 40%, transparent)",
+          transition: "left 0.15s ease",
+        }}
+      />
+    </span>
+  );
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
@@ -2512,8 +2609,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                   </svg>
                 </button>
-                <span aria-hidden="true" style={{ width: 1, alignSelf: "stretch", flexShrink: 0, margin: "7px 2px", background: "color-mix(in srgb, var(--border) 60%, transparent)" }} />
-                <div style={{ flex: isMobile ? "1 1 auto" : "0 1 auto", minWidth: 0, display: "flex", alignItems: "center" }}>
+                {/* Right-hand cluster: everything that describes how the next
+                    message will be handled (model, reasoning effort, the rest of
+                    the controls) sits together on the right. The attach button
+                    stays alone on the left as the one pure action. */}
+                <div style={{ flex: isMobile ? "0 0 auto" : "1 1 auto", minWidth: 8 }} />
+                <div style={{ flex: isMobile ? "1 1 auto" : "0 1 auto", minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                   {(modelOptions.length > 0 || model || modelError) && onModelChange && (
                     <ModelSelector
                       options={modelOptions}
@@ -2525,7 +2626,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     />
                   )}
                 </div>
-                <div style={{ flex: 1 }} />
                 {/* Reasoning effort gets its own control: it is a per-conversation
                     model setting, not a session control like the sliders menu. */}
                 {!isStreaming && onThinkingLevelChange && (
@@ -2568,53 +2668,64 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     {thinkingMenuOpen && (
                       <div
                         role="menu"
+                        aria-label={t("chat.controlsThinking")}
                         style={{
                           position: "absolute",
-                          bottom: "calc(100% + 8px)",
+                          bottom: "calc(100% + 6px)",
                           right: 0,
                           zIndex: 100,
-                          width: "min(320px, calc(100vw - 32px))",
-                          padding: 14,
+                          width: "min(236px, calc(100vw - 24px))",
+                          maxHeight: "min(320px, calc(100vh - 96px))",
+                          overflowY: "auto",
+                          padding: 4,
                           background: "var(--surface-2)",
                           border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                          borderRadius: 12,
+                          borderRadius: 10,
                           boxShadow: "var(--shadow-lg)",
-                          backdropFilter: "blur(10px)",
                         }}
                       >
-                        <div style={controlSectionLabelStyle()}>{t("chat.controlsThinking")}</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {THINKING_LEVELS.filter((lvl) => {
-                            if (!availableThinkingLevels) return true;
-                            if (lvl === "auto") return true;
-                            return availableThinkingLevels.includes(lvl);
-                          }).map((lvl) => {
-                            const isActive = (thinkingLevel ?? "auto") === lvl;
-                            const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                            const chipLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                            const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
-                            return (
-                              <button
-                                key={lvl}
-                                type="button"
-                                role="menuitemradio"
-                                aria-checked={isActive}
-                                title={desc}
-                                onClick={() => { setThinkingMenuOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-                                style={controlChipStyle(isActive)}
-                              >
-                                {chipLabel}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {THINKING_LEVELS.filter((lvl) => {
+                          if (!availableThinkingLevels) return true;
+                          if (lvl === "auto") return true;
+                          return availableThinkingLevels.includes(lvl);
+                        }).map((lvl) => {
+                          const isActive = (thinkingLevel ?? "auto") === lvl;
+                          const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                          const chipLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                          const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={isActive}
+                              title={desc}
+                              onClick={() => { setThinkingMenuOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
+                              style={controlRowStyle(isActive)}
+                              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                            >
+                              <span aria-hidden="true" style={{ width: 10, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+                                {isActive && (
+                                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                                  </svg>
+                                )}
+                              </span>
+                              <span style={{ flexShrink: 0 }}>{chipLabel}</span>
+                              <span title={desc} style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 10.5 }}>
+                                {desc}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 )}
                 {/* Everything else adjustable lives in one popover: tool presets,
-                    compaction, sound. The bar itself stays a quiet attach → model →
-                    gauge → sliders row on every screen size. */}
+                    compaction, sound. The bar itself stays a quiet attach | model
+                    · reasoning · sliders row on every screen size. */}
                 <button
                   type="button"
                   onClick={() => { setThinkingMenuOpen(false); setControlsMenuOpen((v) => !v); }}
@@ -2657,27 +2768,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {controlsMenuOpen && (
                   <div
                     role="menu"
+                    aria-label={t("chat.moreControls")}
                     style={{
                       position: "absolute",
-                      bottom: "calc(100% + 8px)",
+                      bottom: "calc(100% + 6px)",
                       right: 0,
                       zIndex: 100,
-                      width: "min(320px, calc(100vw - 32px))",
-                      padding: 14,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
+                      width: "min(276px, calc(100vw - 24px))",
+                      maxHeight: "min(440px, calc(100vh - 96px))",
+                      overflowY: "auto",
+                      padding: 5,
                       background: "var(--surface-2)",
                       border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                      borderRadius: 12,
+                      borderRadius: 10,
                       boxShadow: "var(--shadow-lg)",
-                      backdropFilter: "blur(10px)",
                     }}
                   >
                     {!isStreaming && onToolPresetChange && (
-                      <div>
+                      <div role="group" aria-label={t("chat.controlsTools")}>
                         <div style={controlSectionLabelStyle()}>{t("chat.controlsTools")}</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
                           {TOOL_PRESETS.map((lvl) => {
                             const preset = TOOL_PRESET_MAP[lvl];
                             const isActive = (toolPreset ?? "default") === preset;
@@ -2694,34 +2804,61 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 aria-checked={isActive}
                                 title={desc}
                                 onClick={() => { setControlsMenuOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                                style={controlChipStyle(isActive)}
+                                style={controlRowStyle(isActive)}
+                                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
                               >
-                                {lvl}
+                                <span aria-hidden="true" style={{ width: 10, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+                                  {isActive && (
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                                    </svg>
+                                  )}
+                                </span>
+                                <span style={{ flexShrink: 0 }}>{lvl}</span>
+                                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "right", color: "var(--text-dim)", fontSize: 10.5 }}>
+                                  {desc}
+                                </span>
                               </button>
                             );
                           })}
                         </div>
                         {systemToolToggles && systemToolToggles.length > 0 && onSystemToolToggle && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                            {systemToolToggles.map((tool) => (
-                              <button
-                                key={tool.name}
-                                type="button"
-                                role="menuitemcheckbox"
-                                aria-checked={tool.active}
-                                title={tool.description}
-                                onClick={() => onSystemToolToggle(tool.name, !tool.active)}
-                                style={controlChipStyle(tool.active)}
-                              >
-                                {tool.name}
-                              </button>
-                            ))}
+                          <div role="group" aria-label={t("chat.controlsExtensionTools")} style={controlSectionDividerStyle()}>
+                            <div style={controlSectionLabelStyle()}>{t("chat.controlsExtensionTools")}</div>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              {systemToolToggles.map((tool) => (
+                                <button
+                                  key={tool.name}
+                                  type="button"
+                                  role="menuitemcheckbox"
+                                  aria-checked={tool.active}
+                                  title={tool.description}
+                                  onClick={() => onSystemToolToggle(tool.name, !tool.active)}
+                                  style={controlToggleRowStyle(tool.active)}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                                >
+                                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{tool.name}</span>
+                                  <ControlSwitch on={tool.active} />
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
                     )}
                     {(onCompact || onSoundToggle !== undefined) && (
-                      <div style={{ borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)", paddingTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div
+                        role="group"
+                        style={{
+                          marginTop: 5,
+                          paddingTop: 5,
+                          borderTop: "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
+                      >
                         {onCompact && (
                           <button
                             type="button"
@@ -2730,32 +2867,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             disabled={isStreaming && !isCompacting}
                             title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "5px 10px",
-                              background: isCompacting ? "color-mix(in srgb, var(--err) 8%, transparent)" : "transparent",
-                              border: "none",
-                              borderRadius: 7,
+                              ...controlActionRowStyle(),
+                              background: isCompacting ? "color-mix(in srgb, var(--err) 10%, transparent)" : "none",
                               color: isCompacting ? "var(--err)" : "var(--text-muted)",
                               cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                              fontSize: 12,
-                              opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                              transition: "background 0.12s, color 0.12s",
+                              opacity: (isStreaming && !isCompacting) ? 0.45 : 1,
                             }}
+                            onMouseEnter={(e) => { if (!isCompacting) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onMouseLeave={(e) => { if (!isCompacting) e.currentTarget.style.background = "none"; }}
                           >
-                            {isCompacting ? (
-                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>
-                            ) : (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                                <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                              </svg>
-                            )}
-                            {isCompacting ? t("chat.compacting") : t("chat.compact")}
+                            <span aria-hidden="true" style={{ width: 12, flexShrink: 0, display: "flex", justifyContent: "center" }}>
+                              {isCompacting ? (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>
+                              ) : (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                                  <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+                                </svg>
+                              )}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {isCompacting ? t("chat.compacting") : t("chat.compactContext")}
+                            </span>
                           </button>
                         )}
-                        <span style={{ flex: 1 }} />
                         {onSoundToggle !== undefined && (
                           <button
                             type="button"
@@ -2763,23 +2898,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             aria-checked={!!soundEnabled}
                             onClick={onSoundToggle}
                             title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "5px 10px",
-                              background: "transparent",
-                              border: "none",
-                              borderRadius: 7,
-                              color: "var(--text-muted)",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              opacity: soundEnabled ? 1 : 0.6,
-                              transition: "background 0.12s, color 0.12s, opacity 0.12s",
-                            }}
+                            style={controlToggleRowStyle(!!soundEnabled)}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                           >
-                            <MorphVolumeIcon on={!!soundEnabled} />
-                            {soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+                            <span style={{ display: "flex", alignItems: "center", gap: 7, flex: 1, minWidth: 0 }}>
+                              <MorphVolumeIcon on={!!soundEnabled} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{t("chat.completionSound")}</span>
+                            </span>
+                            <ControlSwitch on={!!soundEnabled} />
                           </button>
                         )}
                       </div>
