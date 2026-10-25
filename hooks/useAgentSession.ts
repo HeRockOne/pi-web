@@ -22,9 +22,9 @@ import type { AskAnswer } from "@/lib/ask-types";
 import { mergeSessionStats, type SessionFileStats } from "@/lib/session-stats";
 import { userMessageKey } from "@/lib/prompt-recovery";
 import { AgentEventConnection } from "@/lib/agent-event-connection";
+import { subscribeRunningState } from "@/lib/running-hub-client";
+import { createHubAgentSource } from "@/lib/agent-hub-source";
 import { isSystemMessageEvent } from "@/lib/agent-event-wire";
-import { getToolExecutionProgress } from "@/lib/tool-execution-progress";
-import { CODEMODE_TOOL_NAME, getCodemodeProgress } from "@/lib/codemode-view";
 import { bareMcpOpensSettings } from "@/lib/mcp-command";
 import type { SettingsSection } from "@/lib/settings-navigation";
 import {
@@ -172,6 +172,42 @@ export interface UseAgentSessionOptions {
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
+/**
+ * Resolve when the pushed snapshot says this session has no shell command in
+ * flight. The timeout is the fallback for a dead stream, and the caller treats
+ * it as "verify over HTTP" — that turns a 1 s poll into one request per
+ * completion.
+ */
+function waitForBashStateChange(sid: string, timeoutMs: number): Promise<void> {
+  if (typeof window === "undefined") return delay(timeoutMs);
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    let subscribing = true;
+    let stop: () => void = () => {};
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      stop();
+      resolve();
+    };
+    stop = subscribeRunningState({
+      onState: (snapshot) => {
+        // A callback that runs *during* subscribe() is the cached snapshot
+        // replayed to a late subscriber, not news. Acting on it spins: the
+        // cache can predate the command that we already know is running, so
+        // every iteration would "settle" on the same stale value and fall
+        // straight back into the HTTP verification below.
+        if (subscribing) return;
+        if (!snapshot.bashRunningSessionIds.includes(sid)) finish();
+      },
+    });
+    subscribing = false;
+    timer = setTimeout(finish, timeoutMs);
+  });
+}
+
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -180,7 +216,9 @@ const AGENT_STATE_RECONCILE_MS = 15_000;
 // Idle sessions never push context usage; poll slowly while visible so the
 // gauge reflects the latest turn without a page reload.
 const IDLE_CONTEXT_USAGE_POLL_MS = 20_000;
-const BASH_STATE_RECONCILE_MS = 1_000;
+// Only a backstop for a dead stream: the `running` channel pushes the
+// "shell finished" transition, so this tick normally never fires.
+const BASH_SETTLEMENT_BACKSTOP_MS = 15_000;
 const EVENT_STREAM_READY_TIMEOUT_MS = 60_000;
 const EVENT_STREAM_RECONNECT_DELAY_MS = 1_000;
 // Retry temporary model-list failures without requiring a page refresh.
@@ -432,7 +470,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   if (!eventConnectionRef.current) {
     eventConnectionRef.current = new AgentEventConnection({
-      createSource: (sid) => new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`),
+      createSource: (sid) => createHubAgentSource(sid),
       onEvent: (event) => handleAgentEventRef.current?.(event as AgentEvent),
       shouldMaintain: (sid) => (
         sessionHookMountedRef.current
@@ -1088,7 +1126,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       && bashRecoveryIdRef.current === recoveryId
       && sessionIdRef.current === sid
     ) {
-      await delay(BASH_STATE_RECONCILE_MS);
+      // Pushed, not polled: this used to be one request per second for the whole
+      // life of the shell command, and a round trip is the expensive part.
+      await waitForBashStateChange(sid, BASH_SETTLEMENT_BACKSTOP_MS);
+      if (bashRecoveryIdRef.current !== recoveryId || sessionIdRef.current !== sid) return;
+      if (!bashRunningRef.current) return;
       try {
         const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
         if (!res.ok) continue;
@@ -1103,7 +1145,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setPendingBash(null);
         return;
       } catch {
-        // Keep polling while the page is mounted; network recovery is transparent.
+        // Keep waiting while the page is mounted; network recovery is transparent.
       }
     }
   }, [loadSession, syncLiveModel]);
@@ -1395,10 +1437,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_update": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
-        // For codemode, the progress is the newest call the script has made so far.
-        const progress = name === CODEMODE_TOOL_NAME
-          ? getCodemodeProgress(event.partialResult)
-          : getToolExecutionProgress(event.partialResult);
+        // The server derives the status line and ships only that string: pi's
+        // cumulative partialResult is quadratic on the wire (see
+        // lib/agent-event-wire.ts).
+        const progress = typeof event.progress === "string"
+          ? event.progress
+          : undefined;
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           const existing = tools.find((tool) => tool.id === id);

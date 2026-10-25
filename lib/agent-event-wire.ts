@@ -1,4 +1,6 @@
 import type { JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { CODEMODE_TOOL_NAME, getCodemodeProgress } from "./codemode-view";
+import { getToolExecutionProgress } from "./tool-execution-progress";
 
 export interface AgentEventLike {
   type: string;
@@ -97,11 +99,18 @@ export function toClientAgentEvent(
   }
 
   if (event.type === "tool_execution_update") {
+    // Pi emits the whole cumulative partialResult on every update, so a 64 KiB
+    // tool log cost ~6.6 MiB of SSE traffic and the stream spent its bandwidth
+    // re-sending text the browser already had. The UI only renders one short
+    // progress line, so derive it here and send that instead of the snapshot.
+    const toolName = typeof event.toolName === "string" ? event.toolName : "";
     return {
       type: "tool_execution_update",
       toolCallId: event.toolCallId,
       toolName: event.toolName,
-      partialResult: event.partialResult,
+      progress: toolName === CODEMODE_TOOL_NAME
+        ? getCodemodeProgress(event.partialResult)
+        : getToolExecutionProgress(event.partialResult),
     };
   }
 

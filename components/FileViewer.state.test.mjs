@@ -27,12 +27,14 @@ for (const [name, nextName] of [
   test(`${name} pauses its watcher and synchronizes after connecting`, () => {
     const block = functionBlock(name, nextName);
     const guard = block.indexOf("if (!watchEnabled) return;");
-    const eventSource = block.indexOf("new EventSource", guard);
-    const synchronize = block.indexOf("synchronize();", eventSource);
+    // The watch rides the shared event stream now; `watchFile` is its entry.
+    const watcher = block.indexOf("watchFile(", guard);
+    const synchronize = block.indexOf("synchronize();", watcher);
 
     assert.ok(guard >= 0, "watchEnabled guard missing");
-    assert.ok(eventSource > guard, "EventSource created before watchEnabled guard");
-    assert.ok(synchronize > eventSource, "connected synchronization missing");
+    assert.ok(watcher > guard, "file watcher started before watchEnabled guard");
+    assert.ok(synchronize > watcher, "connected synchronization missing");
+    assert.equal(block.match(/watchFile\(/g)?.length, 1, "one watcher per viewer");
     assert.match(block, /\}, \[[^\]]*watchEnabled[^\]]*\]\);/);
   });
 }

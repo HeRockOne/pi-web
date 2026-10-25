@@ -318,6 +318,11 @@ export class AgentSessionWrapper {
     return this._alive && (this.pendingPromptCount > 0 || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
   }
 
+  /** Narrower than isRunning(): the shell tool specifically, which has its own settle path. */
+  isBashRunning(): boolean {
+    return this._alive && this.inner.isBashRunning;
+  }
+
   isChatOnly(): boolean {
     return this.chatOnly;
   }
@@ -1947,6 +1952,15 @@ export function getRunningRpcSessionIds(): string[] {
   const ids = new Set<string>();
   for (const [sessionId, session] of getRegistry()) {
     if (session.isRunning()) ids.add(session.sessionId || sessionId);
+  }
+  return [...ids];
+}
+
+/** Sessions with a shell command in flight, for the push-based settle path. */
+export function getBashRunningRpcSessionIds(): string[] {
+  const ids = new Set<string>();
+  for (const [sessionId, session] of getRegistry()) {
+    if (session.isBashRunning()) ids.add(session.sessionId || sessionId);
   }
   return [...ids];
 }

@@ -13,6 +13,7 @@ import { SessionSearch } from "./SessionSearch";
 import { ChevronDownIcon, MorphChevron } from "./Icons";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
+import { subscribeRunningState, type RunningSnapshot } from "@/lib/running-hub-client";
 
 // Fixed row height for the session list. SessionItem renders at exactly this
 // height, so the list can be windowed (only the visible slice is mounted).
@@ -114,7 +115,6 @@ interface ProjectSelection {
 
 
 const UNREAD_SESSIONS_STORAGE_KEY = "pi-web:unread-session-ids";
-const RUNNING_SESSIONS_POLL_MS = 2500;
 
 
 function loadUnreadSessionIds(): Set<string> {
@@ -429,7 +429,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       setSessionListVersion(data.sessionListVersion);
       setAllSessions(data.sessions);
       // Treat the fetched running set as an initial fallback only. Once the
-      // lightweight poll is live, a slow session-list fetch cannot overwrite it.
+      // pushed snapshot is live, a slow session-list fetch cannot overwrite it.
       if (!runningPollAuthoritativeRef.current) {
         currentSuppressedCompletionSessionIdsRef.current = new Set(
           data.completionNotificationSuppressedSessionIds ?? [],
@@ -470,73 +470,29 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     saveUnreadSessionIds(unreadSessionIds);
   }, [unreadSessionIds]);
 
+  // Pushed over the shared stream instead of polled. This used to be a 2.5 s
+  // fetch for as long as the tab was visible — 24 round trips a minute, and on
+  // a public link the round trip is the dominant cost of an idle window.
   useEffect(() => {
     let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let controller: AbortController | null = null;
 
-    const clearTimer = () => {
-      if (timer) clearTimeout(timer);
-      timer = null;
-    };
-
-    const schedule = () => {
-      clearTimer();
-      if (stopped || document.visibilityState !== "visible") return;
-      timer = setTimeout(() => void poll(), RUNNING_SESSIONS_POLL_MS);
-    };
-
-    const poll = async () => {
-      if (stopped || document.visibilityState !== "visible") return;
-      const current = new AbortController();
-      controller?.abort();
-      controller = current;
-      try {
-        const res = await fetch("/api/agent/running", {
-          cache: "no-store",
-          signal: current.signal,
-        });
-        if (!res.ok) return;
-        const data = await res.json() as {
-          sessionListVersion: number;
-          runningSessionIds?: string[];
-          completionNotificationSuppressedSessionIds?: string[];
-        };
-        if (stopped || controller !== current) return;
-        runningPollAuthoritativeRef.current = true;
-        currentSuppressedCompletionSessionIdsRef.current = new Set(
-          data.completionNotificationSuppressedSessionIds ?? [],
-        );
-        setRunningSessionIds(new Set(data.runningSessionIds ?? []));
-        if (data.sessionListVersion !== sessionListVersionRef.current) {
-          // Reuse the invalidated cache; forcing a scan would change the version again.
-          await loadSessions();
-        }
-      } catch {
-        // Keep the last known state; the next visible-tab poll retries.
-      } finally {
-        if (controller === current) controller = null;
-        schedule();
+    const apply = async (snapshot: RunningSnapshot) => {
+      if (stopped) return;
+      runningPollAuthoritativeRef.current = true;
+      currentSuppressedCompletionSessionIdsRef.current = new Set(
+        snapshot.completionNotificationSuppressedSessionIds,
+      );
+      setRunningSessionIds(new Set(snapshot.runningSessionIds));
+      if (snapshot.sessionListVersion !== sessionListVersionRef.current) {
+        // Reuse the invalidated cache; forcing a scan would change the version again.
+        await loadSessions();
       }
     };
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void poll();
-        return;
-      }
-      clearTimer();
-      controller?.abort();
-      controller = null;
-    };
-
-    void poll();
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    const stop = subscribeRunningState({ onState: (snapshot) => void apply(snapshot) });
     return () => {
       stopped = true;
-      clearTimer();
-      controller?.abort();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      stop();
     };
   }, [loadSessions]);
 

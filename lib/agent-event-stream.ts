@@ -1,18 +1,20 @@
-import {
-  isEventIncludedInSnapshot,
-  toClientAgentEvent,
-  type AgentEventLike,
-} from "./agent-event-wire";
-import { acquireSessionLivenessLease } from "./session-liveness";
+import { openAgentEventChannel, type AgentEventStreamSession } from "./agent-event-channel";
 
-export interface AgentEventStreamSession {
-  readonly isStreaming: boolean;
-  readonly streamingMessage: unknown;
-  isAlive?(): boolean;
-  onEvent(listener: (event: AgentEventLike) => void): () => void;
-}
+export type { AgentEventStreamSession } from "./agent-event-channel";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
+// One enqueue per agent event means one syscall, one flush and one small TCP
+// segment per token. Coalesce into roughly one frame: the browser renders on
+// the animation frame anyway, so this cuts syscalls and packet count without
+// adding perceptible latency.
+const FLUSH_INTERVAL_MS = 16;
+// A tool result or a big snapshot should not sit in a 16 ms window when the
+// buffer is already this large; flush immediately past this point.
+const MAX_PENDING_CHARS = 32 * 1024;
+
+// Only the high-frequency streaming events are worth coalescing. State
+// transitions stay immediate so a turn boundary is never held back.
+const COALESCED_EVENT_TYPES = new Set(["message_update", "tool_execution_update"]);
 
 /**
  * Registry of live SSE streams, closed from the SIGINT/SIGTERM hook in
@@ -29,24 +31,22 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
  * would be two disconnected registries. Symbol.for + globalThis shares one.
  */
 const CLOSER_REGISTRY: symbol = Symbol.for("pi-web.agentEventStreamClosers");
-type StreamCloser = (closeController: boolean | "error") => void;
+type StreamCloser = () => void;
 const activeStreamClosers: Set<StreamCloser> =
   ((globalThis as Record<symbol, Set<StreamCloser>>)[CLOSER_REGISTRY] ??= new Set<StreamCloser>());
 
 /** Close every live SSE stream (called on process shutdown signals). */
 export function closeAllAgentEventStreams(): void {
   for (const close of [...activeStreamClosers]) {
-    try { close("error"); } catch { /* stream already closed */ }
+    try { close(); } catch { /* stream already closed */ }
   }
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
- * Open the SSE transport immediately, then publish the session snapshot only
- * after the agent is ready and its event listener has been installed.
+ * The dedicated per-session SSE endpoint.
+ *
+ * Kept as a thin transport around openAgentEventChannel so the handshake has
+ * exactly one implementation; the multiplexed hub drives the same channel.
  */
 export function createAgentEventStream(
   req: Request,
@@ -54,15 +54,47 @@ export function createAgentEventStream(
   sessionPromise: Promise<AgentEventStreamSession>,
 ): ReadableStream<Uint8Array> {
   let cancelStream: (closeController: boolean | "error") => void = () => {};
-  let releaseLease: () => void = () => {};
 
   return new ReadableStream<Uint8Array>({
     start(controller) {
       const encoder = new TextEncoder();
       let closed = false;
       let heartbeat: ReturnType<typeof setInterval> | null = null;
-      let unsubscribe: (() => void) | null = null;
       let abortHandler: (() => void) | null = null;
+      let teardown = (): void => {};
+      let pending = "";
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+      function flushPending(): void {
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        if (!pending) return;
+        const text = pending;
+        pending = "";
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(text));
+        } catch {
+          cleanup(false);
+        }
+      }
+
+      function enqueueText(text: string, immediate = false): void {
+        if (closed) return;
+        pending += text;
+        if (immediate || pending.length >= MAX_PENDING_CHARS) {
+          flushPending();
+          return;
+        }
+        if (flushTimer !== null) return;
+        flushTimer = setTimeout(flushPending, FLUSH_INTERVAL_MS);
+      }
+
+      function shutdownCloser(): void {
+        cleanup("error");
+      }
 
       // "error": hard-terminate the response (SSE client sees a broken
       // stream and reconnects). Used on process shutdown: a plain close() is
@@ -70,102 +102,37 @@ export function createAgentEventStream(
       // chunked termination, so the socket stays ESTABLISHED and Next's
       // server.close() drain never completes (the original zombie bug).
       // "true": graceful close after we finished writing a final event.
-      const cleanup = (closeController: boolean | "error") => {
+      function cleanup(closeController: boolean | "error"): void {
         if (closed) return;
+        // Deliver whatever is still queued: a final event must not be lost to
+        // the coalescing window.
+        flushPending();
         closed = true;
-        releaseLease();
-        releaseLease = () => {};
-        activeStreamClosers.delete(cleanup);
+        teardown();
+        activeStreamClosers.delete(shutdownCloser);
         if (heartbeat !== null) clearInterval(heartbeat);
-        unsubscribe?.();
-        unsubscribe = null;
         if (abortHandler) req.signal.removeEventListener("abort", abortHandler);
         if (closeController === "error") {
           try { controller.error(new Error("pi-web server shutting down")); } catch { /* already closed */ }
         } else if (closeController) {
           try { controller.close(); } catch { /* stream already closed */ }
         }
-      };
+      }
       cancelStream = cleanup;
-      releaseLease = acquireSessionLivenessLease(sessionId).release;
-      activeStreamClosers.add(cleanup);
+      activeStreamClosers.add(shutdownCloser);
 
-      const enqueueText = (text: string) => {
-        if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(text));
-        } catch {
-          cleanup(false);
-        }
-      };
-      const encode = (data: unknown) => {
-        enqueueText(`data: ${JSON.stringify(data)}\n\n`);
-      };
-      const forwardEvent = (event: AgentEventLike, snapshot: unknown) => {
-        if (isEventIncludedInSnapshot(event, snapshot)) return;
-        const clientEvent = toClientAgentEvent(event);
-        if (clientEvent) encode(clientEvent);
-      };
-
-      const publishSession = async () => {
-        try {
-          const session = await sessionPromise;
-          if (closed) return;
-          if (session.isAlive && !session.isAlive()) {
-            cleanup(true);
-            return;
-          }
-
-          const bufferedEvents: AgentEventLike[] = [];
-          let snapshotPublished = false;
-          const handleEvent = (event: AgentEventLike) => {
-            if (event.type === "session_shutdown") {
-              cleanup(true);
-              return;
-            }
-            if (!snapshotPublished) {
-              bufferedEvents.push(event);
-              return;
-            }
-            forwardEvent(event, snapshot);
-          };
-
-          const stopListening = session.onEvent(handleEvent);
-          if (closed) {
-            stopListening();
-            return;
-          }
-          if (session.isAlive && !session.isAlive()) {
-            stopListening();
-            cleanup(true);
-            return;
-          }
-          unsubscribe = stopListening;
-
-          const snapshot = session.streamingMessage;
-          encode({
-            type: "connected",
-            sessionId,
-            isStreaming: session.isStreaming,
-          });
-          for (const event of bufferedEvents) forwardEvent(event, snapshot);
-          if (snapshot !== undefined && snapshot !== null) {
-            encode({ type: "message_start", message: snapshot });
-          }
-          snapshotPublished = true;
-        } catch (error) {
-          if (closed) return;
-          encode({
-            type: "startup_error",
-            errorMessage: `Failed to start agent: ${errorMessage(error)}`,
-          });
+      teardown = openAgentEventChannel(sessionId, sessionPromise, {
+        send(event) {
+          const type = (event as { type?: string } | null)?.type;
+          enqueueText(
+            `data: ${JSON.stringify(event)}\n\n`,
+            !(type && COALESCED_EVENT_TYPES.has(type)),
+          );
+        },
+        finish() {
           cleanup(true);
-        }
-      };
-
-      // Attach the rejection handler before checking the request signal. The
-      // route may already have started a shared cold-start promise.
-      void publishSession();
+        },
+      });
 
       abortHandler = () => cleanup(true);
       if (req.signal.aborted) {
@@ -178,7 +145,7 @@ export function createAgentEventStream(
 
       // Force the response headers through without claiming that the agent is
       // ready. The client waits for the later `connected` data event.
-      enqueueText(":\n\n");
+      enqueueText(":\n\n", true);
     },
     cancel() {
       cancelStream(false);

@@ -39,16 +39,20 @@ export interface AgentEventConnectionOptions {
   shouldMaintain(sessionId: string): boolean;
   readinessTimeoutMs: number;
   reconnectDelayMs: number;
+  /** Upper bound for the exponential reconnect backoff. */
+  maxReconnectDelayMs?: number;
   onUnexpectedError?(error: unknown): void;
 }
 
 const EVENT_SOURCE_OPEN = 1;
+const DEFAULT_MAX_RECONNECT_DELAY_MS = 30_000;
 
 /** Owns the EventSource, agent-readiness handshake, and passive reconnect. */
 export class AgentEventConnection {
   private current: Connection | null = null;
   private retry: { sessionId: string; timer: ReturnType<typeof setTimeout> } | null = null;
   private retryGeneration = 0;
+  private retryAttempt = 0;
 
   constructor(private readonly options: AgentEventConnectionOptions) {}
 
@@ -149,6 +153,9 @@ export class AgentEventConnection {
       if (event.type === "connected") {
         attempt.ready = true;
         attempt.succeed();
+        // A healthy stream resets the backoff, so the next drop starts at the
+        // base delay instead of where the last outage left off.
+        this.retryAttempt = 0;
         this.stopRetrying();
       } else if (event.type === "startup_error") {
         const message = typeof event.errorMessage === "string" ? event.errorMessage : undefined;
@@ -186,8 +193,22 @@ export class AgentEventConnection {
       if (this.retry?.timer !== timer) return;
       this.retry = null;
       this.maintain(sessionId);
-    }, this.options.reconnectDelayMs);
+    }, this.nextRetryDelay());
     this.retry = { sessionId, timer };
+  }
+
+  /**
+   * Exponential backoff with full jitter. A fixed delay made every open tab
+   * (and every SSE that failed for the same reason) retry in lockstep, and each
+   * retry can cold-start an agent session — the retry storm was heavier than
+   * the outage it was recovering from.
+   */
+  private nextRetryDelay(): number {
+    const base = Math.max(1, this.options.reconnectDelayMs);
+    const cap = Math.max(base, this.options.maxReconnectDelayMs ?? DEFAULT_MAX_RECONNECT_DELAY_MS);
+    const exponential = Math.min(base * 2 ** Math.min(this.retryAttempt, 30), cap);
+    this.retryAttempt += 1;
+    return Math.max(1, Math.round(exponential * (0.5 + Math.random() * 0.5)));
   }
 
   private stopRetrying(): void {

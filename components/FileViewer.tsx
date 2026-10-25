@@ -18,6 +18,7 @@ import {
   isVideoPath,
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { watchFile } from "@/lib/file-watch-client";
 import { resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
@@ -430,7 +431,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -445,11 +445,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
 
   useEffect(() => {
     setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
 
     if (!watchEnabled) return;
 
@@ -474,33 +469,26 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         });
     };
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-      synchronize();
+    const stopWatching = watchFile(filePath, sourceSessionId ?? undefined, {
+      onReady: () => {
+        setWatching(true);
+        synchronize();
+      },
+      onChange: (change) => {
+        syncRequestRef.current += 1;
+        if (typeof change.size === "number") setSize(change.size);
+        setNaturalSize(null);
+        setError(null);
+        setBust((b) => b + 1);
+      },
+      onDisconnected: () => {
+        setWatching(false);
+      },
     });
-    es.addEventListener("change", (e) => {
-      syncRequestRef.current += 1;
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
-      setNaturalSize(null);
-      setError(null);
-      setBust((b) => b + 1);
-    });
-    const markDisconnected = () => {
-      setWatching(false);
-    };
-    es.addEventListener("error", markDisconnected);
-    es.onerror = markDisconnected;
 
     return () => {
       active = false;
-      es.close();
-      if (esRef.current === es) esRef.current = null;
+      stopWatching();
     };
   }, [filePath, sourceSessionId, watchEnabled]);
 
@@ -602,7 +590,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -617,11 +604,6 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
 
   useEffect(() => {
     setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
 
     if (!watchEnabled) return;
 
@@ -646,33 +628,26 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         });
     };
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-      synchronize();
+    const stopWatching = watchFile(filePath, sourceSessionId ?? undefined, {
+      onReady: () => {
+        setWatching(true);
+        synchronize();
+      },
+      onChange: (change) => {
+        syncRequestRef.current += 1;
+        if (typeof change.size === "number") setSize(change.size);
+        setDuration(null);
+        setError(null);
+        setBust((b) => b + 1);
+      },
+      onDisconnected: () => {
+        setWatching(false);
+      },
     });
-    es.addEventListener("change", (e) => {
-      syncRequestRef.current += 1;
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
-      setDuration(null);
-      setError(null);
-      setBust((b) => b + 1);
-    });
-    const markDisconnected = () => {
-      setWatching(false);
-    };
-    es.addEventListener("error", markDisconnected);
-    es.onerror = markDisconnected;
 
     return () => {
       active = false;
-      es.close();
-      if (esRef.current === es) esRef.current = null;
+      stopWatching();
     };
   }, [filePath, sourceSessionId, watchEnabled]);
 
@@ -755,7 +730,6 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -770,11 +744,6 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
 
   useEffect(() => {
     setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
 
     if (!watchEnabled) return;
 
@@ -799,33 +768,26 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         });
     };
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-      synchronize();
+    const stopWatching = watchFile(filePath, sourceSessionId ?? undefined, {
+      onReady: () => {
+        setWatching(true);
+        synchronize();
+      },
+      onChange: (change) => {
+        syncRequestRef.current += 1;
+        if (typeof change.size === "number") setSize(change.size);
+        setDuration(null);
+        setError(null);
+        setBust((b) => b + 1);
+      },
+      onDisconnected: () => {
+        setWatching(false);
+      },
     });
-    es.addEventListener("change", (e) => {
-      syncRequestRef.current += 1;
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
-      setDuration(null);
-      setError(null);
-      setBust((b) => b + 1);
-    });
-    const markDisconnected = () => {
-      setWatching(false);
-    };
-    es.addEventListener("error", markDisconnected);
-    es.onerror = markDisconnected;
 
     return () => {
       active = false;
-      es.close();
-      if (esRef.current === es) esRef.current = null;
+      stopWatching();
     };
   }, [filePath, sourceSessionId, watchEnabled]);
 
@@ -909,7 +871,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }:
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
   const ext = getFileExt(filePath);
@@ -950,11 +911,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }:
   useEffect(() => {
     setWatching(false);
 
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
     if (!watchEnabled) return;
 
     let active = true;
@@ -983,38 +939,31 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }:
         });
     };
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-      synchronize();
-    });
-    es.addEventListener("change", (e) => {
-      syncRequestRef.current += 1;
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") {
-          setSize(d.size);
-          if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
+    const stopWatching = watchFile(filePath, sourceSessionId ?? undefined, {
+      onReady: () => {
+        setWatching(true);
+        synchronize();
+      },
+      onChange: (change) => {
+        syncRequestRef.current += 1;
+        if (typeof change.size === "number") {
+          setSize(change.size);
+          if (!isPdf && change.size > DOCX_PREVIEW_MAX_BYTES) {
             setError("DOCX too large for preview (>10MB)");
             return;
           }
         }
-      } catch { /* ignore */ }
-      setError(null);
-      setBust((b) => b + 1);
+        setError(null);
+        setBust((b) => b + 1);
+      },
+      onDisconnected: () => {
+        setWatching(false);
+      },
     });
-    const markDisconnected = () => {
-      setWatching(false);
-    };
-    es.addEventListener("error", markDisconnected);
-    es.onerror = markDisconnected;
 
     return () => {
       active = false;
-      es.close();
-      if (esRef.current === es) esRef.current = null;
+      stopWatching();
     };
   }, [filePath, isPdf, sourceSessionId, watchEnabled]);
 
@@ -1145,7 +1094,6 @@ function TextFileViewer({
   const [displayMode, setDisplayMode] = useState<DisplayMode>(requestedInitialDisplayMode);
   const [wrapLines, setWrapLines] = useState(initialWrapLines);
   const [watching, setWatching] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
   const contentRequestRef = useRef(0);
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -1327,11 +1275,6 @@ function TextFileViewer({
   useEffect(() => {
     setWatching(false);
 
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
     if (!watchEnabled) return;
 
     const synchronize = () => {
@@ -1340,27 +1283,21 @@ function TextFileViewer({
       void fetchGitDiff(filePath);
     };
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-      // The server emits connected only after its watcher exists. Reading now
-      // closes the gap between the last snapshot and live events.
-      synchronize();
+    const stopWatching = watchFile(filePath, sourceSessionId ?? undefined, {
+      onReady: () => {
+        setWatching(true);
+        // The server emits connected only after its watcher exists. Reading now
+        // closes the gap between the last snapshot and live events.
+        synchronize();
+      },
+      onChange: synchronize,
+      onDisconnected: () => {
+        setWatching(false);
+      },
     });
 
-    es.addEventListener("change", synchronize);
-
-    const markDisconnected = () => {
-      setWatching(false);
-    };
-    es.addEventListener("error", markDisconnected);
-    es.onerror = markDisconnected;
-
     return () => {
-      es.close();
-      if (esRef.current === es) esRef.current = null;
+      stopWatching();
     };
   }, [filePath, fetchContent, fetchGitDiff, sourceSessionId, watchEnabled]);
 

@@ -19,6 +19,8 @@ import {
 } from "@/lib/file-types";
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
+import { authorizeFileRequest } from "@/lib/file-request-auth";
+import { openFileWatchChannel } from "@/lib/event-channels";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import {
   inspectUploadTargets,
@@ -26,7 +28,7 @@ import {
   validateUploadFileNames,
 } from "@/lib/file-upload";
 import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
-import { filePathFromApiSegments, samePath } from "@/lib/paths";
+import { filePathFromApiSegments } from "@/lib/paths";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -502,32 +504,15 @@ export async function GET(
     }
     const sessionId = request.nextUrl.searchParams.get("sessionId");
 
-    const allowedRoots = await getAllowedFileRoots();
-    const allowedByRoot = isFilePathAllowed(filePath, allowedRoots);
-    const allowedBySessionReference =
-      !allowedByRoot &&
-      type !== "list" &&
-      await isFilePathReferencedBySession(filePath, sessionId);
-    if (!allowedByRoot && !allowedBySessionReference) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    const auth = await authorizeFileRequest(filePath, {
+      sessionId,
+      allowSessionReference: type !== "list",
+      allowMissing: type === "watch",
+    });
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-
-    let stat: fs.Stats | undefined;
-    try {
-      stat = fs.statSync(filePath);
-    } catch {
-      if (type !== "watch") {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-      }
-    }
-
-    const existingAuthorizationPath = stat ? filePath : path.dirname(filePath);
-    if (
-      !allowedBySessionReference
-      && !isExistingFilePathAllowed(existingAuthorizationPath, allowedRoots)
-    ) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    const stat = auth.stat;
 
     if (type === "read") {
       if (!stat?.isFile()) {
@@ -619,67 +604,36 @@ export async function GET(
       if (stat && !stat.isFile()) {
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
-      let watcher: fs.FSWatcher | null = null;
-      let lastMtimeMs = stat?.mtimeMs ?? 0;
-      let lastCtimeMs = stat?.ctimeMs ?? 0;
-      let lastIno = stat?.ino ?? 0;
-      let lastSize = stat?.size ?? 0;
-      let lastExists = stat !== undefined;
+      // One implementation of the watch protocol lives in
+      // lib/event-channels.ts; this endpoint only re-frames its events as SSE
+      // so the legacy URL keeps working.
+      const encoder = new TextEncoder();
+      let closeChannel: (() => void) | null = null;
+      let cancelled = false;
       const stream = new ReadableStream({
-        start(controller) {
-          const send = (eventName: string, data: Record<string, unknown>) => {
-            const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+        async start(controller) {
+          const send = (frame: { e?: string; d?: unknown }) => {
+            const payload = `${frame.e ? `event: ${frame.e}\n` : ""}data: ${JSON.stringify(frame.d)}\n\n`;
             try {
-              controller.enqueue(new TextEncoder().encode(payload));
+              controller.enqueue(encoder.encode(payload));
             } catch {
               // client disconnected
             }
           };
-          try {
-            const watchedDirectory = path.dirname(filePath);
-            watcher = fs.watch(watchedDirectory, (_eventType, changedName) => {
-              if (
-                changedName != null
-                && !samePath(path.join(watchedDirectory, changedName.toString()), filePath)
-              ) return;
-              try {
-                const s = fs.statSync(filePath);
-                // Some platforms emit watch events for file reads/attribute
-                // access. Ignore those or the client's refresh read loops.
-                if (
-                  lastExists
-                  && s.mtimeMs === lastMtimeMs
-                  && s.ctimeMs === lastCtimeMs
-                  && s.ino === lastIno
-                  && s.size === lastSize
-                ) return;
-                lastExists = true;
-                lastMtimeMs = s.mtimeMs;
-                lastCtimeMs = s.ctimeMs;
-                lastIno = s.ino;
-                lastSize = s.size;
-                send("change", { mtime: s.mtime.toISOString(), size: s.size });
-              } catch {
-                if (!lastExists) return;
-                lastExists = false;
-                send("change", { mtime: new Date().toISOString(), size: 0 });
-              }
-            });
-            watcher.on("error", () => {
-              try { watcher?.close(); } catch { /* ignore */ }
-              watcher = null;
-              try { controller.close(); } catch { /* ignore */ }
-            });
-            // The client snapshots only after this event, so emit it after the
-            // watcher exists to avoid dropping changes between those steps.
-            send("connected", { filePath });
-          } catch {
-            send("error", { message: "Failed to watch file" });
-            controller.close();
+          const cleanup = await openFileWatchChannel(filePath, send, { sessionId });
+          if (cancelled) {
+            cleanup?.();
+            return;
+          }
+          closeChannel = cleanup;
+          if (!closeChannel) {
+            try { controller.close(); } catch { /* ignore */ }
           }
         },
         cancel() {
-          try { watcher?.close(); } catch { /* ignore */ }
+          cancelled = true;
+          closeChannel?.();
+          closeChannel = null;
         },
       });
       return new Response(stream, {

@@ -34,7 +34,9 @@ app/api/
   sessions/[id]/export/route.ts   GET exported HTML for a session
   agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
   agent/[id]/route.ts             GET state | POST any command
-  agent/[id]/events/route.ts      GET SSE stream
+  agent/[id]/events/route.ts      GET SSE stream (legacy fallback; the app uses /api/events)
+  events/route.ts                 GET the tab's single multiplexed SSE connection
+  events/subscribe/route.ts       POST add/remove channels on that connection
   agent/running/route.ts          GET currently-running session ids
   auth/api-key/[provider]/route.ts POST/DELETE provider API key storage
   auth/login/[provider]/route.ts  GET OAuth/device-code SSE | POST manual code
@@ -58,6 +60,12 @@ app/api/
 
 lib/
   agent-client.ts      typed fetch helper for /api/agent commands
+  event-hub.ts         server registry for multiplexed connections (frames, coalescing)
+  event-channels.ts    channel producers: agent / terminal / file watch
+  event-channel-key.ts channel key parsing (first-colon split, Windows paths)
+  event-hub-client.ts  browser singleton: one EventSource, refcounted, resubscribing
+  agent-hub-source.ts  presents one hub channel as an EventSource for AgentEventConnection
+  agent-event-channel.ts  the agent event handshake, shared by both transports
   draft-store.ts       local draft persistence helpers
   file-access.ts       allowed file roots for /api/files and worktrees
   file-paths.ts        client/server path encoding helpers
@@ -144,6 +152,38 @@ The `enabledModels` setting uses pi's `--models` syntax: minimatch globs against
 
 ### SSE reconnect on page refresh mid-stream
 On `ChatWindow` mount, `GET /api/agent/[id]` is called. If `state.isStreaming === true`, SSE is reconnected automatically. `thinkingLevel` and `isCompacting` are also synced from this response.
+
+### One event stream per tab
+Browsers allow six HTTP/1.1 connections per origin, shared across every tab, and `next start` is HTTP/1.1 only. The chat stream, the terminal stream and a file watch each used to pin one connection each, so two tabs with a panel open could exhaust the pool and make *every* later request wait — including the POST that sends a prompt. Everything now rides `GET /api/events`:
+
+- `GET /api/events` opens the connection and immediately sends a `$hub` `ready` frame carrying a `connectionId`.
+- `POST /api/events/subscribe` adds/removes channels on it (`{connectionId, subscribe:[{channel, after}], sessionId}`). Channels are `agent:<sessionId>`, `terminal:<id>`, `file:<path>` and the id-less singleton `running`; keys split at the **first** colon so Windows paths survive.
+- Frames are `{c, e, d, id}` — channel, event name (`message` when omitted), payload, resume cursor. One encoder and one 16 ms coalescing window serve every channel.
+- `lib/event-hub-client.ts` is a browser singleton: it opens the EventSource lazily, closes it when the last channel unsubscribes, and on reconnect replays every channel with its last cursor. With the sidebar mounted the `running` channel keeps it alive, so a genuine zero-channel tab only exists before the first mount.
+- Consumers keep their old semantics: `AgentEventConnection` still drives the readiness handshake through `lib/agent-hub-source.ts`, and the terminal's byte offset travels as the channel cursor.
+- No producer may be duplicated: `openFileWatchChannel` is the only `fs.watch`, and the legacy `?type=watch` URL just re-frames it. `/api/agent/[id]/events` still works as a rollback path for one release; delete it once the hub has proven itself.
+
+### Remote access through a tunnel
+Over a tunnel the hop that matters is the public one, and the two Cloudflare products behave in opposite ways:
+- **Quick tunnel** (`cloudflared --url`, `*.trycloudflare.com`) **buffers every GET response until it completes** and documents "no SSE". The hub stream then looks frozen and dumps everything at once on close. A heartbeat does not help — a 3-byte comment never reaches the ~128 KB flush threshold. WebSocket and POST responses do stream there, because they are not buffered response bodies. Never hand this app out over a quick tunnel.
+- **Named tunnel** (own hostname, `credentials-file`) streams SSE normally, provided the response carries exactly `Content-Type: text/event-stream`. `/api/events` sets it plus `no-transform` and `X-Accel-Buffering: no`; keep those three together or Cloudflare may buffer to compress.
+- Cloudflare drops an idle HTTP request after 100 s, so the 30 s hub heartbeat is load-bearing, not decorative. Anything above ~90 s breaks long turns on a quiet stream.
+- Behind a tunnel the browser speaks HTTP/2 to the edge, so the six-connection limit that motivated the hub does not apply there — but it still does on `localhost`, which is the primary deployment. Keep the hub; just know that multiplexing now couples channels into one h2 stream, so one flooding terminal can delay agent tokens.
+
+### Push beats poll on a slow link
+On a wide-area link the expensive thing is not a byte, it is a round trip: a measured 230–335 ms from a mainland connection to the nearest Cloudflare edge, on a route that entered at one PoP and reached the tunnel connector at another. Anything that runs on a timer is therefore a tax that scales with how long the tab stays open, not with how much actually changed.
+
+- `running` (see `lib/running-state.ts`) replaced two timers. `/api/agent/running` used to be fetched every 2.5 s for as long as the tab was visible (~24 requests/minute), and the shell settle path fetched `/api/agent/[id]` every second for the whole life of a command (~47/minute). Both now read the same in-process snapshot, which the hub pushes **only when it changes**, with one immediate frame on subscribe so a client never has to ask.
+- The server watcher is refcounted: no channel subscribed means no interval, and the timer is `unref()`'d so it cannot hold the process open. Ticking in-process costs microseconds; ticking over the network cost a round trip each time.
+- `bashRunningSessionIds` exists so the shell settle path can wait on the push instead of asking. Its 15 s timer is a backstop for a dead stream, not a cadence — and even then it is one verification request per completion, not one per second.
+- Client-side fan-out lives in `lib/running-hub-client.ts`: the hub keeps one handler set per channel, so several components share a single subscription and late subscribers get the last snapshot replayed.
+
+### SSE wire budget
+The event stream is the only channel the browser has while a turn runs, so every byte spent there delays the next token.
+- `toClientAgentEvent()` is the single choke point: it drops `turn_start`/`turn_end`, transcript system messages, and the cumulative `partial` on `message_update`. Never forward a pi event verbatim.
+- `tool_execution_update` carries pi's **cumulative** `partialResult`, which is quadratic on the wire: a 64 KiB tool log cost 6.6 MiB of SSE traffic (101×) and stalled the stream behind its own backlog. The projection derives the one status line the UI renders (`getToolExecutionProgress` / `getCodemodeProgress`) and ships `progress` only. Measured 1.2× after the change — keep it flat, `lib/agent-event-wire.test.mjs` asserts it.
+- `createAgentEventStream()` coalesces the high-frequency events (`message_update`, `tool_execution_update`) into one `enqueue` per 16 ms frame; state transitions flush immediately. One `enqueue` per token is one syscall and one small TCP segment per token; loopback hides that, a real network does not. The pending buffer is flushed before any close, so a final event is never lost to the window.
+- Reconnect uses exponential backoff with full jitter (`AgentEventConnection`), not a fixed delay: each retry can cold-start an agent session, and a fixed 1 s delay turned a hiccup into a retry storm heavier than the outage. A healthy `connected` resets the backoff.
 
 ### Compaction SSE events
 Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `auto_compaction_start` / `auto_compaction_end`. `handleAgentEvent` accepts both sets to keep `isCompacting` in sync. Manual compact is a blocking POST — the button stays disabled until the response returns.

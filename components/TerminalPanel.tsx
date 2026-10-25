@@ -5,8 +5,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useI18n } from "@/hooks/useI18n";
 import { createTerminalWriter, terminalRequest } from "@/lib/terminal-client";
-import type { TerminalEvent } from "@/lib/terminal-manager";
 import type { TerminalTab } from "./terminal-tab-state";
+import { subscribeTerminalChannel } from "@/lib/terminal-hub-client";
 
 interface Props {
   tab: TerminalTab;
@@ -34,7 +34,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     const container = containerRef.current;
     if (!container) return;
     let disposed = false;
-    let events: EventSource | null = null;
+    let unsubscribe: (() => void) | null = null;
     let offset: number | undefined;
     let connected = false;
     let exited = false;
@@ -96,39 +96,49 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
 
     const connect = () => {
       if (disposed || exited || !navigator.onLine) return;
-      events?.close();
-      events = new EventSource(`/api/terminal/${encodeURIComponent(id)}/events${offset === undefined ? "" : `?after=${offset}`}`);
-      events.onmessage = (message) => {
-        const event = JSON.parse(message.data) as TerminalEvent;
-        if (event.type === "output") {
-          if (event.reset) terminal.reset();
-          else if (offset !== undefined && event.offset <= offset) return;
-          terminal.write(event.data);
-          offset = event.offset;
-        } else {
-          exited = true;
-          connected = false;
-          terminal.options.disableStdin = true;
-          events?.close();
-          setExitCode(event.type === "exit" ? event.exitCode : null);
-          setStatus("exited");
-        }
-      };
-      events.onopen = () => {
-        connected = true;
-        if (inputFailed) return;
-        terminal.options.disableStdin = false;
-        setStatus("ready");
-        fitAndResize();
-        writer.resize(terminal.cols, terminal.rows);
-        if (container.offsetWidth && container.offsetHeight) terminal.focus();
-      };
-      events.onerror = () => {
-        if (disposed || exited) return;
-        connected = false;
-        terminal.options.disableStdin = true;
-        setStatus(events?.readyState === EventSource.CLOSED ? "error" : "connecting");
-      };
+      unsubscribe?.();
+      unsubscribe = subscribeTerminalChannel(
+        id,
+        offset === undefined ? {} : { after: String(offset) },
+        {
+          onOpen: () => {
+            connected = true;
+            if (inputFailed) return;
+            terminal.options.disableStdin = false;
+            setStatus("ready");
+            fitAndResize();
+            writer.resize(terminal.cols, terminal.rows);
+            if (container.offsetWidth && container.offsetHeight) terminal.focus();
+          },
+          onOutput: (event) => {
+            if (event.reset) terminal.reset();
+            else if (offset !== undefined && event.offset <= offset) return;
+            terminal.write(event.data);
+            offset = event.offset;
+          },
+          onExit: (exitCode) => {
+            exited = true;
+            connected = false;
+            terminal.options.disableStdin = true;
+            unsubscribe?.();
+            unsubscribe = null;
+            setExitCode(exitCode);
+            setStatus("exited");
+          },
+          onChannelError: () => {
+            if (disposed || exited) return;
+            connected = false;
+            terminal.options.disableStdin = true;
+            setStatus("error");
+          },
+          onClose: () => {
+            if (disposed || exited) return;
+            connected = false;
+            terminal.options.disableStdin = true;
+            setStatus("connecting");
+          },
+        },
+      );
     };
 
     startRef.current = (async () => {
@@ -153,7 +163,8 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     const pageHide = () => {
       connected = false;
       terminal.options.disableStdin = true;
-      events?.close();
+      unsubscribe?.();
+      unsubscribe = null;
       if (!exited && !inputFailed) setStatus("connecting");
     };
     const pageShow = (event: PageTransitionEvent) => { if (event.persisted) connect(); };
@@ -163,7 +174,8 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     window.addEventListener("online", connect);
     return () => {
       disposed = true;
-      events?.close();
+      unsubscribe?.();
+      unsubscribe = null;
       void writer.stop();
       resizeObserver.disconnect();
       onData.dispose();

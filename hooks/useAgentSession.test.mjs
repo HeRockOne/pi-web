@@ -362,7 +362,10 @@ test("shows the latest streamed tool execution progress in the running phase", (
     source.indexOf('case "tool_execution_end"'),
   );
 
-  assert.match(updateSource, /getToolExecutionProgress\(event\.partialResult\)/);
+  assert.match(updateSource, /typeof event\.progress === "string"/);
+  // The wire projection derives the status line on the server; the client must
+  // not pull the cumulative snapshot back in.
+  assert.doesNotMatch(updateSource, /event\.partialResult/);
   assert.match(updateSource, /tools: \[\.\.\.tools\.filter\([\s\S]*?, updated\]/);
   assert.match(chatWindowSource, /if \(latest\?\.progress\)/);
   assert.match(chatWindowSource, /chat\.runningNamedTool[\s\S]*latest\.progress/);
@@ -547,4 +550,23 @@ test("keeps a detached viewport in place when streaming completes", () => {
   assert.match(scrollEffectSource, /!agentRunningRef\.current && isNearBottomRef\.current[\s\S]*?scrollToBottom\("auto"\)/);
   assert.doesNotMatch(scrollEffectSource, /\|\|/);
   assert.match(source, /addEventListener\("scroll", handleScrollPositionChange/);
+});
+
+test("waits for the shell to settle on a push instead of polling every second", () => {
+  const settleSource = source.slice(
+    source.indexOf("function waitForBashStateChange"),
+    source.indexOf("const PROMPT_SETTLE_INITIAL_DELAY_MS"),
+  );
+
+  // The old loop fetched /api/agent/<id> once a second for the whole life of
+  // the command; on a wide-area link that is the dominant cost of a bash run.
+  assert.doesNotMatch(source, /BASH_STATE_RECONCILE_MS/);
+  assert.match(settleSource, /subscribeRunningState\(/);
+  assert.match(settleSource, /snapshot\.bashRunningSessionIds\.includes\(sid\)/);
+  // The 15 s timer is a dead-stream backstop, not a cadence.
+  assert.match(source, /const BASH_SETTLEMENT_BACKSTOP_MS = 15_000;/);
+  // A cached snapshot replayed during subscribe() must be ignored, or the loop
+  // settles on stale data and immediately asks the server again.
+  assert.match(settleSource, /if \(subscribing\) return;/);
+  assert.match(source, /if \(bashRecoveryIdRef\.current !== recoveryId \|\| sessionIdRef\.current !== sid\) return;/);
 });

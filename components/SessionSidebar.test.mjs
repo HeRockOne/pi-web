@@ -45,11 +45,14 @@ test("does not register row-level session deletion shortcuts", () => {
   assert.doesNotMatch(sessionItemSource, /tabIndex=\{0\}/);
 });
 
-test("polls running sessions only while the tab is visible", () => {
-  assert.doesNotMatch(source, /new EventSource\("\/api\/agent\/running\/events"\)/);
-  assert.match(source, /fetch\("\/api\/agent\/running"/);
-  assert.match(source, /document\.visibilityState !== "visible"/);
-  assert.match(source, /document\.addEventListener\("visibilitychange", onVisibilityChange\)/);
+test("subscribes to running sessions instead of polling them", () => {
+  // A 2.5 s fetch cost a round trip per tick, which is the dominant cost of an
+  // idle tab on a high-latency link — the snapshot is pushed now.
+  assert.doesNotMatch(source, /fetch\("\/api\/agent\/running"/);
+  assert.doesNotMatch(source, /RUNNING_SESSIONS_POLL_MS/);
+  assert.doesNotMatch(source, /new EventSource/);
+  assert.match(source, /subscribeRunningState\(\{ onState: \(snapshot\) => void apply\(snapshot\) \}\)/);
+  assert.match(source, /if \(snapshot\.sessionListVersion !== sessionListVersionRef\.current\)/);
 });
 
 test("exposes the polled running-session set to the shell", () => {
@@ -107,7 +110,7 @@ test("lifecycle refreshes bypass the cache while cross-window polling reuses it"
   assert.match(source, /force \? "\/api\/sessions\?force=1" : "\/api\/sessions"/);
   assert.match(source, /cache: "no-store"/);
   assert.match(source, /loadSessions\(isFirst, !isFirst\)/);
-  assert.match(source, /data\.sessionListVersion !== sessionListVersionRef\.current[\s\S]*?await loadSessions\(\)/);
+  assert.match(source, /snapshot\.sessionListVersion !== sessionListVersionRef\.current[\s\S]*?await loadSessions\(\)/);
   assert.doesNotMatch(source, /sessionRefreshDone|sessionRefreshTimerRef|title=\{t\("sidebar\.refresh"\)\}/);
   assert.match(source, /loadSessions\(false, true\);[\s\S]*?onBackgroundTaskDone/);
 });
