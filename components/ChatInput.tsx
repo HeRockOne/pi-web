@@ -532,14 +532,14 @@ export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
   );
 }
 
-/** Chip for the controls popover: pill that fills with the accent when active. */
+/** Chip for a controls popover: pill with a filled accent when active. */
 function controlChipStyle(active: boolean): React.CSSProperties {
   return {
     padding: "4px 11px",
     borderRadius: 999,
-    border: `1px solid ${active ? "color-mix(in srgb, var(--accent) 55%, transparent)" : "color-mix(in srgb, var(--border) 85%, transparent)"}`,
-    background: active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
-    color: active ? "var(--accent)" : "var(--text-muted)",
+    border: `1px solid ${active ? "var(--accent)" : "color-mix(in srgb, var(--border) 85%, transparent)"}`,
+    background: active ? "var(--accent)" : "transparent",
+    color: active ? "var(--bg)" : "var(--text-muted)",
     fontSize: 12,
     fontWeight: active ? 500 : 400,
     cursor: "pointer",
@@ -551,9 +551,11 @@ function controlChipStyle(active: boolean): React.CSSProperties {
 /** Small caps-style label above a controls-popover section. */
 function controlSectionLabelStyle(): React.CSSProperties {
   return {
-    fontSize: 11,
+    fontSize: 10.5,
+    fontWeight: 500,
+    letterSpacing: "0.5px",
     color: "var(--text-dim)",
-    marginBottom: 6,
+    marginBottom: 8,
     whiteSpace: "nowrap",
   };
 }
@@ -577,6 +579,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const isMobile = useIsMobile();
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
+  const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
@@ -612,6 +615,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
+  const thinkingMenuRef = useRef<HTMLDivElement>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -1672,11 +1676,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? `${compactResult.reason && compactResult.reason !== "manual" ? `${compactResult.reason[0].toUpperCase()}${compactResult.reason.slice(1)} ` : t("chat.compacted")} ${formatTokens(compactResult.tokensBefore)} -> ${formatTokens(compactResult.estimatedTokensAfter)} tokens (${t("chat.tokensSaved", { saved: formatTokens(compactSavedTokens) })})`
     : null;
 
+  const activeLevel = thinkingLevel ?? "auto";
+  const activeLevelMapped = (activeLevel !== "auto" && thinkingLevelMap) ? thinkingLevelMap[activeLevel] : undefined;
+  const activeLevelLabel = (activeLevelMapped != null && activeLevelMapped !== activeLevel) ? activeLevelMapped : activeLevel;
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (controlsMenuRef.current && !controlsMenuRef.current.contains(e.target as Node)) {
         setControlsMenuOpen(false);
+      }
+      if (thinkingMenuRef.current && !thinkingMenuRef.current.contains(e.target as Node)) {
+        setThinkingMenuOpen(false);
       }
       if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node) && !textareaRef.current?.contains(e.target as Node)) {
         setHistoryMenuOpen(false);
@@ -1690,7 +1701,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   useEffect(() => {
-    if (!isMobile) setControlsMenuOpen(false);
+    if (!isMobile) {
+      setControlsMenuOpen(false);
+      setThinkingMenuOpen(false);
+    }
   }, [isMobile]);
 
 
@@ -2512,12 +2526,98 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   )}
                 </div>
                 <div style={{ flex: 1 }} />
-                {/* Everything adjustable lives in one popover: reasoning level,
-                    tool presets, compaction, sound. The bar itself stays a quiet
-                    attach → model → sliders row on every screen size. */}
+                {/* Reasoning effort gets its own control: it is a per-conversation
+                    model setting, not a session control like the sliders menu. */}
+                {!isStreaming && onThinkingLevelChange && (
+                  <div ref={thinkingMenuRef} style={{ position: "relative", flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => { setControlsMenuOpen(false); setThinkingMenuOpen((v) => !v); }}
+                      title={`${t("chat.controlsThinking")}: ${activeLevelLabel}`}
+                      aria-label={`${t("chat.controlsThinking")}: ${activeLevelLabel}`}
+                      aria-expanded={thinkingMenuOpen}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        height: 28,
+                        padding: "0 8px",
+                        background: thinkingMenuOpen ? "var(--bg-hover)" : "none",
+                        border: "none",
+                        borderRadius: 7,
+                        color: thinkingMenuOpen ? "var(--text)" : "var(--text-muted)",
+                        cursor: "pointer",
+                        fontSize: 11,
+                        transition: "background 0.12s, color 0.12s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--bg-hover)";
+                        e.currentTarget.style.color = "var(--text)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = thinkingMenuOpen ? "var(--bg-hover)" : "none";
+                        e.currentTarget.style.color = thinkingMenuOpen ? "var(--text)" : "var(--text-muted)";
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m12 14 4-4" />
+                        <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+                      </svg>
+                      <span style={{ maxWidth: 72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeLevelLabel}</span>
+                    </button>
+                    {thinkingMenuOpen && (
+                      <div
+                        role="menu"
+                        style={{
+                          position: "absolute",
+                          bottom: "calc(100% + 8px)",
+                          right: 0,
+                          zIndex: 100,
+                          width: "min(320px, calc(100vw - 32px))",
+                          padding: 14,
+                          background: "var(--surface-2)",
+                          border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                          borderRadius: 12,
+                          boxShadow: "var(--shadow-lg)",
+                          backdropFilter: "blur(10px)",
+                        }}
+                      >
+                        <div style={controlSectionLabelStyle()}>{t("chat.controlsThinking")}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {THINKING_LEVELS.filter((lvl) => {
+                            if (!availableThinkingLevels) return true;
+                            if (lvl === "auto") return true;
+                            return availableThinkingLevels.includes(lvl);
+                          }).map((lvl) => {
+                            const isActive = (thinkingLevel ?? "auto") === lvl;
+                            const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                            const chipLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                            const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
+                            return (
+                              <button
+                                key={lvl}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={isActive}
+                                title={desc}
+                                onClick={() => { setThinkingMenuOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
+                                style={controlChipStyle(isActive)}
+                              >
+                                {chipLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Everything else adjustable lives in one popover: tool presets,
+                    compaction, sound. The bar itself stays a quiet attach → model →
+                    gauge → sliders row on every screen size. */}
                 <button
                   type="button"
-                  onClick={() => setControlsMenuOpen((v) => !v)}
+                  onClick={() => { setThinkingMenuOpen(false); setControlsMenuOpen((v) => !v); }}
                   title={t("chat.moreControls")}
                   aria-label={t("chat.moreControls")}
                   aria-expanded={controlsMenuOpen}
@@ -2563,7 +2663,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       right: 0,
                       zIndex: 100,
                       width: "min(320px, calc(100vw - 32px))",
-                      padding: 12,
+                      padding: 14,
                       display: "flex",
                       flexDirection: "column",
                       gap: 12,
@@ -2574,36 +2674,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       backdropFilter: "blur(10px)",
                     }}
                   >
-                    {!isStreaming && onThinkingLevelChange && (
-                      <div>
-                        <div style={controlSectionLabelStyle()}>{t("chat.controlsThinking")}</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {THINKING_LEVELS.filter((lvl) => {
-                            if (!availableThinkingLevels) return true;
-                            if (lvl === "auto") return true;
-                            return availableThinkingLevels.includes(lvl);
-                          }).map((lvl) => {
-                            const isActive = (thinkingLevel ?? "auto") === lvl;
-                            const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                            const chipLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                            const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
-                            return (
-                              <button
-                                key={lvl}
-                                type="button"
-                                role="menuitemradio"
-                                aria-checked={isActive}
-                                title={desc}
-                                onClick={() => { setControlsMenuOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-                                style={controlChipStyle(isActive)}
-                              >
-                                {chipLabel}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                     {!isStreaming && onToolPresetChange && (
                       <div>
                         <div style={controlSectionLabelStyle()}>{t("chat.controlsTools")}</div>

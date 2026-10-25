@@ -222,6 +222,26 @@ test("keeps the controls popover closed until opened", () => {
   assert.doesNotMatch(html, />Chat only</);
 });
 
+test("gives reasoning effort its own trigger outside the controls popover", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(ChatInput, {
+        onSend() {},
+        onAbort() {},
+        isStreaming: false,
+        onThinkingLevelChange() {},
+        thinkingLevel: "low",
+      }),
+    ),
+  );
+
+  assert.match(html, /aria-label="Reasoning: low"/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.doesNotMatch(html, /Reasoning: low[\s\S]*>Tools</);
+});
+
 test("renders the compact composer with the standard Send button and no session controls", () => {
   const html = renderToStaticMarkup(
     React.createElement(

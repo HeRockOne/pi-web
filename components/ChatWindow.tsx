@@ -2,7 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { ChevronDownIcon } from "./Icons";
 import Image from "next/image";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, Children } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import type { TurnUsage } from "@/lib/turn-usage";
@@ -26,6 +26,7 @@ import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantB
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { getTurnDurationMs } from "@/lib/turn-duration";
 import { getTurnUsage } from "@/lib/turn-usage";
+import { formatPercent } from "@/lib/usage-stats-format";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -109,8 +110,6 @@ const CHAT_MINIMAP_WIDTH = 36;
 /** Phones get a tighter gutter so the column keeps most of its width. */
 const CHAT_COLUMN_PADDING_MOBILE = 12;
 const CHAT_COLUMN_PADDING = 16;
-/** Messages of the streaming turn kept on screen; earlier ones fold away. */
-const LIVE_TAIL_VISIBLE = 12;
 
 function NewSessionUpdateLink({
   label,
@@ -185,13 +184,38 @@ function hasFinalAssistantAnswer(message: AgentMessage): boolean {
 }
 
 function findFinalAssistantIndex(messages: AgentMessage[], userIdx: number, endIdx: number): number {
+  // A response that stopped to call tools (or defer thinking) is mid-turn by
+  // definition. Without this guard, a quiet gap between agent events renders
+  // the latest intermediate reply in the answer slot until the real final
+  // answer arrives and the message folds back into the process card.
   for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (hasFinalAssistantAnswer(messages[candidateIdx])) return candidateIdx;
+    const message = messages[candidateIdx];
+    if (message.role !== "assistant") continue;
+    const stopReason = (message as AssistantMessage).stopReason;
+    if (stopReason === "toolUse" || stopReason === "deferred" || stopReason === "pending") continue;
+    if (hasFinalAssistantAnswer(message)) return candidateIdx;
   }
   for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (messages[candidateIdx]?.role === "assistant") return candidateIdx;
+    const message = messages[candidateIdx];
+    if (message.role !== "assistant") continue;
+    const stopReason = (message as AssistantMessage).stopReason;
+    if (stopReason === "toolUse" || stopReason === "deferred" || stopReason === "pending") continue;
+    return candidateIdx;
   }
   return -1;
+}
+
+/** Cache-hit rate of the turn's most recent request that reported one. */
+function latestCacheHitRate(messages: AgentMessage[], startIdx: number, endIdx: number): number | null {
+  for (let idx = endIdx - 1; idx >= startIdx; idx--) {
+    const message = messages[idx];
+    if (message.role !== "assistant" || !message.usage) continue;
+    const usage = message.usage;
+    const total = usage.input + usage.cacheRead + usage.cacheWrite;
+    if (!(usage.cacheRead > 0) || total <= 0) continue;
+    return usage.cacheRead / total;
+  }
+  return null;
 }
 
 function getUserInputText(message: AgentMessage): string | null {
@@ -218,43 +242,41 @@ function withAssistantBlocks(
   return next;
 }
 
-/** Steps visible in an expanded process group before earlier ones fold away. */
-const PROCESS_STEP_LIMIT = 14;
+/** An expanded card scrolls its steps inside this window instead of unrolling down the page. */
+const PROCESS_CARD_MAX_HEIGHT = 280;
 
-function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
+function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, intermediateCount = 0, live = false, cacheHit = null, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; thinkingCount?: number; intermediateCount?: number; live?: boolean; cacheHit?: number | null; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [showAllSteps, setShowAllSteps] = useState(false);
   useLayoutEffect(() => {
     if (reveal) setExpanded(true);
   }, [reveal]);
-  const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
+  const parts: string[] = [];
+  if (thinkingCount > 0) parts.push(t("chat.processThinking"));
   if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
-
-  // An expanded group shows only the latest steps; earlier ones fold behind a
-  // button so a 50-call turn does not unroll as a wall. Search reveal wins.
-  const items = Array.isArray(children) ? children : Children.toArray(children);
-  const hiddenSteps = expanded && !reveal && !showAllSteps
-    ? Math.max(0, items.length - PROCESS_STEP_LIMIT)
-    : 0;
+  if (intermediateCount > 0) parts.push(`${intermediateCount} ${t(intermediateCount === 1 ? "chat.intermediateReply" : "chat.intermediateReplies")}`);
+  if (parts.length === 0) parts.push(`${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`);
 
   return (
-    <div style={{ marginBottom: 14 }}>
+    <div
+      style={{
+        margin: "4px 0 10px",
+        border: "1px solid var(--border)",
+        borderRadius: 9,
+        background: "var(--bg-subtle)",
+        overflow: "hidden",
+      }}
+    >
       <button
         type="button"
         aria-expanded={expanded || reveal}
-        onClick={() => {
-          setExpanded((v) => {
-            if (v) setShowAllSteps(false);
-            return !v;
-          });
-        }}
+        onClick={() => setExpanded((v) => !v)}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          width: "auto",
-          minHeight: 24,
-          padding: "2px 0",
+          width: "100%",
+          minHeight: 30,
+          padding: "4px 12px",
           border: "none",
           background: "transparent",
           color: "var(--text-muted)",
@@ -267,35 +289,39 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="4 2.5 7.5 6 4 9.5" />
         </svg>
+        {live && (
+          <span
+            aria-hidden="true"
+            className="animate-[pulse_1.5s_infinite]"
+            style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", flexShrink: 0 }}
+          />
+        )}
+        <span style={{ fontWeight: 500, flexShrink: 0 }}>{t("chat.processDetails")}</span>
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {parts.join(" · ")}
         </span>
+        {cacheHit !== null && (
+          <span
+            style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--ok)", fontSize: 11, flexShrink: 0 }}
+            title={`${t("session.cacheHitRate")} ${formatPercent(cacheHit)}`}
+          >
+            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", display: "inline-block" }} />
+            {formatPercent(cacheHit, 1)}
+          </span>
+        )}
       </button>
       {(expanded || reveal) && (
-        <div style={{ marginTop: 8 }}>
-          {hiddenSteps > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAllSteps(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                margin: "0 0 6px 8px",
-                padding: "1px 8px",
-                border: "none",
-                borderRadius: 6,
-                background: "transparent",
-                color: "var(--text-dim)",
-                cursor: "pointer",
-                fontSize: 11.5,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
-            >
-              {t("chat.showEarlierSteps", { count: hiddenSteps })}
-            </button>
-          )}
-          {hiddenSteps > 0 ? items.slice(hiddenSteps) : items}
+        <div
+          className="scrollbar-subtle"
+          style={{
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg)",
+            maxHeight: live ? undefined : PROCESS_CARD_MAX_HEIGHT,
+            overflowY: live ? undefined : "auto",
+            padding: "6px 8px 10px",
+          }}
+        >
+          {children}
         </div>
       )}
     </div>
@@ -360,9 +386,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   });
 
   const sessionBusy = agentRunning || bashRunning;
-  // Live-tail folds the streaming turn's early steps; per-turn reveal persists
-  // until the turn settles and the collapsed process group takes over.
-  const [revealedLiveTails, setRevealedLiveTails] = useState<Record<string, boolean>>({});
   const [quotedSelection, setQuotedSelection] = useState<{
     text: string;
     top: number;
@@ -1185,6 +1208,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
               };
 
               const rendered: ReactNode[] = [];
+              let streamingInCard = false;
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
                 if (!isMessageGroupAnchor(msg)) {
@@ -1210,41 +1234,75 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
                   rendered.push(renderMessage(userIdx));
-                  // While the turn streams in, keep only the newest steps on
-                  // screen; earlier ones fold behind a button so a long run
-                  // does not unroll as a wall of tool rows.
+                  // The streaming turn's settled steps fold into the process
+                  // card; the in-flight step streams below it, so whatever is
+                  // being written right now (the answer, once it starts) stays
+                  // outside the card.
                   const turnKey = entryIds[userIdx] ?? `idx-${userIdx}`;
-                  const turnMessageCount = endIdx - userIdx - 1;
-                  const hiddenLiveSteps = revealedLiveTails[turnKey]
-                    ? 0
-                    : Math.max(0, turnMessageCount - LIVE_TAIL_VISIBLE);
-                  if (hiddenLiveSteps > 0) {
-                    rendered.push(
-                      <button
-                        key={`live-fold-${turnKey}`}
-                        type="button"
-                        onClick={() => setRevealedLiveTails((prev) => ({ ...prev, [turnKey]: true }))}
-                        style={{
-                          display: "block",
-                          margin: "0 0 6px 8px",
-                          padding: "1px 8px",
-                          border: "none",
-                          borderRadius: 6,
-                          background: "transparent",
-                          color: "var(--text-dim)",
-                          cursor: "pointer",
-                          fontSize: 11.5,
-                          textAlign: "left",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
-                      >
-                        {t("chat.showEarlierSteps", { count: hiddenLiveSteps })}
-                      </button>
-                    );
+                  const liveViews: ReactNode[] = [];
+                  let liveToolCount = 0;
+                  let liveThinkingCount = 0;
+                  let liveIntermediateCount = 0;
+                  let liveRefIdx: number | undefined;
+                  let revealLive = false;
+                  for (let processIdx = userIdx + 1; processIdx < endIdx; processIdx++) {
+                    const processMessage = messages[processIdx];
+                    if (processMessage.role === "custom") {
+                      revealLive ||= Boolean(pendingSearchScroll && pendingSearchScroll.entryId === entryIds[processIdx]);
+                      liveViews.push(renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }));
+                      continue;
+                    }
+                    if (processMessage.role !== "assistant") continue;
+                    const blocks = getDisplayableAssistantBlocks(processMessage);
+                    if (blocks.length === 0) continue;
+                    liveRefIdx ??= visibleRefIndexByMessage.get(processIdx);
+                    liveToolCount += countToolCallBlocks(blocks);
+                    if (blocks.some((block) => block.type === "thinking")) liveThinkingCount++;
+                    if (blocks.some((block) => block.type === "text")) liveIntermediateCount++;
+                    revealLive ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
+                    liveViews.push(renderMessage(processIdx, {
+                      attachRef: false,
+                      keyPrefix: "process",
+                      showTimestamp: false,
+                    }));
                   }
-                  for (let renderIdx = userIdx + 1 + hiddenLiveSteps; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
+                  if (liveViews.length > 0) {
+                    // The in-flight message streams inside the card too: an
+                    // intermediate reply below the card would read as the
+                    // answer and then fold away once the real one arrives.
+                    if (streamState.isStreaming && hasStreamingContent && streamState.streamingMessage) {
+                      streamingInCard = true;
+                      liveViews.push(
+                        <MessageView
+                          key={`${turnKey}-streaming`}
+                          message={streamState.streamingMessage as AgentMessage}
+                          isStreaming
+                          cwd={messageCwd}
+                          onOpenFile={onOpenFile}
+                          onOpenSession={onOpenSession}
+                        />,
+                      );
+                    }
+                    rendered.push(
+                      <div
+                        key={`process-live-${turnKey}`}
+                        ref={liveRefIdx === undefined ? undefined : (el) => { messageRefs.current[liveRefIdx] = el; }}
+                      >
+                        <ProcessDetailsGroup
+                          messageCount={liveViews.length}
+                          toolCallCount={liveToolCount}
+                          thinkingCount={liveThinkingCount}
+                          intermediateCount={liveIntermediateCount}
+                          live={sessionBusy}
+                          cacheHit={latestCacheHitRate(messages, userIdx + 1, endIdx)}
+                          defaultExpanded
+                          reveal={revealLive}
+                          t={t}
+                        >
+                          {liveViews}
+                        </ProcessDetailsGroup>
+                      </div>,
+                    );
                   }
                   idx = endIdx;
                   continue;
@@ -1264,6 +1322,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
                 const processViews: ReactNode[] = [];
                 let processToolCount = 0;
+                let processThinkingCount = 0;
+                let processIntermediateCount = 0;
                 let processRefIdx: number | undefined;
                 let revealProcess = false;
 
@@ -1282,6 +1342,8 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   if (blocks.length === 0) continue;
                   processRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                   processToolCount += countToolCallBlocks(blocks);
+                  if (blocks.some((block) => block.type === "thinking")) processThinkingCount++;
+                  if (blocks.some((block) => block.type === "text")) processIntermediateCount++;
                   revealProcess ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
                   processViews.push(renderMessage(processIdx, {
                     attachRef: false,
@@ -1297,7 +1359,16 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                       key={`process-group-${entryIds[userIdx] ?? userIdx}`}
                       ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}
                     >
-                      <ProcessDetailsGroup messageCount={processViews.length} toolCallCount={processToolCount} defaultExpanded={!finalAnswerMessage} reveal={revealProcess} t={t}>
+                      <ProcessDetailsGroup
+                        messageCount={processViews.length}
+                        toolCallCount={processToolCount}
+                        thinkingCount={processThinkingCount}
+                        intermediateCount={processIntermediateCount}
+                        cacheHit={latestCacheHitRate(messages, userIdx + 1, finalAssistantIdx + 1)}
+                        defaultExpanded={!finalAnswerMessage}
+                        reveal={revealProcess}
+                        t={t}
+                      >
                         {processViews}
                       </ProcessDetailsGroup>
                     </div>,
@@ -1346,12 +1417,12 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                     </div>
                   )}
                   {rendered.slice(startIndex)}
+                  {!streamingInCard && streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
+                    <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
+                  )}
                 </>
               );
             })()}
-            {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} />
-            )}
 
             {agentRunning && !hasStreamingContent && agentPhase && (
               <div className="break-words py-2 text-[13px] text-text-muted">
