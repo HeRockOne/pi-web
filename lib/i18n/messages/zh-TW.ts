@@ -392,6 +392,8 @@ export const zhTWLocale: LocalePlugin = {
     "chat.processThinking": "思考",
     "chat.intermediateReply": "則中間回覆",
     "chat.intermediateReplies": "則中間回覆",
+    "chat.latestRequestCacheHit": "最近一次請求快取命中率",
+    "chat.latestRequestShort": "最近請求",
     "chat.turnDuration": "耗時 {time}",
     "chat.turnUsage": "本輪用量",
     "chat.turnUsageShort": "用量",

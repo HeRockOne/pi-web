@@ -392,6 +392,8 @@ export const enLocale: LocalePlugin = {
     "chat.processThinking": "Thinking",
     "chat.intermediateReply": "intermediate reply",
     "chat.intermediateReplies": "intermediate replies",
+    "chat.latestRequestCacheHit": "Latest request cache hit",
+    "chat.latestRequestShort": "Last request",
     "chat.turnDuration": "took {time}",
     "chat.turnUsage": "Tokens this turn used",
     "chat.turnUsageShort": "Usage",

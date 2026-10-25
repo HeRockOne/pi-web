@@ -395,6 +395,8 @@ export const zhCNLocale: LocalePlugin = {
     "chat.processThinking": "思考",
     "chat.intermediateReply": "条中间回复",
     "chat.intermediateReplies": "条中间回复",
+    "chat.latestRequestCacheHit": "最近一次请求缓存命中率",
+    "chat.latestRequestShort": "最近请求",
     "chat.turnDuration": "耗时 {time}",
     "chat.turnUsage": "本轮用量",
     "chat.turnUsageShort": "用量",
