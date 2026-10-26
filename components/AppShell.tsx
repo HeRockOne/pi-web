@@ -2074,9 +2074,10 @@ export function AppShell() {
                 {formatTokens(tokens.output)}
               </span>
             )}
-            {costText && (
+            {/* Mobile shows the stats panel's cache hit rate in place of the cost. */}
+            {((cacheHitRateText ?? costText) || null) && (
               <span className="mobile-session-stat-cost" style={{ color: "var(--text)", fontWeight: 500, flexShrink: 0 }}>
-                {costText}
+                {cacheHitRateText ?? costText}
               </span>
             )}
             {mobileContextText && (
