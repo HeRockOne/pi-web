@@ -6,6 +6,19 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 
+/** Accepts `host:port` as well as full URLs; proxy agents need a scheme. */
+export function normalizeProxyUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "http:" || url.protocol === "https:" ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 type DispatcherGlobal = typeof globalThis & {
   __piWebHttpDispatcherConfigured?: boolean;
 };
@@ -73,6 +86,9 @@ class ProviderAwareDispatcher {
   private modelsMtimeMs = -1;
   private readonly proxyByOrigin = new Map<string, string>();
   private readonly agentsByProxy = new Map<string, undici.ProxyAgent>();
+  /** Root-level `proxy.enabled` in models.json: every provider without its
+   *  own proxy goes through this URL. Null when disabled or invalid. */
+  private globalProxyUrl: string | null = null;
 
   constructor(base: undici.Dispatcher, timeoutMs: number) {
     this.base = base;
@@ -96,12 +112,17 @@ class ProviderAwareDispatcher {
     this.modelsMtimeMs = mtimeMs;
 
     this.proxyByOrigin.clear();
+    this.globalProxyUrl = null;
     if (mtimeMs < 0) return;
 
     try {
       const data = JSON.parse(readFileSync(modelsPath, "utf8")) as {
         providers?: Record<string, { baseUrl?: string; proxy?: string }>;
+        proxy?: { enabled?: boolean; url?: string };
       };
+      if (data.proxy?.enabled) {
+        this.globalProxyUrl = normalizeProxyUrl(data.proxy.url ?? "");
+      }
       for (const provider of Object.values(data.providers ?? {})) {
         if (!provider?.proxy || !provider.baseUrl) continue;
         try {
@@ -121,7 +142,7 @@ class ProviderAwareDispatcher {
   ): boolean {
     this.refresh();
     const origin = options.origin ? new URL(String(options.origin)) : undefined;
-    const proxyUrl = origin ? this.proxyByOrigin.get(origin.origin) : undefined;
+    const proxyUrl = (origin ? this.proxyByOrigin.get(origin.origin) : undefined) ?? this.globalProxyUrl;
     if (proxyUrl) {
       let agent = this.agentsByProxy.get(proxyUrl);
       if (!agent) {

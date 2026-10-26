@@ -54,6 +54,7 @@ import {
   useEnabledModels,
   type EnabledModelsController,
 } from "./EnabledModelsSection";
+import { ConfigSwitch } from "./SettingsUi";
 import { providerBadgeLabel } from "./enabled-models-helpers";
 import { ProviderIcon } from "./ProviderIcon";
 import type { PeakPricingConfig, PeakPricingRates } from "@/lib/usage-peak-pricing";
@@ -120,6 +121,8 @@ interface ProviderEntry {
 
 interface ModelsJson {
   providers?: Record<string, ProviderEntry>;
+  /** Global proxy for all provider requests; a per-provider proxy wins. */
+  proxy?: { enabled?: boolean; url?: string };
 }
 
 type ModelTestState =
@@ -418,6 +421,35 @@ function PeakPricingModal({
 
 
 // ── Provider detail ───────────────────────────────────────────────────────────
+
+const DEFAULT_PROXY_URL = "127.0.0.1:7890";
+
+function ProxySettingsRow({ proxy, onChange }: { proxy?: { enabled?: boolean; url?: string }; onChange: (proxy: { enabled: boolean; url?: string }) => void }) {
+  const enabled = proxy?.enabled ?? false;
+  const url = proxy?.url ?? DEFAULT_PROXY_URL;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap",
+        padding: "8px 12px",
+        margin: "0 0 10px",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-control, 6px)",
+        background: "var(--bg-subtle)",
+      }}
+    >
+      <ConfigSwitch checked={enabled} label="Proxy" onChange={(checked) => onChange({ enabled: checked, url: checked ? (url.trim() || DEFAULT_PROXY_URL) : url })} />
+      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Proxy</span>
+      <TextInput value={url} onChange={(v) => onChange({ enabled, url: v })} placeholder={DEFAULT_PROXY_URL} mono />
+      <span style={{ fontSize: 11, color: "var(--text-dim)", flex: 1, minWidth: 220 }}>
+        Off by default: providers connect directly. When enabled, every provider without its own Proxy goes through this HTTP proxy.
+      </span>
+    </div>
+  );
+}
 
 function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels, enabledModels }: {
   name: string; provider: ProviderEntry;
@@ -2361,6 +2393,11 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null }: {
     <ConfigPanelShell embedded={embedded} title={t("common.models")} subtitle="~/.pi/agent/models.json" closeLabel={t("i18n.close")} onClose={onClose}>
 
         <EnabledModelsBanner controller={enabledModels} />
+
+        <ProxySettingsRow
+          proxy={config.proxy}
+          onChange={(proxy) => setConfig((prev) => ({ ...prev, proxy }))}
+        />
 
         {/* Body */}
         <ConfigSplitView>
