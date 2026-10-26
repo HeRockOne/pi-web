@@ -2,7 +2,7 @@
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { ChevronDownIcon } from "./Icons";
 import Image from "next/image";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import type { TurnUsage } from "@/lib/turn-usage";
@@ -242,26 +242,8 @@ function withAssistantBlocks(
   return next;
 }
 
-/** An expanded card scrolls its steps inside this window instead of unrolling down the page. */
-const PROCESS_CARD_MAX_HEIGHT = 280;
-
 function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, intermediateCount = 0, live = false, cacheHit = null, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; thinkingCount?: number; intermediateCount?: number; live?: boolean; cacheHit?: number | null; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  // While the turn streams, keep the capped body pinned to its newest step —
-  // unless the user scrolled up inside the card to read earlier steps.
-  const stickToBottomRef = useRef(true);
-  useLayoutEffect(() => {
-    if (!live || !stickToBottomRef.current) return;
-    const body = bodyRef.current;
-    if (body) body.scrollTop = body.scrollHeight;
-  });
-  const handleBodyScroll = live
-    ? (event: UIEvent<HTMLDivElement>) => {
-        const el = event.currentTarget;
-        stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-      }
-    : undefined;
   useLayoutEffect(() => {
     if (reveal) setExpanded(true);
   }, [reveal]);
@@ -328,14 +310,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
       </button>
       {(expanded || reveal) && (
         <div
-          ref={bodyRef}
-          className="scrollbar-subtle"
-          onScroll={handleBodyScroll}
           style={{
             borderTop: "1px solid var(--border)",
             background: "var(--bg)",
-            maxHeight: PROCESS_CARD_MAX_HEIGHT,
-            overflowY: "auto",
             padding: "6px 8px 10px",
           }}
         >

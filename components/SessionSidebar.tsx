@@ -19,7 +19,7 @@ import { subscribeRunningState, type RunningSnapshot } from "@/lib/running-hub-c
 // height, so the list can be windowed (only the visible slice is mounted).
 // One tight line per row: title (or folder path) + trailing state/time. No
 // second line for message counts — the count told nobody anything.
-export const SESSION_LIST_ITEM_HEIGHT = 34;
+export const SESSION_LIST_ITEM_HEIGHT = 36;
 
 // Tree collapse state persists across page reloads (project folders + session branches).
 const TREE_COLLAPSE_STORAGE_KEY = "pi-web:sidebar-tree-collapsed";
@@ -1463,7 +1463,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       label={projectBasename(row.project.root)}
                       title={displayCwd(row.project.root, homeDir)}
                       selected={row.project.key === selectedProject?.key}
-                      running={(activity?.running ?? 0) > 0}
+                      divider={index > 0}
                       unread={(activity?.unread ?? 0) > 0}
                       hasChildren={row.hasChildren}
                       collapsed={row.collapsed}
@@ -1859,10 +1859,10 @@ function SessionItem({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              fontSize: 13,
+              fontSize: depth > 0 ? 11 : 13,
               fontWeight: isSelected ? 550 : 400,
               lineHeight: 1.4,
-              color: isSelected ? "var(--text)" : "var(--text-muted)",
+              color: isSelected ? "var(--text)" : depth > 0 ? "var(--text-dim)" : "var(--text-muted)",
             }}
           >
             {title}
@@ -1892,6 +1892,7 @@ function SessionItem({
                 alignItems: "center",
                 gap: 4,
                 color: "var(--text-dim)",
+                opacity: 0.75,
                 fontSize: 11,
                 fontVariantNumeric: "tabular-nums",
                 whiteSpace: "nowrap",
@@ -1993,7 +1994,7 @@ function ProjectFolderRow({
   label,
   title,
   selected,
-  running,
+  divider,
   unread,
   hasChildren,
   collapsed,
@@ -2006,7 +2007,8 @@ function ProjectFolderRow({
   /** Full (home-shortened) path, used for tooltips only. */
   title: string;
   selected: boolean;
-  running: boolean;
+  /** Hairline above the row — marks the top of every project group but the first. */
+  divider: boolean;
   unread: boolean;
   hasChildren: boolean;
   collapsed: boolean;
@@ -2036,6 +2038,7 @@ function ProjectFolderRow({
         margin: "0 6px",
         borderRadius: "var(--radius-control, 6px)",
         background: hovered ? "var(--bg-hover)" : "transparent",
+        borderTop: divider ? "1px solid color-mix(in srgb, var(--border) 55%, transparent)" : "1px solid transparent",
         borderLeft: "2px solid transparent",
         transition: "background var(--motion-feedback) ease, border-color var(--motion-feedback) ease",
         gap: 6,
@@ -2058,7 +2061,7 @@ function ProjectFolderRow({
       ) : (
         <span style={{ width: 18, flexShrink: 0 }} />
       )}
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-muted)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? "var(--accent)" : "var(--text-dim)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       </svg>
       <span
@@ -2068,15 +2071,17 @@ function ProjectFolderRow({
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 600,
           lineHeight: 1.35,
-          color: "var(--text)",
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: "var(--text-dim)",
         }}
       >
         {label}
       </span>
-      {running ? <RunningSessionIndicator /> : unread ? <UnreadSessionIndicator /> : null}
+      {unread ? <UnreadSessionIndicator /> : null}
       {/* New-session action — shown on hover, mirroring session row actions */}
       {hovered && onNewSession && (
         <button

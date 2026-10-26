@@ -150,7 +150,7 @@ test("renders the session list as a project folder tree", () => {
 test("sidebar rows stay single-line: no message counts, no session totals", () => {
   // Row height is what the windowed list budgets per row; a second line per row
   // forced 46px and doubled the visual noise for a number nobody reads.
-  assert.match(source, /export const SESSION_LIST_ITEM_HEIGHT = 34;/);
+  assert.match(source, /export const SESSION_LIST_ITEM_HEIGHT = 36;/);
   assert.doesNotMatch(source, /sidebar\.messagesCount/);
   assert.doesNotMatch(source, /sidebar\.projectSessions/);
   assert.doesNotMatch(sessionItemSource, /sessionCount/);
