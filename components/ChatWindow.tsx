@@ -242,15 +242,14 @@ function withAssistantBlocks(
   return next;
 }
 
-function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, intermediateCount = 0, live = false, cacheHit = null, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; thinkingCount?: number; intermediateCount?: number; live?: boolean; cacheHit?: number | null; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
+function ProcessDetailsGroup({ messageCount, toolCallCount, intermediateCount = 0, live = false, cacheHit = null, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; intermediateCount?: number; live?: boolean; cacheHit?: number | null; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   useLayoutEffect(() => {
     if (reveal) setExpanded(true);
   }, [reveal]);
   const parts: string[] = [];
-  if (thinkingCount > 0) parts.push(t("chat.processThinking"));
-  if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
-  if (intermediateCount > 0) parts.push(`${intermediateCount} ${t(intermediateCount === 1 ? "chat.intermediateReply" : "chat.intermediateReplies")}`);
+  if (toolCallCount > 0) parts.push(t(toolCallCount === 1 ? "chat.toolCallCount" : "chat.toolCallCountPlural", { count: toolCallCount }));
+  if (intermediateCount > 0) parts.push(t(intermediateCount === 1 ? "chat.intermediateReplyCount" : "chat.intermediateReplyCountPlural", { count: intermediateCount }));
   if (parts.length === 0) parts.push(`${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`);
 
   return (
@@ -260,7 +259,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
         border: "1px solid var(--border)",
         borderRadius: 9,
         background: "var(--bg-subtle)",
-        overflow: "hidden",
+        // clip, not hidden: hidden would make the card its own scrollport and
+        // stop the summary header from sticking to the chat scrollport.
+        overflow: "clip",
       }}
     >
       <button
@@ -274,13 +275,30 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
           width: "100%",
           minHeight: 30,
           padding: "4px 12px",
+          // One header, always: while the card is on screen the summary row stays
+          // glued under the title bar and the card body scrolls behind it.
+          position: "sticky",
+          // -16 pulls the stuck header over the scrollport's own pt-4 padding
+          // band; with top:0 a 15px strip of scrolling content stayed visible
+          // between the title bar and the header.
+          top: -16,
+          zIndex: 2,
           border: "none",
-          background: "transparent",
+          // Opaque stack: --bg-subtle is translucent, so the body would
+          // otherwise scroll through the stuck header.
+          background: "linear-gradient(var(--bg-subtle), var(--bg-subtle)), var(--bg)",
+          // Same 9px radius as the card, so the header keeps its rounded top
+          // corners once it is stuck flush against the title bar.
+          borderRadius: "9px 9px 0 0",
+          borderBottom: expanded || reveal ? "1px solid var(--border)" : "none",
           color: "var(--text-muted)",
           cursor: "pointer",
           fontSize: 12,
           textAlign: "left",
         }}
+        // The visible header is just the counts; the label lives on as the
+        // accessible name so screen readers still hear what the row is.
+        aria-label={t("chat.processDetails")}
         title={expanded ? t("chat.collapseProcess") : t("chat.expandProcess")}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform var(--motion-move)" }}>
@@ -293,7 +311,6 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
             style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", flexShrink: 0 }}
           />
         )}
-        <span style={{ fontWeight: 500, flexShrink: 0 }}>{t("chat.processDetails")}</span>
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {parts.join(" · ")}
         </span>
@@ -311,7 +328,6 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
       {(expanded || reveal) && (
         <div
           style={{
-            borderTop: "1px solid var(--border)",
             background: "var(--bg)",
             padding: "6px 8px 10px",
           }}
@@ -319,71 +335,6 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, thinkingCount = 0, i
           {children}
         </div>
       )}
-    </div>
-  );
-}
-
-type LiveProcessInfo = {
-  messageCount: number;
-  toolCallCount: number;
-  thinkingCount: number;
-  intermediateCount: number;
-  cacheHit: number | null;
-};
-
-/** Summary bar pinned under the title bar while the live process card's top is scrolled out of view. */
-function LiveProcessPinnedBar({ info, isMobile, onJump, t }: { info: LiveProcessInfo; isMobile: boolean; onJump: () => void; t: (key: string, params?: Record<string, string | number>) => string }) {
-  const parts: string[] = [];
-  if (info.thinkingCount > 0) parts.push(t("chat.processThinking"));
-  if (info.toolCallCount > 0) parts.push(`${info.toolCallCount} ${t(info.toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
-  if (info.intermediateCount > 0) parts.push(`${info.intermediateCount} ${t(info.intermediateCount === 1 ? "chat.intermediateReply" : "chat.intermediateReplies")}`);
-  if (parts.length === 0) parts.push(`${info.messageCount} ${t(info.messageCount === 1 ? "chat.message" : "chat.messages")}`);
-
-  return (
-    <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, pointerEvents: "none" }}>
-      <div style={{ maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto", padding: `0 ${isMobile ? CHAT_COLUMN_PADDING_MOBILE : CHAT_COLUMN_PADDING}px`, pointerEvents: "auto" }}>
-        <button
-          type="button"
-          onClick={onJump}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            width: "100%",
-            minHeight: 30,
-            padding: "4px 12px",
-            // Opaque stack: --bg-subtle is translucent, and the pinned bar lets
-            // scrolling content bleed through unless layered over a solid base.
-            background: "linear-gradient(var(--bg-subtle), var(--bg-subtle)), var(--bg)",
-            border: "1px solid var(--border)",
-            borderTop: "none",
-            borderRadius: "0 0 9px 9px",
-            boxShadow: "0 4px 10px -6px rgba(0, 0, 0, 0.25)",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 12,
-            textAlign: "left",
-          }}
-        >
-          <span
-            aria-hidden="true"
-            className="animate-[pulse_1.5s_infinite]"
-            style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", flexShrink: 0 }}
-          />
-          <span style={{ fontWeight: 500, flexShrink: 0 }}>{t("chat.processDetails")}</span>
-          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{parts.join(" · ")}</span>
-          {info.cacheHit !== null && (
-            <span
-              style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, flexShrink: 0, color: "var(--ok)" }}
-              title={`${t("chat.latestRequestCacheHit")} ${formatPercent(info.cacheHit)}`}
-            >
-              <span style={{ color: "var(--text-dim)" }}>{t("chat.latestRequestShort")}</span>
-              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", display: "inline-block" }} />
-              {formatPercent(info.cacheHit, 1)}
-            </span>
-          )}
-        </button>
-      </div>
     </div>
   );
 }
@@ -892,26 +843,12 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   // Floating "jump to bottom" button: visible whenever the scroll position
   // drifts away from the live tail (streaming auto-scroll keeps it hidden).
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  // Live "process details" card: once its top scrolls past the viewport top,
-  // pin a summary bar under the title bar so the counts stay readable. Runs on
-  // every render too — streaming grows the content without user scroll events.
-  const liveProcessRef = useRef<HTMLDivElement | null>(null);
-  const liveProcessInfoRef = useRef<LiveProcessInfo | null>(null);
-  const [liveProcessPinned, setLiveProcessPinned] = useState(false);
-  const syncLiveProcessPin = useCallback(() => {
-    const group = liveProcessRef.current;
-    const container = scrollContainerRef.current;
-    const pinned = Boolean(group && container && group.getBoundingClientRect().top < container.getBoundingClientRect().top - 1);
-    setLiveProcessPinned((prev) => (prev === pinned ? prev : pinned));
-  }, [scrollContainerRef]);
-  useLayoutEffect(syncLiveProcessPin);
   const handleScrollContainerScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     setShowScrollToBottom(distance > 160);
-    syncLiveProcessPin();
-  }, [scrollContainerRef, syncLiveProcessPin]);
+  }, [scrollContainerRef]);
 
   const visibleMessages = messages.filter((m) => isMessageGroupAnchor(m) || m.role === "assistant");
   // Stable Map identity: `messages` doesn't change during streaming updates
@@ -1318,7 +1255,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   const turnKey = entryIds[userIdx] ?? `idx-${userIdx}`;
                   const liveViews: ReactNode[] = [];
                   let liveToolCount = 0;
-                  let liveThinkingCount = 0;
                   let liveIntermediateCount = 0;
                   let liveRefIdx: number | undefined;
                   let revealLive = false;
@@ -1334,7 +1270,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                     if (blocks.length === 0) continue;
                     liveRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                     liveToolCount += countToolCallBlocks(blocks);
-                    if (blocks.some((block) => block.type === "thinking")) liveThinkingCount++;
                     if (blocks.some((block) => block.type === "text")) liveIntermediateCount++;
                     revealLive ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
                     liveViews.push(renderMessage(processIdx, {
@@ -1344,13 +1279,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                     }));
                   }
                   if (liveViews.length > 0) {
-                    liveProcessInfoRef.current = {
-                      messageCount: liveViews.length,
-                      toolCallCount: liveToolCount,
-                      thinkingCount: liveThinkingCount,
-                      intermediateCount: liveIntermediateCount,
-                      cacheHit: latestCacheHitRate(messages, userIdx + 1, endIdx),
-                    };
                     // The in-flight message streams inside the card too: an
                     // intermediate reply below the card would read as the
                     // answer and then fold away once the real one arrives.
@@ -1372,13 +1300,11 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                         key={`process-live-${turnKey}`}
                         ref={(el) => {
                           if (liveRefIdx !== undefined) messageRefs.current[liveRefIdx] = el;
-                          liveProcessRef.current = el;
                         }}
                       >
                         <ProcessDetailsGroup
                           messageCount={liveViews.length}
                           toolCallCount={liveToolCount}
-                          thinkingCount={liveThinkingCount}
                           intermediateCount={liveIntermediateCount}
                           live={sessionBusy}
                           cacheHit={latestCacheHitRate(messages, userIdx + 1, endIdx)}
@@ -1409,7 +1335,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
 
                 const processViews: ReactNode[] = [];
                 let processToolCount = 0;
-                let processThinkingCount = 0;
                 let processIntermediateCount = 0;
                 let processRefIdx: number | undefined;
                 let revealProcess = false;
@@ -1429,7 +1354,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                   if (blocks.length === 0) continue;
                   processRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                   processToolCount += countToolCallBlocks(blocks);
-                  if (blocks.some((block) => block.type === "thinking")) processThinkingCount++;
                   if (blocks.some((block) => block.type === "text")) processIntermediateCount++;
                   revealProcess ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
                   processViews.push(renderMessage(processIdx, {
@@ -1449,7 +1373,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                       <ProcessDetailsGroup
                         messageCount={processViews.length}
                         toolCallCount={processToolCount}
-                        thinkingCount={processThinkingCount}
                         intermediateCount={processIntermediateCount}
                         cacheHit={latestCacheHitRate(messages, userIdx + 1, finalAssistantIdx + 1)}
                         defaultExpanded={!finalAnswerMessage}
@@ -1540,14 +1463,6 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
             </div>
           </div>
         </div>
-        {liveProcessPinned && liveProcessInfoRef.current && (
-          <LiveProcessPinnedBar
-            info={liveProcessInfoRef.current}
-            isMobile={isMobile}
-            onJump={() => { liveProcessRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-            t={t}
-          />
-        )}
         {isMobile || pendingScrollRestore ? null : (
           <ChatMinimap
             messages={messages}
@@ -2147,7 +2062,6 @@ function AskDialog({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [request.expiresAt]);
-
 
   const submitAll = useCallback((overrides?: AskDraft[]) => {
     const effective = overrides ?? drafts;
