@@ -121,8 +121,6 @@ interface ProviderEntry {
 
 interface ModelsJson {
   providers?: Record<string, ProviderEntry>;
-  /** Global proxy for all provider requests; a per-provider proxy wins. */
-  proxy?: { enabled?: boolean; url?: string };
 }
 
 type ModelTestState =
@@ -424,33 +422,6 @@ function PeakPricingModal({
 
 const DEFAULT_PROXY_URL = "127.0.0.1:7890";
 
-function ProxySettingsRow({ proxy, onChange }: { proxy?: { enabled?: boolean; url?: string }; onChange: (proxy: { enabled: boolean; url?: string }) => void }) {
-  const enabled = proxy?.enabled ?? false;
-  const url = proxy?.url ?? DEFAULT_PROXY_URL;
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexWrap: "wrap",
-        padding: "8px 12px",
-        margin: "0 0 10px",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-control, 6px)",
-        background: "var(--bg-subtle)",
-      }}
-    >
-      <ConfigSwitch checked={enabled} label="Proxy" onChange={(checked) => onChange({ enabled: checked, url: checked ? (url.trim() || DEFAULT_PROXY_URL) : url })} />
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Proxy</span>
-      <TextInput value={url} onChange={(v) => onChange({ enabled, url: v })} placeholder={DEFAULT_PROXY_URL} mono />
-      <span style={{ fontSize: 11, color: "var(--text-dim)", flex: 1, minWidth: 220 }}>
-        Off by default: providers connect directly. When enabled, every provider without its own Proxy goes through this HTTP proxy.
-      </span>
-    </div>
-  );
-}
-
 function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels, enabledModels }: {
   name: string; provider: ProviderEntry;
   onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
@@ -580,10 +551,14 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
       </Field>
 
       <Field label="Proxy">
-        <TextInput value={provider.proxy ?? ""} onChange={(v) => set("proxy", v || undefined)}
-          placeholder="http://127.0.0.1:7890" mono />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ConfigSwitch checked={Boolean(provider.proxy)} label="Proxy"
+            onChange={(checked) => set("proxy", checked ? (provider.proxy?.trim() || DEFAULT_PROXY_URL) : undefined)} />
+          <TextInput value={provider.proxy ?? ""} onChange={(v) => set("proxy", v.trim() ? v : undefined)}
+            placeholder={DEFAULT_PROXY_URL} mono />
+        </div>
         <span style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-          Requests from this provider go through this proxy; all its models share it. Leave empty to connect directly.
+          Off by default: this provider connects directly. When enabled, all its models go through this HTTP proxy ({DEFAULT_PROXY_URL} by default; a scheme-less host:port is treated as http).
         </span>
       </Field>
 
@@ -2393,11 +2368,6 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null }: {
     <ConfigPanelShell embedded={embedded} title={t("common.models")} subtitle="~/.pi/agent/models.json" closeLabel={t("i18n.close")} onClose={onClose}>
 
         <EnabledModelsBanner controller={enabledModels} />
-
-        <ProxySettingsRow
-          proxy={config.proxy}
-          onChange={(proxy) => setConfig((prev) => ({ ...prev, proxy }))}
-        />
 
         {/* Body */}
         <ConfigSplitView>

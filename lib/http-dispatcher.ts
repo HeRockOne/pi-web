@@ -86,9 +86,6 @@ class ProviderAwareDispatcher {
   private modelsMtimeMs = -1;
   private readonly proxyByOrigin = new Map<string, string>();
   private readonly agentsByProxy = new Map<string, undici.ProxyAgent>();
-  /** Root-level `proxy.enabled` in models.json: every provider without its
-   *  own proxy goes through this URL. Null when disabled or invalid. */
-  private globalProxyUrl: string | null = null;
 
   constructor(base: undici.Dispatcher, timeoutMs: number) {
     this.base = base;
@@ -112,21 +109,19 @@ class ProviderAwareDispatcher {
     this.modelsMtimeMs = mtimeMs;
 
     this.proxyByOrigin.clear();
-    this.globalProxyUrl = null;
     if (mtimeMs < 0) return;
 
     try {
       const data = JSON.parse(readFileSync(modelsPath, "utf8")) as {
         providers?: Record<string, { baseUrl?: string; proxy?: string }>;
-        proxy?: { enabled?: boolean; url?: string };
       };
-      if (data.proxy?.enabled) {
-        this.globalProxyUrl = normalizeProxyUrl(data.proxy.url ?? "");
-      }
       for (const provider of Object.values(data.providers ?? {})) {
         if (!provider?.proxy || !provider.baseUrl) continue;
+        // Accept `host:port` shorthand; ProxyAgent needs a scheme.
+        const proxyUrl = normalizeProxyUrl(provider.proxy);
+        if (!proxyUrl) continue;
         try {
-          this.proxyByOrigin.set(new URL(provider.baseUrl).origin, provider.proxy);
+          this.proxyByOrigin.set(new URL(provider.baseUrl).origin, proxyUrl);
         } catch {
           // Invalid baseUrl: skip this provider.
         }
@@ -142,7 +137,7 @@ class ProviderAwareDispatcher {
   ): boolean {
     this.refresh();
     const origin = options.origin ? new URL(String(options.origin)) : undefined;
-    const proxyUrl = (origin ? this.proxyByOrigin.get(origin.origin) : undefined) ?? this.globalProxyUrl;
+    const proxyUrl = origin ? this.proxyByOrigin.get(origin.origin) : undefined;
     if (proxyUrl) {
       let agent = this.agentsByProxy.get(proxyUrl);
       if (!agent) {
